@@ -1,0 +1,10 @@
+node_modules/
+out/
+dist/
+.DS_Store
+npm-debug.log*
+*.log
+.env
+.env.*
+!.env.example
+.codex-log/

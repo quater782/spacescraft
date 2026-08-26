@@ -1,0 +1,87 @@
+# 开发与验证
+
+## Web 版本
+
+直接打开 `index.html`，或使用仅监听本机的静态服务器：
+
+```bash
+python3 -m http.server 4173 --bind 127.0.0.1
+```
+
+打开 `http://127.0.0.1:4173`。
+
+### 本地快速战役冒烟测试
+
+在本机服务器地址追加 `?qa-fast`：
+
+```text
+http://127.0.0.1:4173/?qa-fast
+```
+
+此模式仅在 `localhost` 或 `127.0.0.1` 生效，会加速章节时间并降低 Boss 测试耐久，用于快速检查九个事件、三场精英战、Boss 阶段和完整通关路径。测试结果不会写入出航、通关、最高分等生涯统计，也不会在正式域名或 Electron 文件协议下启用。
+
+自动化或人工检查可以读取 `#game` 上的 `data-mode`、`data-language`、`data-stage`、`data-stage-time`、`data-events`、`data-enemies`、`data-boss-phase`、`data-player-hp`、`data-fps` 与 `data-qa` 诊断属性。机库和合约还提供 `data-frame`、`data-module`、`data-contract`、`data-score-multiplier`、`data-player-shield`、`data-player-speed`、`data-player-fire-rate`、`data-player-damage`、`data-player-energy-gain`、`data-achievement-count` 与 `data-stardust-reward`。
+
+### 本地机库经济测试
+
+在本机地址追加 `?qa-wallet` 会仅在当前载入时把可用测试星尘提高到至少 3000。追加 `?qa-contracts` 会临时满足风暴与过载的显示解锁条件：
+
+```text
+http://127.0.0.1:4173/?qa-fast&qa-wallet&qa-contracts
+```
+
+这些开关只在 localhost 生效，用于检查解锁、扣款、勋章和合约签署流程。执行解锁或签署后会写入当前浏览器的本地测试存档；测试完成后应通过设置页的“清除本地记录”恢复默认状态。Electron 文件协议和正式域名无法启用这些开关。
+
+### 局内构筑与确定性种子测试
+
+追加 `?qa-draft` 会保留章节间的三选一操作；不追加时，`qa-fast` 会自动完成选择，避免冒烟测试停在构筑页。使用 `seed` 参数可以复现同一轮候选项和战斗随机序列：
+
+```text
+http://127.0.0.1:4173/?qa-fast&qa-draft&seed=20260826
+```
+
+构筑页同样遵循“只控制方向”的产品约束：左右选择，上下确认；P1 可使用 WASD，P2 可使用方向键。该功能当前属于 0.8.0 开发快照，版本边界见[当前项目状态](./PROJECT-STATE.md)。
+
+## 桌面版本
+
+```bash
+npm install
+npm start
+```
+
+桌面壳默认启用以下安全配置：
+
+- `contextIsolation: true`
+- `nodeIntegration: false`
+- `sandbox: true`
+- 严格 Content Security Policy
+
+## 每次更新的最低验证清单
+
+1. 运行 `npm run verify`，确认文档链接、语法、本地化引用键和正式依赖审计通过。
+2. 打开标题页，确认 WebGL 场景、SVG 图标和响应式布局。
+3. 分别验证单人 AI 与本地双人模式；开局等待至少 20 秒，检查自动开火、刷怪、弹幕速度和生命变化。
+4. 检查 AI 僚机闪避、编队、集火和倒地救援，并测试两名玩家的四方向移动。
+5. 测试首次教学、DOM 暂停、设置、静音、全屏、三阶段 Boss 与章节切换。
+6. 调整语言、音乐、音效、画质、震动、闪光和弹幕配色设置，刷新后确认用户可见状态保持一致。
+7. 检查机库余额、解锁扣款、刷新持久化、装备参数、清档恢复和三种 3D 机体辨识度。
+8. 检查合约锁定条件、倍率属性、签署持久化、勋章触发与陈列计数。
+9. 使用本地快速模式分别跑通巡航与过载合约，并抽样检查正常速度战役的难度、AI 和 Boss 转场。
+10. 分别从中英文启动，检查教程、机库、战斗事件、Boss 阶段和结算；在结算页切换语言并确认当前结果即时重绘。
+11. 检查浏览器或 Electron 开发者控制台无错误。
+12. 使用固定 `seed` 检查局内三选一、升级叠层、章节恢复和结算构筑摘要。
+13. 检查 `data-hud-resolution` 不低于 HUD 的 CSS 显示尺寸，确认正常窗口与全屏下战斗文字清晰。
+14. 更新 `CHANGELOG.md`、[当前项目状态](./PROJECT-STATE.md)、发行说明和相关设计文档。
+
+## 架构
+
+- `src/renderer3d.js`：原生 WebGL 渲染、矩阵、着色器和 3D 模型。
+- `src/game.js`：固定时间步、关卡、碰撞、AI、音频和 HUD。
+- `src/i18n.js`：简体中文/英文文案目录、插值、DOM 与元数据同步。
+- `electron/main.cjs`：安全桌面窗口与生命周期。
+- `forge.config.cjs`：桌面发行产物配置。
+- `scripts/build-icons.mjs`：从 SVG 母版生成多分辨率桌面图标。
+- `scripts/verify-localization.mjs`：收集 HTML 与游戏逻辑引用键，验证两种语言完整覆盖。
+- `scripts/verify-docs.mjs`：检查必需文档、Codex 指令大小和仓库内 Markdown 链接。
+
+完整模块边界与数据流见[系统架构](./ARCHITECTURE.md)。

@@ -1,0 +1,27 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run verify
+      - run: npm run package:win
+      - run: npm run make:win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spacecraft-windows-x64
+          path: |
+            out/make/**
+            out/*-win32-x64/**
