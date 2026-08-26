@@ -80,21 +80,21 @@ const QA_DRAFT_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-draft");
 const REQUESTED_RUN_SEED = Number.parseInt(URL_PARAMS.get("seed") || "", 10);
 const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft"].filter(Boolean).join("+") || "off";
 const t = (key, variables) => SpaceI18n.t(key, variables);
+const UPGRADE_DEFS = SpaceRoguelike.UPGRADE_DEFS;
 
 ctx.imageSmoothingEnabled = false;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const lerp = (a, b, t) => a + (b - a) * t;
-let runRandomState = 0;
-const setRunRandomSeed = (seed) => { runRandomState = (Number(seed) >>> 0) || 0x6d2b79f5; };
-const random = () => {
-  let state = runRandomState || 0x6d2b79f5;
-  state ^= state << 13;
-  state ^= state >>> 17;
-  state ^= state << 5;
-  runRandomState = state >>> 0;
-  return runRandomState / 4294967296;
+let runRandom = SpaceRoguelike.createRng(1);
+let visualRandom = SpaceRoguelike.createRng(0x9e3779b9);
+const setRunRandomSeed = (seed) => {
+  const normalized = (Number(seed) >>> 0) || 0x6d2b79f5;
+  runRandom = SpaceRoguelike.createRng(normalized);
+  visualRandom = SpaceRoguelike.createRng(normalized ^ 0x9e3779b9);
 };
+const random = () => runRandom();
+const visualRand = (min, max) => min + visualRandom() * (max - min);
 const createRunSeed = () => {
   if (Number.isFinite(REQUESTED_RUN_SEED)) return (REQUESTED_RUN_SEED >>> 0) || 1;
   const values = new Uint32Array(1);
@@ -251,24 +251,6 @@ const ACHIEVEMENTS = [
   { id: "fullHangar", nameKey: "achievement.fullHangar.name", descriptionKey: "achievement.fullHangar.description" },
   { id: "stormClear", nameKey: "achievement.stormClear.name", descriptionKey: "achievement.stormClear.description" },
   { id: "overdriveClear", nameKey: "achievement.overdriveClear.name", descriptionKey: "achievement.overdriveClear.description" },
-];
-
-const UPGRADE_DEFS = [
-  { id: "overclock", category: "armament", rarity: "common", max: 3, nameKey: "upgrade.overclock.name", descriptionKey: "upgrade.overclock.description" },
-  { id: "rail", category: "armament", rarity: "common", max: 3, nameKey: "upgrade.rail.name", descriptionKey: "upgrade.rail.description" },
-  { id: "prism", category: "armament", rarity: "rare", max: 3, nameKey: "upgrade.prism.name", descriptionKey: "upgrade.prism.description" },
-  { id: "piercing", category: "armament", rarity: "rare", max: 2, nameKey: "upgrade.piercing.name", descriptionKey: "upgrade.piercing.description" },
-  { id: "drone", category: "armament", rarity: "legendary", max: 2, nameKey: "upgrade.drone.name", descriptionKey: "upgrade.drone.description" },
-  { id: "chain", category: "armament", rarity: "legendary", max: 2, nameKey: "upgrade.chain.name", descriptionKey: "upgrade.chain.description" },
-  { id: "turbo", category: "mobility", rarity: "common", max: 3, nameKey: "upgrade.turbo.name", descriptionKey: "upgrade.turbo.description" },
-  { id: "gyro", category: "mobility", rarity: "common", max: 3, nameKey: "upgrade.gyro.name", descriptionKey: "upgrade.gyro.description" },
-  { id: "phase", category: "mobility", rarity: "rare", max: 2, nameKey: "upgrade.phase.name", descriptionKey: "upgrade.phase.description" },
-  { id: "aegisCycle", category: "system", rarity: "rare", max: 2, nameKey: "upgrade.aegisCycle.name", descriptionKey: "upgrade.aegisCycle.description" },
-  { id: "nanites", category: "system", rarity: "common", max: 3, nameKey: "upgrade.nanites.name", descriptionKey: "upgrade.nanites.description" },
-  { id: "capacitor", category: "system", rarity: "common", max: 3, nameKey: "upgrade.capacitor.name", descriptionKey: "upgrade.capacitor.description" },
-  { id: "novaCore", category: "system", rarity: "rare", max: 3, nameKey: "upgrade.novaCore.name", descriptionKey: "upgrade.novaCore.description" },
-  { id: "resonanceArray", category: "system", rarity: "rare", max: 3, nameKey: "upgrade.resonanceArray.name", descriptionKey: "upgrade.resonanceArray.description" },
-  { id: "magnet", category: "system", rarity: "common", max: 3, nameKey: "upgrade.magnet.name", descriptionKey: "upgrade.magnet.description" },
 ];
 
 function contractIsUnlocked(contract, state) {
@@ -994,30 +976,12 @@ function upgradeLevel(upgradeId) {
   return world.upgrades[upgradeId] || 0;
 }
 
-function weightedUpgradeChoice(items) {
-  const stageBonus = world.stageIndex;
-  const weightFor = (item) => item.rarity === "legendary" ? .7 + stageBonus * 1.2 : item.rarity === "rare" ? 3 + stageBonus * 1.5 : 8;
-  const total = items.reduce((sum, item) => sum + weightFor(item), 0);
-  let roll = random() * total;
-  for (const item of items) {
-    roll -= weightFor(item);
-    if (roll <= 0) return item;
-  }
-  return items[items.length - 1];
-}
-
 function rollDraftOptions() {
-  const choices = [];
-  for (const category of ["armament", "mobility", "system"]) {
-    const eligible = UPGRADE_DEFS.filter((upgrade) => upgrade.category === category && upgradeLevel(upgrade.id) < upgrade.max);
-    if (eligible.length) choices.push(weightedUpgradeChoice(eligible));
-  }
-  while (choices.length < 3) {
-    const fallback = UPGRADE_DEFS.filter((upgrade) => upgradeLevel(upgrade.id) < upgrade.max && !choices.includes(upgrade));
-    if (!fallback.length) break;
-    choices.push(weightedUpgradeChoice(fallback));
-  }
-  return choices;
+  return SpaceRoguelike.rollDraftOptions({
+    levels: world.upgrades,
+    stageIndex: world.stageIndex,
+    random,
+  });
 }
 
 function renderBuildTray() {
@@ -1078,21 +1042,7 @@ function applyRunUpgrade(upgrade) {
   world.upgrades[upgrade.id] = level;
   world.upgradeHistory.push(upgrade.id);
   for (const player of world.players) {
-    if (upgrade.id === "overclock") player.fireRate *= 1.16;
-    else if (upgrade.id === "rail") { player.damage *= 1.2; player.projectileSpeed *= 1.12; }
-    else if (upgrade.id === "prism") { player.weaponFloor = Math.min(3, player.weaponFloor + 1); player.weapon = Math.min(4, Math.max(player.weapon, 1 + player.weaponFloor)); }
-    else if (upgrade.id === "piercing") player.pierce += 1;
-    else if (upgrade.id === "drone") player.droneLevel += 1;
-    else if (upgrade.id === "chain") player.chainDamage += 8;
-    else if (upgrade.id === "turbo") player.speed *= 1.14;
-    else if (upgrade.id === "gyro") player.handling *= 1.22;
-    else if (upgrade.id === "phase") { player.r *= .85; player.hitInvulnerability += .2; }
-    else if (upgrade.id === "aegisCycle") { player.shieldRegenInterval = Math.max(16, 30 - level * 6); player.shieldRegenTimer = Math.min(player.shieldRegenTimer, player.shieldRegenInterval); }
-    else if (upgrade.id === "nanites") { player.maxHp += 1; player.hp = Math.min(player.maxHp, player.hp + 2); }
-    else if (upgrade.id === "capacitor") player.energyGain *= 1.2;
-    else if (upgrade.id === "novaCore") player.novaDamage *= 1.3;
-    else if (upgrade.id === "resonanceArray") { player.linkRange += 16; player.beamDamage *= 1.22; }
-    else if (upgrade.id === "magnet") player.pickupMagnetRadius += level === 1 ? 70 : 35;
+    SpaceRoguelike.applyUpgradeToPlayer(player, upgrade.id, level);
   }
   audio.sfx("upgrade");
   pulseGamepad(0, 220, .55, .42);
@@ -1332,18 +1282,18 @@ function pulseGamepad(index, duration = 90, strong = 0.35, weak = 0.2) {
 
 function makeStars() {
   world.stars = Array.from({ length: 105 }, () => ({
-    x: rand(-W * 2, W * 2),
-    y: rand(-H * 2, H * 2),
-    z: rand(20, 380),
-    pz: rand(20, 380),
-    size: random() < 0.16 ? 2 : 1,
+    x: visualRand(-W * 2, W * 2),
+    y: visualRand(-H * 2, H * 2),
+    z: visualRand(20, 380),
+    pz: visualRand(20, 380),
+    size: visualRandom() < 0.16 ? 2 : 1,
   }));
 }
 
 function resetStar(star, far = false) {
-  star.x = rand(-W * 2, W * 2);
-  star.y = rand(-H * 2, H * 2);
-  star.z = far ? 380 : rand(300, 380);
+  star.x = visualRand(-W * 2, W * 2);
+  star.y = visualRand(-H * 2, H * 2);
+  star.z = far ? 380 : visualRand(300, 380);
   star.pz = star.z;
 }
 
@@ -1477,17 +1427,17 @@ function showToast(message) {
 
 function burst(x, y, color, count = 8, speed = 55) {
   for (let i = 0; i < count; i += 1) {
-    const angle = rand(0, TAU);
-    const velocity = rand(speed * 0.25, speed);
+    const angle = visualRand(0, TAU);
+    const velocity = visualRand(speed * 0.25, speed);
     world.particles.push({
       x,
       y,
       vx: Math.cos(angle) * velocity,
       vy: Math.sin(angle) * velocity,
-      life: rand(0.25, 0.7),
+      life: visualRand(0.25, 0.7),
       maxLife: 0.7,
       color,
-      size: random() < 0.4 ? 2 : 1,
+      size: visualRandom() < 0.4 ? 2 : 1,
     });
   }
 }
@@ -1857,8 +1807,8 @@ function useNova(player) {
     world.particles.push({
       x: player.x,
       y: player.y,
-      vx: Math.cos(angle) * rand(90, 190),
-      vy: Math.sin(angle) * rand(90, 190),
+      vx: Math.cos(angle) * visualRand(90, 190),
+      vy: Math.sin(angle) * visualRand(90, 190),
       life: 0.65,
       maxLife: 0.65,
       color: PLAYER_CONFIG[player.index].color,
@@ -2031,7 +1981,7 @@ function killEnemy(enemy, owner = 0) {
   if (enemy.boss) {
     handleBossDefeat(enemy);
   } else {
-    audio.sfx(random() < 0.28 ? "explode" : "hit");
+    audio.sfx(Math.random() < 0.28 ? "explode" : "hit");
     const dropChance = enemy.elite ? 1 : enemy.type === "tank" ? 0.32 : 0.105;
     if (random() < dropChance) spawnPickup(enemy.x, enemy.y);
     if (enemy.elite) {

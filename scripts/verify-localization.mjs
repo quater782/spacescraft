@@ -3,6 +3,7 @@ import vm from "node:vm";
 
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const game = fs.readFileSync(new URL("../src/game.js", import.meta.url), "utf8");
+const roguelike = fs.readFileSync(new URL("../src/roguelike.js", import.meta.url), "utf8");
 const i18nSource = fs.readFileSync(new URL("../src/i18n.js", import.meta.url), "utf8");
 
 const keys = new Set([
@@ -10,11 +11,18 @@ const keys = new Set([
   "pickup.repair",
   "pickup.shield",
   "pickup.energy",
+  "draft.category.armament",
+  "draft.category.mobility",
+  "draft.category.system",
+  "draft.rarity.common",
+  "draft.rarity.rare",
+  "draft.rarity.legendary",
 ]);
 
 for (const match of html.matchAll(/data-i18n(?:-aria-label)?="([^"]+)"/g)) keys.add(match[1]);
 for (const match of game.matchAll(/\bt\("([^"]+)"/g)) keys.add(match[1]);
 for (const match of game.matchAll(/(?:nameKey|descriptionKey|statsKey|unlockKey|codeKey|subtitleKey|bossKey):\s*"([^"]+)"/g)) keys.add(match[1]);
+for (const match of roguelike.matchAll(/(?:nameKey|descriptionKey):\s*"([^"]+)"/g)) keys.add(match[1]);
 for (const match of game.matchAll(/"(bossPhase\.\d\.\d)"/g)) keys.add(match[1]);
 
 const document = {

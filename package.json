@@ -1,14 +1,14 @@
 {
   "name": "spacescraft",
   "productName": "SPACECRAFT 星航双子",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "双人合作 WebGL 3D 太空射击游戏 / Local co-op WebGL 3D space shooter",
   "main": "electron/main.cjs",
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
     "icons": "node scripts/build-icons.mjs",
-    "verify": "node scripts/verify-docs.mjs && node --check src/i18n.js && node --check src/game.js && node --check src/renderer3d.js && node scripts/verify-localization.mjs && npm audit --omit=dev",
+    "verify": "node scripts/verify-docs.mjs && node --check src/i18n.js && node --check src/roguelike.js && node --check src/game.js && node --check src/renderer3d.js && node scripts/verify-localization.mjs && node scripts/verify-roguelike.mjs && npm audit --omit=dev",
     "start": "electron-forge start",
     "package": "electron-forge package",
     "package:win": "electron-forge package --platform=win32 --arch=x64",
