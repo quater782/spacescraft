@@ -52,7 +52,7 @@ npm start
 
 ## 技术说明
 
-- Three.js WebGL2 透视相机、`InstancedMesh` 积木体素、平面法线 PBR、独立实体/自发光/辉光深度层与动态点光源
+- Three.js WebGL2 透视相机、按色缓存的 `InstancedMesh` 积木体素、三阶 `MeshToonMaterial`、独立实体/自发光/轻辉光深度层与动态点光源
 - 480×270 透明 HUD，3D 场景根据屏幕像素密度动态渲染
 - Web Audio API 实时合成多轨 8-bit 配乐与音效
 - 固定时间步游戏循环，避免不同刷新率改变游戏速度
@@ -80,4 +80,4 @@ npm start
 - [开发与验证](./docs/DEVELOPMENT.md)
 - [桌面和 EXE 打包](./docs/PACKAGING.md)
 - [Steam 上架路线图](./docs/STEAM-ROADMAP.md)
-- [0.16.0 发行说明](./docs/RELEASE-0.16.0.md)
+- [0.17.0 发行说明](./docs/RELEASE-0.17.0.md)

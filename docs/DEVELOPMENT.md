@@ -20,7 +20,7 @@ http://127.0.0.1:4173/?qa-fast
 
 此模式仅在 `localhost` 或 `127.0.0.1` 生效，会加速章节时间并降低 Boss 测试耐久，用于快速检查九个事件、三场精英战、Boss 阶段和完整通关路径。测试结果不会写入出航、通关、最高分等生涯统计，也不会在正式域名或 Electron 文件协议下启用。
 
-自动化或人工检查可以读取 `#game` 上的 `data-mode`、`data-language`、`data-stage`、`data-stage-time`、`data-events`、`data-enemies`、`data-boss-phase`、`data-player-hp`、`data-fps` 与 `data-qa` 诊断属性。机库、合约、构筑与远征还提供 `data-frame`、`data-module`、`data-contract`、`data-talents`、`data-talent-count`、`data-score-multiplier`、`data-player-shield`、`data-player-speed`、`data-player-fire-rate`、`data-player-damage`、`data-player-energy-gain`、`data-achievement-count`、`data-stardust-reward`、`data-run-seed`、`data-upgrade-count`、`data-upgrades`、`data-draft-options`、`data-protocols`、`data-protocol-count`、`data-protocol-procs`、`data-player-buffs`、`data-player-debuffs`、`data-enemy-module-slots`、`data-enemy-build-catalog`、`data-qa-enemy-build`、`data-route-signature`、`data-biome`、`data-enemy-variants`、`data-active-builds`、`data-path-plan`、`data-active-path`、`data-path-options`、`data-path-selection`、`data-path-history`、`data-encounter-plan`、`data-active-encounter`、`data-encounter-progress`、`data-encounter-objects`、`data-encounter-history` 及七项 `data-rush-*` 狂潮状态。3D Canvas 还应为 `data-renderer="three-r185-instanced-voxel"`。
+自动化或人工检查可以读取 `#game` 上的 `data-mode`、`data-language`、`data-stage`、`data-stage-time`、`data-events`、`data-enemies`、`data-boss-phase`、`data-player-hp`、`data-fps` 与 `data-qa` 诊断属性。机库、合约、构筑与远征还提供 `data-frame`、`data-module`、`data-contract`、`data-talents`、`data-talent-count`、`data-score-multiplier`、`data-player-shield`、`data-player-speed`、`data-player-fire-rate`、`data-player-damage`、`data-player-energy-gain`、`data-achievement-count`、`data-stardust-reward`、`data-run-seed`、`data-upgrade-count`、`data-upgrades`、`data-draft-options`、`data-protocols`、`data-protocol-count`、`data-protocol-procs`、`data-player-buffs`、`data-player-debuffs`、`data-enemy-module-slots`、`data-enemy-build-catalog`、`data-qa-enemy-build`、`data-route-signature`、`data-biome`、`data-enemy-variants`、`data-active-builds`、`data-path-plan`、`data-active-path`、`data-path-options`、`data-path-selection`、`data-path-history`、`data-encounter-plan`、`data-active-encounter`、`data-encounter-progress`、`data-encounter-objects`、`data-encounter-history` 及七项 `data-rush-*` 狂潮状态。3D Canvas 还应为 `data-renderer="three-r185-instanced-voxel"`、`data-art-style="toon-glow-light-blocks"` 和 `data-model-palette="saturated-no-black"`。
 
 ### 本地机库经济测试
 
@@ -58,7 +58,7 @@ http://127.0.0.1:4173/?qa-fast&qa-protocol=cometDrive&qa-path=1&qa-encounter=rel
 
 可选稳定 ID：`cometDrive`、`phaseLance`、`prismChoir`、`stormCircuit`、`aegisNova`、`salvageReactor`、`resonantGyro`。检查 `data-protocols`、`data-protocol-count` 和 `data-protocol-procs`，并确认构筑托盘 SVG、HUD、3D 轨道遗物与自动触发音效。测试期间只发送方向输入，不得出现协议触发键。
 
-### Three.js 航空战机、异形六维敌军与状态测试
+### Three.js Toon+Glow 航空战机、异形六维敌军与状态测试
 
 使用专用正常速度建模面，不触发动态遭遇或 Boss，并强制船体以及推进/武器/核心/AI/载荷六维敌型：
 
@@ -68,7 +68,7 @@ http://127.0.0.1:4173/?qa-voxel&qa-buffs&qa-status=chill&qa-path=1&qa-hull=carri
 
 `qa-hull=scout|dart|tank|spinner|mine|lancer|carrier` 强制基础机体，`qa-enemy` 必须是五段功能模块稳定 ID；七个船体与每槽四种模块形成 7,168 个完整构筑。`qa-buffs` 自动给双机上线军械超频、纳米花簇、神盾矩阵和磁通核心；`qa-status=chill|jam|fracture` 只给 P1 施加对应异常。全部开关仅在 localhost 生效，不增加战斗键。
 
-视觉验收必须同时检查：玩家尖鼻朝屏幕上方、敌军绕 Y 轴 180° 朝屏幕下方；玩家具有细长机身、纵向座舱、连续阶梯薄翼、倾斜尾翼与独立推进焰，不得呈现甲虫/装甲车式粗短截面；敌军不得调用玩家的机鼻/机翼/尾翼构造器，必须以弯月骨翼、分叉颚、甲壳、触须和非对称眼阵形成异形剪影；Buff/Debuff 贴合主体结构；彩色体素弹幕、体素星球/生态、3D 网格和远近雾有纵深；静止截图和连续运行中均无共面闪烁。`npm run verify` 会拒绝敌方复用人类战机构造器、原生 shader/buffer/draw call、手写面片以及 Plane/Sphere/Torus/Octahedron/Cone 几何回退。
+视觉验收必须同时检查：玩家尖鼻朝屏幕上方、敌军绕 Y 轴 180° 朝屏幕下方；玩家具有细长机身、纵向座舱、连续阶梯薄翼、倾斜尾翼与独立推进焰，不得呈现甲虫/装甲车式粗短截面；敌军不得调用玩家的机鼻/机翼/尾翼构造器，必须以弯月骨翼、分叉颚、甲壳、触须和非对称眼阵形成异形剪影；Buff/Debuff 贴合主体结构。玩家与敌军主体必须保持蓝、青、紫、粉、橙等饱和颜色，不得使用近黑色结构块，也不得因曝光过高变成粉白；表面应可见三阶 Toon 明暗，Glow 只形成略大于实体的同色边缘。单个机鼻不超过四块、单侧翼不超过四块、单侧尾翼不超过两块、单侧弯月不超过三块；彩色体素弹幕、体素星球/生态、3D 网格和远近雾有纵深；静止截图和连续运行中均无共面闪烁。`npm run verify` 会拒绝近黑舰体色、超预算核心构造器、敌方复用人类战机构造器、原生 shader/buffer/draw call、手写面片以及 Plane/Sphere/Torus/Octahedron/Cone 几何回退。
 
 ### 星门分支测试
 
@@ -106,7 +106,7 @@ http://127.0.0.1:4173/?qa-fast&qa-rush&qa-path=1&qa-encounter=relay&seed=2
 npm run smoke:electron
 ```
 
-成功输出必须同时包含 `talentPurchase.owned: true`、`talentCount: "1"`、`protocols: "cometDrive"`、`protocolCount: "1"`、大于 0 的 `protocolProcs`、双机 `playerSpeed` 大于 109、`rushActive: "true"`、`rushCount: "1"`、`encounterHistory: "relay:success"`、`rendererState.backend: "three-r185-instanced-voxel"`、`webgl: true`、`consoleErrors: 0`、接近 60 的 `fps` 和不低于 CSS 显示尺寸的 `hudResolution`；`settledRush` 还必须记录 `rushActive: "false"` 和大于 0 的 `rushLastBonus`。脚本依次生成完整战斗、状态体素和无 Buff 干净机体三张截图。这项测试不能替代可见窗口下对其余六协议、自然构筑/充能、九天赋组合、其余四类目标、Boss 音频、双人和手柄的人工回归。
+成功输出必须同时包含 `talentPurchase.owned: true`、`talentCount: "1"`、`protocols: "cometDrive"`、`protocolCount: "1"`、大于 0 的 `protocolProcs`、双机 `playerSpeed` 大于 109、`rushActive: "true"`、`rushCount: "1"`、`encounterHistory: "relay:success"`、`rendererState.backend: "three-r185-instanced-voxel"`、`rendererState.artStyle: "toon-glow-light-blocks"`、`rendererState.modelPalette: "saturated-no-black"`、`webgl: true`、`consoleErrors: 0`、接近 60 的 `fps` 和不低于 CSS 显示尺寸的 `hudResolution`；`settledRush` 还必须记录 `rushActive: "false"` 和大于 0 的 `rushLastBonus`。脚本依次生成完整战斗、状态体素和无 Buff 干净机体三张截图。这项测试不能替代可见窗口下对其余六协议、自然构筑/充能、九天赋组合、其余四类目标、Boss 音频、双人和手柄的人工回归。
 
 ## 桌面版本
 
@@ -143,12 +143,12 @@ npm start
 17. 使用测试钱包按三条依赖链点亮九项天赋，检查精确扣款、刷新持久化、双机属性、前置拒绝、v4 迁移和清档恢复。
 18. 在自然充能和 `qa-rush` 两条路径检查自动触发、火力倍率、拾取牵引、光链消弹、击破延时、3D 能量环、动态音乐、结算与七项诊断。
 19. 逐项覆盖七种遗物协议，检查第二次构筑配套注入、方向确认、自动触发、SVG/HUD/3D、协议音乐、结果摘要与 CSP 控制台。
-20. 用有/无状态两种 `qa-voxel` 画面检查玩家/敌军相反朝向、尖鼻/连续承力翼/尾焰、六维模块对主体轮廓的改变、体素弹幕/背景、稳定发光层和 60 FPS；确认没有悬浮微方块、面片堆砌或共面闪烁。
+20. 用有/无状态两种 `qa-voxel` 画面检查玩家/敌军相反朝向、尖鼻/连续承力翼/尾焰、六维模块对主体轮廓的改变、饱和 Toon 色块、轻微 Glow、体素弹幕/背景和 60 FPS；确认没有近黑舰体、过曝粉白、悬浮微方块、面片堆砌或共面闪烁。
 21. 更新 `CHANGELOG.md`、[当前项目状态](./PROJECT-STATE.md)、发行说明和相关设计文档。
 
 ## 架构
 
-- `src/renderer3d.js`：Three.js WebGL2、实例化 `BoxGeometry`、PBR/自发光/辉光分层、点光源、体素背景和全部 3D 模型。
+- `src/renderer3d.js`：Three.js WebGL2、按色实例化 `BoxGeometry`、三阶 Toon/自发光/轻辉光分层、点光源、体素背景和全部 3D 模型。
 - `src/game.js`：固定时间步、关卡、碰撞、AI、音频和 HUD。
 - `src/roguelike.js`：局内升级池、确定性 RNG、候选生成和升级效果。
 - `src/relics.js`：七种两件套协议、激活判定、配套候选注入和自动协同倍率。

@@ -1,9 +1,9 @@
 import * as THREE from "../node_modules/three/build/three.module.min.js";
 
 const TAU = Math.PI * 2;
-const MAX_SOLID_VOXELS = 4096;
+const MAX_SOLID_PER_COLOR = 512;
 const MAX_EMISSIVE_PER_COLOR = 512;
-const MAX_GLOW_VOXELS = 2048;
+const MAX_GLOW_PER_COLOR = 512;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const lerp = (a, b, t) => a + (b - a) * t;
 
@@ -32,7 +32,7 @@ class SpaceRenderer3D {
     }
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.42;
+    this.renderer.toneMappingExposure = 1.02;
     this.renderer.shadowMap.enabled = false;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
 
@@ -42,28 +42,15 @@ class SpaceRenderer3D {
     this.camera = new THREE.PerspectiveCamera(55.4, 16 / 9, .1, 80);
 
     this.boxGeometry = new THREE.BoxGeometry(1, 1, 1);
-    this.solidMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, flatShading: true, roughness: .62, metalness: .24 });
-    this.glowMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      vertexColors: true,
-      transparent: true,
-      opacity: .16,
-      depthWrite: false,
-      depthTest: true,
-      blending: THREE.AdditiveBlending,
-      toneMapped: false,
-      fog: false,
-    });
-    this.solidBatch = new THREE.InstancedMesh(this.boxGeometry, this.solidMaterial, MAX_SOLID_VOXELS);
-    this.glowBatch = new THREE.InstancedMesh(this.boxGeometry, this.glowMaterial, MAX_GLOW_VOXELS);
-    this.solidBatch.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.glowBatch.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.solidBatch.frustumCulled = false;
-    this.glowBatch.frustumCulled = false;
-    this.solidBatch.castShadow = false;
-    this.solidBatch.receiveShadow = false;
-    this.glowBatch.renderOrder = 4;
-    this.scene.add(this.solidBatch, this.glowBatch);
+    const toonBands = new Uint8Array([72, 152, 232]);
+    this.toonGradient = new THREE.DataTexture(toonBands, 3, 1, THREE.RedFormat);
+    this.toonGradient.colorSpace = THREE.NoColorSpace;
+    this.toonGradient.minFilter = THREE.NearestFilter;
+    this.toonGradient.magFilter = THREE.NearestFilter;
+    this.toonGradient.generateMipmaps = false;
+    this.toonGradient.needsUpdate = true;
+    this.toonBatches = new Map();
+    this.glowBatches = new Map();
     this.emissiveBatches = new Map();
 
     this.floor = new THREE.Mesh(new THREE.BoxGeometry(28, .08, 38), new THREE.MeshStandardMaterial({ color: "#111634", roughness: .78, metalness: .18 }));
@@ -79,26 +66,26 @@ class SpaceRenderer3D {
 
     this.starLayers = [this.createStars(280, .058, 90210), this.createStars(150, .085, 37191)];
     this.starLayers.forEach((stars) => this.scene.add(stars));
-    this.hemisphere = new THREE.HemisphereLight("#d8e7ff", "#2d1648", 3.2);
-    this.keyLight = new THREE.DirectionalLight("#ffffff", 3.4);
+    this.fillLight = new THREE.AmbientLight("#ffffff", .32);
+    this.hemisphere = new THREE.HemisphereLight("#d8e7ff", "#2d1648", 1.05);
+    this.keyLight = new THREE.DirectionalLight("#ffffff", 1.55);
     this.keyLight.position.set(-7, 12, 8);
     this.keyLight.castShadow = false;
     this.keyLight.shadow.mapSize.set(1024, 1024);
     Object.assign(this.keyLight.shadow.camera, { left: -15, right: 15, top: 14, bottom: -14, near: 1, far: 42 });
     this.keyLight.shadow.bias = .0005;
     this.keyLight.shadow.normalBias = .025;
-    this.rimLight = new THREE.PointLight("#7fffe2", 10, 25, 2);
+    this.rimLight = new THREE.PointLight("#7fffe2", 2.6, 25, 2);
     this.rimLight.position.set(0, 4, -8);
-    this.playerLights = [new THREE.PointLight("#66f6e5", 4, 7, 2), new THREE.PointLight("#ff7aa8", 4, 7, 2)];
-    this.scene.add(this.hemisphere, this.keyLight, this.rimLight, ...this.playerLights);
+    this.playerLights = [new THREE.PointLight("#66f6e5", 1.25, 7, 2), new THREE.PointLight("#ff7aa8", 1.25, 7, 2)];
+    this.scene.add(this.fillLight, this.hemisphere, this.keyLight, this.rimLight, ...this.playerLights);
 
-    this.solidCursor = 0;
-    this.glowCursor = 0;
-    this.tempColor = new THREE.Color();
     this.tempShell = new THREE.Matrix4();
     this.shellScale = new THREE.Vector3();
     this.ready = true;
     this.canvas.dataset.renderer = "three-r185-instanced-voxel";
+    this.canvas.dataset.artStyle = "toon-glow-light-blocks";
+    this.canvas.dataset.modelPalette = "saturated-no-black";
   }
 
   createStars(count, size, seed) {
@@ -130,32 +117,72 @@ class SpaceRenderer3D {
   }
 
   beginFrame() {
-    this.solidCursor = 0;
-    this.glowCursor = 0;
-    this.solidBatch.count = 0;
-    this.glowBatch.count = 0;
-    for (const batch of this.emissiveBatches.values()) {
+    for (const batch of [...this.toonBatches.values(), ...this.glowBatches.values(), ...this.emissiveBatches.values()]) {
       batch.userData.cursor = 0;
       batch.count = 0;
     }
   }
 
   endFrame() {
-    this.solidBatch.count = this.solidCursor;
-    this.glowBatch.count = this.glowCursor;
-    this.solidBatch.instanceMatrix.needsUpdate = true;
-    this.glowBatch.instanceMatrix.needsUpdate = true;
-    if (this.solidBatch.instanceColor) this.solidBatch.instanceColor.needsUpdate = true;
-    if (this.glowBatch.instanceColor) this.glowBatch.instanceColor.needsUpdate = true;
-    for (const batch of this.emissiveBatches.values()) {
+    for (const batch of [...this.toonBatches.values(), ...this.glowBatches.values(), ...this.emissiveBatches.values()]) {
       batch.count = batch.userData.cursor;
       batch.instanceMatrix.needsUpdate = true;
     }
     this.renderer.render(this.scene, this.camera);
   }
 
+  colorKey(color) {
+    if (typeof color === "string") return color.replace("#", "").toLowerCase();
+    return new THREE.Color(color).getHexString();
+  }
+
+  toonBatchFor(color) {
+    const key = this.colorKey(color);
+    if (this.toonBatches.has(key)) return this.toonBatches.get(key);
+    const material = new THREE.MeshToonMaterial({ color: `#${key}`, gradientMap: this.toonGradient });
+    material.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <emissivemap_fragment>",
+        "#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * 0.08;",
+      );
+    };
+    material.customProgramCacheKey = () => "toon-color-fill-v2";
+    const batch = new THREE.InstancedMesh(this.boxGeometry, material, MAX_SOLID_PER_COLOR);
+    batch.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    batch.frustumCulled = false;
+    batch.castShadow = false;
+    batch.receiveShadow = false;
+    batch.userData.cursor = 0;
+    this.toonBatches.set(key, batch);
+    this.scene.add(batch);
+    return batch;
+  }
+
+  glowBatchFor(color) {
+    const key = this.colorKey(color);
+    if (this.glowBatches.has(key)) return this.glowBatches.get(key);
+    const material = new THREE.MeshBasicMaterial({
+      color: `#${key}`,
+      transparent: true,
+      opacity: .055,
+      depthWrite: false,
+      depthTest: true,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+      fog: false,
+    });
+    const batch = new THREE.InstancedMesh(this.boxGeometry, material, MAX_GLOW_PER_COLOR);
+    batch.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    batch.frustumCulled = false;
+    batch.renderOrder = 4;
+    batch.userData.cursor = 0;
+    this.glowBatches.set(key, batch);
+    this.scene.add(batch);
+    return batch;
+  }
+
   emissiveBatchFor(color) {
-    const key = new THREE.Color(color).getHexString();
+    const key = this.colorKey(color);
     if (this.emissiveBatches.has(key)) return this.emissiveBatches.get(key);
     const material = new THREE.MeshBasicMaterial({ color: `#${key}`, toneMapped: false, fog: false });
     const batch = new THREE.InstancedMesh(this.boxGeometry, material, MAX_EMISSIVE_PER_COLOR);
@@ -173,7 +200,8 @@ class SpaceRenderer3D {
   }
 
   pushVoxel(matrix, color, emissive = 0) {
-    const luminous = emissive >= .38;
+    const glow = Math.max(.13, emissive);
+    const luminous = emissive >= .82;
     if (luminous) {
       const batch = this.emissiveBatchFor(color);
       const cursor = batch.userData.cursor;
@@ -181,17 +209,21 @@ class SpaceRenderer3D {
         batch.setMatrixAt(cursor, matrix);
         batch.userData.cursor += 1;
       }
-    } else if (this.solidCursor < MAX_SOLID_VOXELS) {
-      this.solidBatch.setMatrixAt(this.solidCursor, matrix);
-      this.solidBatch.setColorAt(this.solidCursor, this.tempColor.set(color));
-      this.solidCursor += 1;
+    } else {
+      const batch = this.toonBatchFor(color);
+      const cursor = batch.userData.cursor;
+      if (cursor < MAX_SOLID_PER_COLOR) {
+        batch.setMatrixAt(cursor, matrix);
+        batch.userData.cursor += 1;
+      }
     }
-    if (emissive > .1 && this.glowCursor < MAX_GLOW_VOXELS) {
-      const size = 1.08 + Math.min(.1, emissive * .045);
+    const glowBatch = this.glowBatchFor(color);
+    const glowCursor = glowBatch.userData.cursor;
+    if (glowCursor < MAX_GLOW_PER_COLOR) {
+      const size = 1.045 + Math.min(.07, glow * .04);
       this.tempShell.copy(matrix).scale(this.shellScale.set(size, size, size));
-      this.glowBatch.setMatrixAt(this.glowCursor, this.tempShell);
-      this.glowBatch.setColorAt(this.glowCursor, this.tempColor.set(color));
-      this.glowCursor += 1;
+      glowBatch.setMatrixAt(glowCursor, this.tempShell);
+      glowBatch.userData.cursor += 1;
     }
   }
 
@@ -224,43 +256,32 @@ class SpaceRenderer3D {
   }
 
   voxelThruster(base, x, z, color, flame, scale = 1) {
-    this.voxel(base, [x, -.02, z], [.2 * scale, .2 * scale, .3], "#070b17");
-    this.voxel(base, [x, -.02, z + .2], [.14 * scale, .14 * scale, .18 + flame * .14], "#fff6c4", 1);
-    this.voxel(base, [x, -.02, z + .35 + flame * .07], [.09 * scale, .09 * scale, .14 + flame * .18], color, 1);
+    this.voxel(base, [x, -.02, z], [.19 * scale, .17 * scale, .3], "#5268d8", .22);
+    this.voxel(base, [x, -.02, z + .3 + flame * .05], [.1 * scale, .1 * scale, .3 + flame * .2], color, .9);
   }
 
   fighterNose(base, palette, length = 1, canopy = "#dffcff") {
     const [dark, bright, light] = palette;
-    this.voxel(base, [0, .055, -.48 * length], [.48, .2, .82 * length], dark);
-    this.voxel(base, [0, .05, -.94 * length], [.34, .16, .46 * length], bright);
-    this.voxel(base, [0, .035, -1.23 * length], [.2, .12, .24 * length], bright);
-    this.voxel(base, [0, .025, -1.41 * length], [.1, .08, .14 * length], light, .3);
-    this.voxel(base, [0, .02, -1.52 * length], [.045, .045, .09 * length], bright, .22);
-    this.voxel(base, [0, .205, -.49 * length], [.3, .13, .52 * length], canopy, .78);
-    this.voxel(base, [0, .265, -.23 * length], [.22, .055, .17 * length], light, .28);
+    this.voxel(base, [0, .055, -.58 * length], [.46, .2, .96 * length], dark, .16);
+    this.voxel(base, [0, .045, -1.14 * length], [.25, .13, .36 * length], bright, .18);
+    this.voxel(base, [0, .025, -1.4 * length], [.09, .07, .16 * length], light, .24);
+    this.voxel(base, [0, .205, -.51 * length], [.28, .13, .5 * length], canopy, .48);
   }
 
   sweptWing(base, side, palette, width = 1, rear = .55, armored = false) {
     const [dark, bright, light] = palette;
     const sweep = side * .055;
-    this.voxel(base, [side * .46 * width, .015, -.02], [.72 * width, .09, .4], bright, .14, [0, sweep, 0]);
-    this.voxel(base, [side * .91 * width, 0, .2 + rear * .08], [.58 * width, .075, .34], bright, .1, [0, sweep, 0]);
-    this.voxel(base, [side * 1.25 * width, -.01, .4 + rear * .1], [.42 * width, .06, .27], dark, 0, [0, sweep, 0]);
-    this.voxel(base, [side * 1.49 * width, -.015, .56 + rear * .11], [.22 * width, .05, .18], bright, .08, [0, sweep, 0]);
-    this.voxel(base, [side * .82 * width, .072, .02], [.84 * width, .035, .075], light, .4, [0, sweep, 0]);
-    this.voxel(base, [side * 1.22 * width, .045, .43], [.38 * width, .025, .06], light, .24, [0, sweep, 0]);
-    if (armored) {
-      this.voxel(base, [side * .48 * width, .095, .2], [.42 * width, .1, .48], dark);
-      this.voxel(base, [side * .94 * width, .07, .38], [.38 * width, .065, .28], bright);
-    }
+    this.voxel(base, [side * .48 * width, .02, .02], [.78 * width, .1, .44], bright, .18, [0, sweep, 0]);
+    this.voxel(base, [side * 1.03 * width, 0, .28 + rear * .08], [.68 * width, .075, .32], dark, .16, [0, sweep, 0]);
+    this.voxel(base, [side * 1.46 * width, -.012, .55 + rear * .08], [.32 * width, .055, .2], light, .24, [0, sweep, 0]);
+    if (armored) this.voxel(base, [side * .53 * width, .1, .2], [.42 * width, .1, .48], light, .18);
   }
 
   tailFins(base, palette, spread = .4, height = 1) {
     const [dark, bright, light] = palette;
     for (const side of [-1, 1]) {
-      this.voxel(base, [side * spread, .22 * height, .72], [.075, .36 * height, .42], dark, 0, [side * -.16, 0, 0]);
-      this.voxel(base, [side * spread, .42 * height, .78], [.05, .2 * height, .25], bright, 0, [side * -.16, 0, 0]);
-      this.voxel(base, [side * spread, .53 * height, .72], [.035, .07, .12], light, .58);
+      this.voxel(base, [side * spread, .25 * height, .72], [.075, .4 * height, .44], dark, .18, [side * -.16, 0, 0]);
+      this.voxel(base, [side * spread, .48 * height, .75], [.045, .13 * height, .2], light, .34, [side * -.16, 0, 0]);
     }
   }
 
@@ -269,35 +290,30 @@ class SpaceRenderer3D {
     const span = profile.span;
     if ((player.buffs?.arsenal || 0) > 0) {
       for (const side of [-1, 1]) {
-        this.voxel(base, [side * span * .4, .085, -.38], [.12, .09, .82], palette[0]);
-        this.voxel(base, [side * span * .4, .125, -.61], [.055, .035, .54], "#ffe36d", .74);
-        this.voxel(base, [side * span * .4, .13, -.96], [.06 * flash, .06 * flash, .14], "#fff6be", 1);
+        this.voxel(base, [side * span * .4, .11, -.48], [.1, .08, .86], "#ffd94a", .38);
+        this.voxel(base, [side * span * .4, .13, -.95], [.055 * flash, .055 * flash, .15], "#ff8a4c", .88);
       }
     }
     if ((player.buffs?.nanobloom || 0) > 0) {
-      this.voxel(base, [0, .22, .5], [.24, .075, .68], palette[0]);
-      this.voxel(base, [0, .265, .48], [.12, .035, .58], "#78f5aa", .82);
-      for (const side of [-1, 1]) this.voxel(base, [side * span * .34, .08, .55], [.07, .045, .52], "#78f5aa", .62);
+      this.voxel(base, [0, .25, .48], [.18, .07, .68], "#58e890", .5);
+      this.voxel(base, [0, .29, .46], [.08, .035, .52], "#b8ff6a", .76);
     }
     if ((player.buffs?.aegis || 0) > 0) {
       const pulse = 1 + Math.sin(this.time * 8) * .05;
       for (const side of [-1, 1]) {
-        this.voxel(base, [side * span * .65, .085, .08], [.055 * pulse, .04, 1.08], "#76dbff", .78, [0, side * .12, 0]);
-        this.voxel(base, [side * span * .25, .275, -.18], [.055, .055, .64], "#baffff", .6);
+        this.voxel(base, [side * span * .63, .09, .08], [.05 * pulse, .04, 1.06], "#4edcff", .62, [0, side * .12, 0]);
       }
     }
     if ((player.buffs?.flux || 0) > 0) {
       const pulse = 1 + Math.sin(this.time * 10) * .12;
-      this.voxel(base, [0, .3, .08], [.21 * pulse, .095, .74], palette[0]);
-      this.voxel(base, [0, .35, .02], [.11 * pulse, .045, .62], "#bc86ff", 1);
-      this.voxel(base, [0, .22, .72], [.1, .05, .46], "#bc86ff", .74);
+      this.voxel(base, [0, .32, .04], [.16 * pulse, .08, .72], "#a967ff", .58);
+      this.voxel(base, [0, .37, -.02], [.07 * pulse, .035, .52], "#ff67d4", .82);
     }
     const debuffs = [["chill", "#70eaff"], ["jam", "#ff83d7"], ["fracture", "#ffb45f"]].filter(([id]) => (player.debuffs?.[id] || 0) > 0);
     const statusScale = 1 + clamp(player.statusFlash || 0, 0, .44) * .5;
     debuffs.forEach(([, color], statusIndex) => {
       const bandZ = .18 + statusIndex * .28;
-      this.voxel(base, [0, .2 + statusIndex * .028, bandZ], [profile.bodyWidth * .9, .035 * statusScale, .08], color, 1);
-      for (const side of [-1, 1]) this.voxel(base, [side * span * (.56 + statusIndex * .035), .055, bandZ], [.1, .04 * statusScale, .15], color, .72);
+      this.voxel(base, [0, .22 + statusIndex * .028, bandZ], [profile.bodyWidth * .9, .035 * statusScale, .08], color, .86);
     });
   }
 
@@ -313,38 +329,33 @@ class SpaceRenderer3D {
     };
     const profile = profiles[frameId] || profiles.comet;
     const base = compose(position, [pitch, 0, roll], [profile.scale, profile.scale, profile.scale]);
-    const palette = [colors.dark, colors.color, colors.light];
+    const pilotPalettes = [
+      ["#3974e8", "#32d9c7", "#a66cff"],
+      ["#b348c7", "#ff617d", "#ffb347"],
+    ];
+    const palette = pilotPalettes[player.index] || [colors.color, colors.light, "#8f72ff"];
     const flame = .52 + Math.sin(this.time * 28 + player.index) * .16;
 
-    this.voxel(base, [0, .05, .18], [profile.bodyWidth, .21 + (profile.armored ? .035 : 0), profile.bodyLength], palette[0]);
-    this.voxel(base, [0, .125, -.02], [profile.bodyWidth * .7, .11, profile.bodyLength * 1.14], palette[1], .12);
-    this.voxel(base, [0, .045, .88], [profile.bodyWidth * .78, .16, .54], palette[0]);
-    this.fighterNose(base, palette, profile.nose, frameId === "bulwark" ? "#58bad1" : "#24b7d0");
+    this.voxel(base, [0, .055, .24], [profile.bodyWidth, .21 + (profile.armored ? .035 : 0), profile.bodyLength * 1.08], palette[0], .18);
+    this.voxel(base, [0, .145, -.04], [profile.bodyWidth * .68, .1, profile.bodyLength], palette[1], .2);
+    this.fighterNose(base, palette, profile.nose, palette[2]);
     for (const side of [-1, 1]) this.sweptWing(base, side, palette, profile.wing, frameId === "pulse" ? .96 : .78, profile.armored);
     if (frameId === "bulwark") {
       for (const side of [-1, 1]) {
-        this.voxel(base, [side * .47, .065, .3], [.2, .2, 1.25], palette[0]);
-        this.voxel(base, [side * .47, .135, -.2], [.13, .08, .68], palette[1]);
-        this.voxel(base, [side * .47, .185, -.42], [.07, .035, .38], palette[2], .35);
+        this.voxel(base, [side * .47, .075, .28], [.2, .18, 1.2], palette[2], .2);
       }
     } else if (frameId === "pulse") {
       for (const side of [-1, 1]) {
-        this.voxel(base, [side * .43, .045, -.42], [.36, .075, .78], palette[1], 0, [0, side * .2, 0]);
-        this.voxel(base, [side * .58, .09, -.65], [.07, .035, .54], palette[2], .45, [0, side * .2, 0]);
+        this.voxel(base, [side * .48, .06, -.5], [.34, .07, .82], palette[2], .26, [0, side * .2, 0]);
       }
     } else {
-      for (const side of [-1, 1]) {
-        this.voxel(base, [side * .29, .06, .45], [.18, .18, 1.02], palette[0]);
-        this.voxel(base, [side * .29, .13, .12], [.1, .055, .56], palette[1]);
-      }
-      this.voxel(base, [0, .235, .1], [.3, .045, .7], palette[2], .25);
+      for (const side of [-1, 1]) this.voxel(base, [side * .29, .07, .46], [.17, .16, 1], palette[2], .2);
     }
     this.tailFins(base, palette, profile.tail, frameId === "bulwark" ? .94 : frameId === "pulse" ? .8 : .88);
     for (const engineX of profile.engines) this.voxelThruster(base, engineX, 1.05, palette[1], flame, frameId === "bulwark" ? .72 : .68);
     if (!demo && player.shield > 0) {
       const shieldPulse = 1 + Math.sin(this.time * 8) * .08;
       this.voxelCage(base, profile.span * .64, "#86eaff", .55 * shieldPulse);
-      for (const side of [-1, 1]) this.voxel(base, [side * profile.span * .31, .29, -.76], [profile.span * .48, .025, .05], "#baffff", .82, [0, side * .12, 0]);
     }
     if (!demo) this.drawPlayerModules(player, base, palette, profile);
   }
@@ -352,26 +363,24 @@ class SpaceRenderer3D {
   alienCrescent(base, palette, span = 1, rake = 1) {
     const [dark, bright, light] = palette;
     for (const side of [-1, 1]) {
-      this.voxel(base, [side * .43 * span, .025, -.08], [.72 * span, .1, .28], bright, 0, [0, side * .26 * rake, 0]);
-      this.voxel(base, [side * .96 * span, 0, .22], [.64 * span, .075, .22], dark, 0, [0, side * .48 * rake, 0]);
-      this.voxel(base, [side * 1.36 * span, -.01, .52], [.48 * span, .055, .14], bright, 0, [0, side * .68 * rake, 0]);
-      this.voxel(base, [side * .82 * span, .085, .08], [.5 * span, .032, .07], light, .42, [0, side * .42 * rake, 0]);
+      this.voxel(base, [side * .45 * span, .025, -.06], [.76 * span, .1, .3], bright, .18, [0, side * .26 * rake, 0]);
+      this.voxel(base, [side * 1.02 * span, 0, .26], [.68 * span, .075, .22], dark, .16, [0, side * .48 * rake, 0]);
+      this.voxel(base, [side * 1.46 * span, -.01, .57], [.42 * span, .055, .15], light, .26, [0, side * .68 * rake, 0]);
     }
   }
 
   alienTendril(base, side, palette, x = .5, z = .55, curl = 1, glow = null) {
     const handed = side || 1;
-    for (let segment = 0; segment < 4; segment += 1) {
-      const taper = 1 - segment * .17;
-      this.voxel(base, [handed * (x + segment * .16 * curl), .015 + segment * .018, z + segment * .34], [.13 * taper, .105 * taper, .48], segment % 2 ? palette[1] : palette[0], 0, [0, handed * -.18 * curl, 0]);
-      if (glow) this.voxel(base, [handed * (x + segment * .16 * curl), .075, z + segment * .34], [.035, .025, .3], glow, .72, [0, handed * -.18 * curl, 0]);
+    for (let segment = 0; segment < 3; segment += 1) {
+      const taper = 1 - segment * .22;
+      const color = glow && segment === 2 ? glow : palette[segment % palette.length];
+      this.voxel(base, [handed * (x + segment * .19 * curl), .02 + segment * .02, z + segment * .39], [.14 * taper, .105 * taper, .54], color, segment === 2 ? .34 : .17, [0, handed * -.2 * curl, 0]);
     }
   }
 
   alienEye(base, x, z, color, scale = 1) {
-    this.voxel(base, [x, .25 * scale, z], [.24 * scale, .13 * scale, .3 * scale], "#100d1c");
-    this.voxel(base, [x, .325 * scale, z - .06], [.11 * scale, .045 * scale, .15 * scale], color, 1);
-    this.voxel(base, [x, .35 * scale, z - .12], [.035 * scale, .025 * scale, .05 * scale], "#ffffff", 1);
+    this.voxel(base, [x, .25 * scale, z], [.24 * scale, .13 * scale, .3 * scale], "#5468d8", .2);
+    this.voxel(base, [x, .325 * scale, z - .07], [.1 * scale, .045 * scale, .14 * scale], color, .88);
   }
 
   drawEnemyChassis(enemy, base, palette) {
@@ -441,17 +450,12 @@ class SpaceRenderer3D {
     const flame = .38 + Math.sin(this.time * 18 + enemy.seed) * .1;
     const handed = Math.sin(Number(enemy.seed) || 1) >= 0 ? 1 : -1;
     if (enemy.movementModule === "weave") {
-      for (const side of [-1, 1]) {
-        this.alienTendril(base, side, palette, .42, .42, side === handed ? 1.08 : .78, moduleColor);
-        this.voxelThruster(base, side * .46, 1.22, moduleColor, flame, .46);
-      }
+      for (const side of [-1, 1]) this.alienTendril(base, side, palette, .42, .48, side === handed ? 1.08 : .78, moduleColor);
     } else if (enemy.movementModule === "rush") {
-      this.voxel(base, [0, .04, .72], [.3, .15, .9], palette[0]);
-      this.voxel(base, [0, .12, .78], [.09, .045, .7], moduleColor, .78);
-      for (const side of [-1, 0, 1]) this.voxelThruster(base, side * .2, 1.16, moduleColor, .7 + flame, .48);
+      this.voxel(base, [0, .08, .72], [.25, .13, .88], palette[2], .2);
+      for (const side of [-1, 1]) this.voxelThruster(base, side * .2, 1.12, moduleColor, .7 + flame, .46);
     } else if (enemy.movementModule === "drift") {
       this.alienTendril(base, handed, palette, .52, .45, 1.28, moduleColor);
-      this.alienTendril(base, -handed, palette, .38, .5, .55, null);
       this.voxelThruster(base, handed * .56, 1.2, moduleColor, flame, .5);
     } else {
       for (const side of [-1, 1]) this.voxelThruster(base, side * .24, .94, moduleColor, flame, .48);
@@ -459,46 +463,33 @@ class SpaceRenderer3D {
 
     if (enemy.weaponModule === "twin") {
       for (const side of [-1, 1]) {
-        this.voxel(base, [side * .3, .08, -.76], [.11, .11, 1.02], palette[0], 0, [0, side * .06, 0]);
-        this.voxel(base, [side * .3, .11, -1.3], [.055, .045, .3], moduleColor, .9);
+        this.voxel(base, [side * .3, .08, -.82], [.11, .11, 1.12], palette[1], .18, [0, side * .06, 0]);
+        this.voxel(base, [side * .3, .11, -1.4], [.055, .045, .24], moduleColor, .86);
       }
     } else if (enemy.weaponModule === "sniper") {
-      this.voxel(base, [0, .09, -.94], [.14, .12, 1.48], palette[0]);
-      this.voxel(base, [0, .12, -1.72], [.065, .05, .36], moduleColor, 1);
-      this.voxel(base, [0, .12, -1.95], [.03, .025, .12], "#ffffff", 1);
+      this.voxel(base, [0, .09, -1], [.14, .12, 1.58], palette[2], .22);
+      this.voxel(base, [0, .12, -1.84], [.055, .045, .3], moduleColor, .9);
     } else if (enemy.weaponModule === "orbit") {
-      for (const side of [-1, 1]) {
-        this.voxel(base, [side * .62, .09, -.18], [.82, .075, .16], palette[0], 0, [0, side * .35, 0]);
-        this.voxel(base, [side * .96, .12, -.43], [.2, .07, .32], moduleColor, .92, [0, side * .35, 0]);
-      }
+      for (const side of [-1, 1]) this.voxel(base, [side * .7, .1, -.24], [.88, .075, .17], side === handed ? moduleColor : palette[2], .34, [0, side * .35, 0]);
     } else {
-      this.voxel(base, [0, .08, -.88], [.12, .1, .72], palette[0]);
-      this.voxel(base, [0, .11, -1.27], [.055, .045, .18], moduleColor, 1);
+      this.voxel(base, [0, .08, -.92], [.12, .1, .8], palette[1], .18);
+      this.voxel(base, [0, .11, -1.36], [.055, .045, .16], moduleColor, .88);
     }
 
     if (enemy.coreModule === "plated") {
-      for (const side of [-1, 1]) {
-        this.voxel(base, [side * .24, .2, .08], [.32, .11, .82], "#25263a", 0, [0, side * .12, 0]);
-        this.voxel(base, [side * .47, .13, .2], [.3, .07, .6], palette[0], 0, [0, side * .25, 0]);
-      }
+      for (const side of [-1, 1]) this.voxel(base, [side * .28, .2, .08], [.36, .11, .82], side === handed ? palette[2] : palette[0], .2, [0, side * .12, 0]);
     } else if (enemy.coreModule === "barrier") {
-      for (const side of [-1, 1]) {
-        this.voxel(base, [side * .46, .14, .02], [.045, .04, 1.22], moduleColor, .75, [0, side * .13, 0]);
-        this.voxel(base, [side * .25, .24, -.04], [.22, .055, .72], palette[0]);
-      }
+      for (const side of [-1, 1]) this.voxel(base, [side * .44, .17, .02], [.05, .045, 1.2], moduleColor, .68, [0, side * .13, 0]);
       if (enemy.moduleBarrier > 0) {
         const pulse = 1 + Math.sin(this.time * 9 + enemy.seed) * .04;
         this.voxel(base, [0, .44, -.26], [1.3 * pulse, .035, .07], moduleColor, 1);
-        this.voxel(base, [0, .44, .48], [1.06 * pulse, .03, .06], moduleColor, .72);
       }
     } else if (enemy.coreModule === "volatile") {
       const pulse = 1 + Math.sin(this.time * 10 + enemy.seed) * .12;
-      this.voxel(base, [0, .21, .08], [.4 * pulse, .15, .58], palette[0]);
-      this.voxel(base, [0, .29, .05], [.22 * pulse, .07, .4], moduleColor, 1);
-      this.voxel(base, [0, .32, .04], [.7, .03, .065], moduleColor, .68);
+      this.voxel(base, [0, .22, .08], [.4 * pulse, .15, .58], palette[2], .22);
+      this.voxel(base, [0, .3, .04], [.2 * pulse, .06, .38], moduleColor, .86);
     } else {
-      this.voxel(base, [0, .21, -.02], [.32, .11, .52], palette[1]);
-      this.voxel(base, [0, .275, -.08], [.16, .045, .34], moduleColor, .62);
+      this.voxel(base, [0, .23, -.02], [.3, .11, .5], moduleColor, .48);
     }
 
     if (enemy.aiModule === "hunter") {
@@ -507,27 +498,19 @@ class SpaceRenderer3D {
       this.alienEye(base, handed * .38, -.38, "#ffcf6e", .75);
       this.voxel(base, [handed * .72, .13, -.14], [.5, .04, .42], "#ffcf6e", .72, [0, handed * .3, 0]);
     } else if (enemy.aiModule === "oracle") {
-      this.voxel(base, [0, .34, -.14], [.46, .07, .56], palette[0]);
-      this.voxel(base, [0, .39, -.34], [.32, .035, .24], moduleColor, 1);
-      this.voxel(base, [0, .37, .12], [.06, .18, .56], "#ffffff", .75);
+      this.voxel(base, [0, .35, -.14], [.46, .07, .56], palette[2], .24);
+      this.voxel(base, [0, .4, -.35], [.3, .035, .22], moduleColor, .9);
     } else {
       this.alienEye(base, handed * .07, -.42, "#fff5b5", .62);
     }
 
     if (enemy.payloadModule === "cryo") {
-      for (const side of [-1, 1]) {
-        this.voxel(base, [side * .42, .08, .55], [.16, .08, .72], palette[0], 0, [0, side * .14, 0]);
-        this.voxel(base, [side * .42, .13, .57], [.055, .03, .58], "#70eaff", .86, [0, side * .14, 0]);
-      }
+      for (const side of [-1, 1]) this.voxel(base, [side * .42, .13, .57], [.07, .045, .66], "#70eaff", .74, [0, side * .14, 0]);
     } else if (enemy.payloadModule === "glitch") {
       const color = Math.floor(this.time * 14 + enemy.seed) % 2 ? "#ff83d7" : "#7f8cff";
-      this.voxel(base, [handed * .14, .17, .56], [.82, .035, .08], color, 1, [0, handed * .14, 0]);
-      this.voxel(base, [-handed * .2, .19, .3], [.5, .03, .055], color, .75, [0, -handed * .2, 0]);
+      this.voxel(base, [handed * .14, .18, .55], [.82, .04, .08], color, .82, [0, handed * .14, 0]);
     } else if (enemy.payloadModule === "fracture") {
-      for (const side of [-1, 1]) {
-        this.voxel(base, [side * .5, .1, .48], [.22, .085, .62], palette[0], 0, [0, side * .2, 0]);
-        this.voxel(base, [side * .5, .15, .42], [.065, .035, .42], "#ffb45f", .9, [0, side * .2, 0]);
-      }
+      for (const side of [-1, 1]) this.voxel(base, [side * .5, .15, .44], [.08, .045, .5], "#ff9d4f", .8, [0, side * .2, 0]);
     }
   }
 
@@ -541,13 +524,13 @@ class SpaceRenderer3D {
       return;
     }
     const palettes = {
-      scout: ["#49386e", "#a28cff", "#ffe17d"],
-      dart: ["#6b3348", "#ff7965", "#ffd173"],
-      tank: ["#593546", "#ef6874", "#fff19a"],
-      spinner: ["#48386d", "#ad90ff", "#dff8ff"],
-      mine: ["#5b2d50", "#ef5794", "#ffd46c"],
-      lancer: ["#24566a", "#4dd5ef", "#d9fbff"],
-      carrier: ["#5b4165", "#dd73a8", "#ffe278"],
+      scout: ["#6254d9", "#a86cff", "#ffd454"],
+      dart: ["#cf4777", "#ff6b60", "#ffc857"],
+      tank: ["#7b4bd7", "#e85a9f", "#ffb64f"],
+      spinner: ["#477ddd", "#8d70ff", "#51e1ff"],
+      mine: ["#9848d0", "#ef59c8", "#6ee7ff"],
+      lancer: ["#2d89d0", "#3fe0d0", "#ffd64f"],
+      carrier: ["#784fd0", "#e75d9e", "#ffcb55"],
     };
     const palette = palettes[enemy.type] || palettes.scout;
     const moduleColor = enemy.moduleColor || "#7fffe2";
@@ -561,15 +544,15 @@ class SpaceRenderer3D {
       }
     }
     if (enemy.hitFlash > 0) {
-      this.voxel(base, [0, .46, -.2], [.92, .035, .07], "#ffffff", 1);
-      this.voxel(base, [0, .46, .32], [.64, .03, .055], "#ffffff", 1);
+      this.voxel(base, [0, .46, -.2], [.92, .035, .07], "#7fffe2", 1);
+      this.voxel(base, [0, .46, .32], [.64, .03, .055], "#ff73bd", 1);
     }
   }
 
   drawBoss(enemy, base) {
     const stage = this.stageIndex;
     const pulse = .5 + Math.sin(this.time * 6) * .5;
-    const palettes = enemy.hitFlash > 0 ? ["#eaffff", "#ffffff", "#ffffff"] : [["#551f4c", "#f26ba5", "#ffbd78"], ["#153d4b", "#56d3bd", "#f3c94f"], ["#361039", "#b84786", "#ff4b6e"]][stage];
+    const palettes = enemy.hitFlash > 0 ? ["#72eaff", "#ff73bd", "#ffe15d"] : [["#824fcf", "#f261aa", "#ffbd58"], ["#327fd0", "#52d9b8", "#f3cf4f"], ["#7540c8", "#d94d9a", "#ff596f"]][stage];
     const scale = [1.12, 1.24, 1.36][stage];
     const bossBase = multiply(base, compose([0, 0, 0], [0, 0, 0], [scale, scale, scale]));
     const handed = Math.sin(Number(enemy.seed) || 1) >= 0 ? 1 : -1;
@@ -753,7 +736,7 @@ class SpaceRenderer3D {
       const base = compose(position, rotation);
       if (bullet.weaponModule === "sniper") {
         this.voxel(base, [0, 0, 0], [size * .72, size * .72, size * 4.2], color, 1);
-        this.voxel(base, [0, 0, size * 2.5], [size * .28, size * .28, size * 2.2], "#ffffff", .85);
+        this.voxel(base, [0, 0, size * 2.5], [size * .28, size * .28, size * 2.2], bullet.payloadColor || "#ffd454", .76);
       } else if (bullet.weaponModule === "orbit") {
         this.voxel(base, [0, 0, 0], [size * 2.4, size, size], color, 1, [0, bullet.age * 5, 0]);
         this.voxel(base, [0, 0, 0], [size, size, size * 2.4], color, 1, [0, bullet.age * 5, 0]);
@@ -763,27 +746,22 @@ class SpaceRenderer3D {
       } else this.voxel(base, [0, 0, 0], [size, size, size * 1.55], color, 1);
       if (bullet.payloadModule !== "clean") {
         const payloadColor = bullet.payloadColor || color;
-        this.voxel(base, [-size * 1.4, 0, size * .2], [size * .42, size * .42, size * .42], payloadColor, 1);
-        this.voxel(base, [size * 1.4, 0, size * .2], [size * .42, size * .42, size * .42], payloadColor, 1);
+        this.voxel(base, [0, 0, size * 1.35], [size * .7, size * .7, size * .7], payloadColor, .82);
       }
     } else {
       const base = compose(position, rotation);
       if (bullet.phaseBarrier) {
-        this.voxel(base, [0, 0, 0], [.11, .08, .72], "#d7f1ff", 1);
+        this.voxel(base, [0, 0, 0], [.11, .08, .72], "#58dfff", 1);
         this.voxel(base, [0, .01, -.34], [.18, .06, .18], bullet.color, .85);
-        for (const side of [-1, 1]) this.voxel(base, [side * .11, 0, .08], [.045, .045, .54], bullet.color, .82);
       } else if ((bullet.seeker || 0) > 0) {
         this.voxel(base, [0, 0, -.04], [.08, .08, .46], bullet.color, 1);
-        for (const side of [-1, 1]) this.voxel(base, [side * .1, 0, .14], [.16, .05, .18], bullet.color, .78, [0, side * .35, 0]);
-        this.voxel(base, [0, 0, -.3], [.04, .04, .18], "#ffffff", 1);
+        this.voxel(base, [0, 0, .2], [.24, .05, .16], "#a96cff", .82);
       } else if ((bullet.r || 0) > 2.35) {
         this.voxel(base, [0, 0, 0], [.11, .11, .52], bullet.color, 1);
-        this.voxel(base, [0, .01, -.32], [.065, .065, .2], "#ffffff", 1);
-        this.voxel(base, [0, 0, .34], [.18, .045, .16], bullet.color, .68);
+        this.voxel(base, [0, .01, -.32], [.065, .065, .2], "#ffd454", .82);
       } else {
         this.voxel(base, [0, 0, 0], [.07, .07, .42], bullet.color, 1);
-        this.voxel(base, [0, 0, -.28], [.035, .035, .2], "#ffffff", .85);
-        this.voxel(base, [0, 0, .28], [.12, .04, .14], bullet.color, .58);
+        this.voxel(base, [0, 0, .26], [.12, .04, .13], "#8d70ff", .7);
       }
     }
   }
@@ -793,7 +771,7 @@ class SpaceRenderer3D {
     const colors = { weapon: "#ffe36d", repair: "#78f5aa", shield: "#76dbff", energy: "#bc86ff" };
     const color = colors[pickup.type];
     const base = compose(position, [0, pickup.age * 1.2, 0]);
-    this.voxel(base, [0, 0, 0], [.34, .34, .34], "#151b31");
+    this.voxel(base, [0, 0, 0], [.34, .34, .34], "#5865d8", .24);
     if (pickup.type === "weapon") for (const side of [-1, 1]) this.voxel(base, [side * .22, .08, -.08], [.1, .12, .48], color, 1);
     else if (pickup.type === "repair") {
       this.voxel(base, [0, .08, 0], [.14, .46, .14], color, 1);
@@ -806,7 +784,7 @@ class SpaceRenderer3D {
       this.voxel(base, [0, .08, 0], [.16, .22, .16], color, 1);
       this.voxel(base, [.12, -.14, 0], [.16, .2, .16], color, 1);
     }
-    this.voxelHalo(base, .55, 0, color, 8, .75, pickup.age, .055);
+    this.voxelHalo(base, .55, 0, color, 5, .75, pickup.age, .055);
   }
 
   drawParticle(particle) {
@@ -875,9 +853,9 @@ class SpaceRenderer3D {
     this.starLayers[0].position.z = (this.time * .8) % 18;
     this.starLayers[1].position.z = ((this.time * .55) % 18) - 12;
     this.rimLight.color.set(stage.biome?.accent || stage.grid);
-    this.rimLight.intensity = this.quality === "low" ? 5 : 9;
+    this.rimLight.intensity = this.quality === "low" ? 1.45 : 2.6;
     this.renderer.shadowMap.enabled = false;
-    this.solidBatch.castShadow = false;
+    for (const batch of this.toonBatches.values()) batch.castShadow = false;
     this.playerLights.forEach((light, index) => {
       const player = world.players?.[index];
       light.visible = Boolean(player && world.mode !== "menu");
