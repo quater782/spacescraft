@@ -5,7 +5,9 @@ const os = require("node:os");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
-const screenshotPath = path.join(os.tmpdir(), "spacescraft-rush-electron-smoke.png");
+const screenshotPath = path.join(os.tmpdir(), "spacescraft-voxel-electron-smoke.png");
+const voxelShowcaseScreenshotPath = path.join(os.tmpdir(), "spacescraft-voxel-showcase.png");
+const airframeShowcaseScreenshotPath = path.join(os.tmpdir(), "spacescraft-airframe-showcase.png");
 const talentScreenshotPath = path.join(os.tmpdir(), "spacescraft-talent-grid-smoke.png");
 const mime = {
   ".html": "text/html; charset=utf-8",
@@ -44,7 +46,7 @@ async function run() {
   window.webContents.on("console-message", (_event, level, message) => {
     if (level >= 2) errors.push(message);
   });
-  await window.loadURL(`http://127.0.0.1:${port}/?qa-fast&qa-wallet&qa-rush&qa-protocol=cometDrive&qa-path=1&qa-encounter=relay&seed=2`);
+  await window.loadURL(`http://127.0.0.1:${port}/?qa-fast&qa-wallet&qa-rush&qa-buffs&qa-protocol=cometDrive&qa-path=1&qa-encounter=relay&qa-enemy=drift.orbit.barrier.oracle.cryo&seed=2`);
   const talentState = await window.webContents.executeJavaScript(`(() => {
     document.querySelector('#hangarButton').click();
     document.querySelector('[data-talent-id="vectorThrusters"]').click();
@@ -68,12 +70,14 @@ async function run() {
     await delay(100);
     state = await window.webContents.executeJavaScript(`(() => {
       const game = document.querySelector('#game');
-      return Object.fromEntries(['mode', 'qa', 'stage', 'fps', 'activeEncounter', 'encounterProgress', 'encounterObjects', 'encounterPlan', 'hudResolution', 'talents', 'talentCount', 'playerSpeed', 'rushActive', 'rushCharge', 'rushTimer', 'rushChain', 'rushBestChain', 'rushCount', 'protocols', 'protocolCount', 'protocolProcs'].map((key) => [key, game.dataset[key]]));
+      return Object.fromEntries(['mode', 'qa', 'stage', 'fps', 'activeEncounter', 'encounterProgress', 'encounterObjects', 'encounterPlan', 'hudResolution', 'talents', 'talentCount', 'playerSpeed', 'rushActive', 'rushCharge', 'rushTimer', 'rushChain', 'rushBestChain', 'rushCount', 'protocols', 'protocolCount', 'protocolProcs', 'enemyModuleSlots', 'enemyBuildCatalog', 'qaEnemyBuild', 'activeBuilds', 'playerBuffs', 'playerDebuffs'].map((key) => [key, game.dataset[key]]));
     })()`);
     if (state.activeEncounter === "relay" && state.rushCount === "1") break;
   }
   if (state?.activeEncounter !== "relay") throw new Error(`relay encounter did not become active: ${JSON.stringify(state)}`);
   if (state.rushActive !== "true" || state.rushCount !== "1" || Number(state.rushTimer) <= 0) throw new Error(`automatic rush did not activate: ${JSON.stringify(state)}`);
+  if (state.enemyModuleSlots !== "5" || state.enemyBuildCatalog !== "1024" || state.qaEnemyBuild !== "drift.orbit.barrier.oracle.cryo") throw new Error(`five-slot enemy forge diagnostics missing: ${JSON.stringify(state)}`);
+  if (!state.playerBuffs.split(",").every((buffs) => ["arsenal", "nanobloom", "aegis", "flux"].every((id) => buffs.includes(id)))) throw new Error(`automatic buff modules missing: ${state.playerBuffs}`);
 
   window.webContents.sendInputEvent({ type: "keyDown", keyCode: "D" });
   window.webContents.sendInputEvent({ type: "keyDown", keyCode: "W" });
@@ -100,8 +104,12 @@ async function run() {
   if (state.talents !== "vectorThrusters" || state.talentCount !== "1") throw new Error(`talent diagnostics missing: ${JSON.stringify(state)}`);
   if (!state.playerSpeed.split(",").every((speed) => Number(speed) > 96)) throw new Error(`talent combat effect missing: ${state.playerSpeed}`);
   if (errors.length) throw new Error(`renderer console errors: ${errors.join(" | ")}`);
-  const webgl = await window.webContents.executeJavaScript("Boolean(document.querySelector('#scene').getContext('webgl'))");
-  if (!webgl) throw new Error("WebGL context unavailable");
+  const rendererState = await window.webContents.executeJavaScript(`(() => {
+    const scene = document.querySelector('#scene');
+    return { backend: scene.dataset.renderer, webgl: Boolean(scene.getContext('webgl2') || scene.getContext('webgl')) };
+  })()`);
+  const webgl = rendererState.webgl;
+  if (!webgl || rendererState.backend !== "three-r185-instanced-voxel") throw new Error(`Three.js WebGL renderer unavailable: ${JSON.stringify(rendererState)}`);
   const rushState = await window.webContents.executeJavaScript(`(() => {
     const game = document.querySelector('#game');
     return Object.fromEntries(['rushActive', 'rushCharge', 'rushTimer', 'rushChain', 'rushBestChain', 'rushCount', 'rushLastBonus'].map((key) => [key, game.dataset[key]]));
@@ -118,7 +126,39 @@ async function run() {
     if (settledRush.rushActive === "false" && Number(settledRush.rushLastBonus) > 0) break;
   }
   if (settledRush.rushActive !== "false" || Number(settledRush.rushLastBonus) <= 0) throw new Error(`rush did not settle with a score bonus: ${JSON.stringify(settledRush)}`);
-  process.stdout.write(`${JSON.stringify({ ...state, protocolState, rushState, settledRush, talentPurchase: talentState, encounterHistory, webgl, consoleErrors: errors.length, screenshot: screenshotPath, talentScreenshot: talentScreenshotPath })}\n`);
+  await window.loadURL(`http://127.0.0.1:${port}/?qa-voxel&qa-buffs&qa-status=chill&qa-path=1&qa-enemy=drift.orbit.barrier.oracle.cryo&seed=2`);
+  await window.webContents.executeJavaScript(`
+    document.querySelector('#startButton').click();
+    if (!document.querySelector('#tutorial').hidden) document.querySelector('#tutorialContinueButton').click();
+    true;
+  `);
+  await delay(6000);
+  const voxelState = await window.webContents.executeJavaScript(`(() => {
+    const game = document.querySelector('#game');
+    return Object.fromEntries(['mode', 'qa', 'stageTime', 'fps', 'activeBuilds', 'enemyModuleSlots', 'enemyBuildCatalog', 'qaEnemyBuild', 'playerBuffs', 'playerDebuffs'].map((key) => [key, game.dataset[key]]));
+  })()`);
+  if (!voxelState.activeBuilds.includes("drift.orbit.barrier.oracle.cryo") || voxelState.enemyBuildCatalog !== "1024") throw new Error(`voxel showcase did not render the forced five-slot build: ${JSON.stringify(voxelState)}`);
+  if (!voxelState.playerBuffs.includes("arsenal|nanobloom|aegis|flux")) throw new Error(`voxel showcase buffs missing: ${JSON.stringify(voxelState)}`);
+  if (!voxelState.playerDebuffs.startsWith("chill,")) throw new Error(`voxel showcase debuff missing: ${JSON.stringify(voxelState)}`);
+  const voxelImage = await window.webContents.capturePage();
+  fs.writeFileSync(voxelShowcaseScreenshotPath, voxelImage.toPNG());
+  if (errors.length) throw new Error(`renderer console errors after voxel showcase: ${errors.join(" | ")}`);
+  await window.loadURL(`http://127.0.0.1:${port}/?qa-voxel&qa-path=1&qa-enemy=drift.orbit.barrier.oracle.cryo&seed=2`);
+  await window.webContents.executeJavaScript(`
+    document.querySelector('#startButton').click();
+    if (!document.querySelector('#tutorial').hidden) document.querySelector('#tutorialContinueButton').click();
+    true;
+  `);
+  await delay(6000);
+  const cleanVoxelState = await window.webContents.executeJavaScript(`(() => {
+    const game = document.querySelector('#game');
+    return Object.fromEntries(['fps', 'activeBuilds', 'enemyBuildCatalog', 'playerBuffs', 'playerDebuffs'].map((key) => [key, game.dataset[key]]));
+  })()`);
+  if (!cleanVoxelState.activeBuilds.includes("drift.orbit.barrier.oracle.cryo") || cleanVoxelState.playerBuffs !== "none,none") throw new Error(`clean airframe showcase invalid: ${JSON.stringify(cleanVoxelState)}`);
+  const airframeImage = await window.webContents.capturePage();
+  fs.writeFileSync(airframeShowcaseScreenshotPath, airframeImage.toPNG());
+  if (errors.length) throw new Error(`renderer console errors after clean airframe showcase: ${errors.join(" | ")}`);
+  process.stdout.write(`${JSON.stringify({ ...state, protocolState, rushState, settledRush, voxelState, cleanVoxelState, talentPurchase: talentState, encounterHistory, rendererState, webgl, consoleErrors: errors.length, screenshot: screenshotPath, voxelShowcaseScreenshot: voxelShowcaseScreenshotPath, airframeShowcaseScreenshot: airframeShowcaseScreenshotPath, talentScreenshot: talentScreenshotPath })}\n`);
   window.destroy();
   server.close();
   app.quit();

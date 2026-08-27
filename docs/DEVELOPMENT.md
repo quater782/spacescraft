@@ -20,7 +20,7 @@ http://127.0.0.1:4173/?qa-fast
 
 此模式仅在 `localhost` 或 `127.0.0.1` 生效，会加速章节时间并降低 Boss 测试耐久，用于快速检查九个事件、三场精英战、Boss 阶段和完整通关路径。测试结果不会写入出航、通关、最高分等生涯统计，也不会在正式域名或 Electron 文件协议下启用。
 
-自动化或人工检查可以读取 `#game` 上的 `data-mode`、`data-language`、`data-stage`、`data-stage-time`、`data-events`、`data-enemies`、`data-boss-phase`、`data-player-hp`、`data-fps` 与 `data-qa` 诊断属性。机库、合约、构筑与远征还提供 `data-frame`、`data-module`、`data-contract`、`data-talents`、`data-talent-count`、`data-score-multiplier`、`data-player-shield`、`data-player-speed`、`data-player-fire-rate`、`data-player-damage`、`data-player-energy-gain`、`data-achievement-count`、`data-stardust-reward`、`data-run-seed`、`data-upgrade-count`、`data-upgrades`、`data-draft-options`、`data-protocols`、`data-protocol-count`、`data-protocol-procs`、`data-route-signature`、`data-biome`、`data-enemy-variants`、`data-active-builds`、`data-path-plan`、`data-active-path`、`data-path-options`、`data-path-selection`、`data-path-history`、`data-encounter-plan`、`data-active-encounter`、`data-encounter-progress`、`data-encounter-objects`、`data-encounter-history` 及七项 `data-rush-*` 狂潮状态。
+自动化或人工检查可以读取 `#game` 上的 `data-mode`、`data-language`、`data-stage`、`data-stage-time`、`data-events`、`data-enemies`、`data-boss-phase`、`data-player-hp`、`data-fps` 与 `data-qa` 诊断属性。机库、合约、构筑与远征还提供 `data-frame`、`data-module`、`data-contract`、`data-talents`、`data-talent-count`、`data-score-multiplier`、`data-player-shield`、`data-player-speed`、`data-player-fire-rate`、`data-player-damage`、`data-player-energy-gain`、`data-achievement-count`、`data-stardust-reward`、`data-run-seed`、`data-upgrade-count`、`data-upgrades`、`data-draft-options`、`data-protocols`、`data-protocol-count`、`data-protocol-procs`、`data-player-buffs`、`data-player-debuffs`、`data-enemy-module-slots`、`data-enemy-build-catalog`、`data-qa-enemy-build`、`data-route-signature`、`data-biome`、`data-enemy-variants`、`data-active-builds`、`data-path-plan`、`data-active-path`、`data-path-options`、`data-path-selection`、`data-path-history`、`data-encounter-plan`、`data-active-encounter`、`data-encounter-progress`、`data-encounter-objects`、`data-encounter-history` 及七项 `data-rush-*` 狂潮状态。3D Canvas 还应为 `data-renderer="three-r185-instanced-voxel"`。
 
 ### 本地机库经济测试
 
@@ -46,7 +46,7 @@ http://127.0.0.1:4173/?qa-fast&qa-wallet&qa-contracts
 http://127.0.0.1:4173/?qa-fast&qa-draft&seed=20260826
 ```
 
-构筑页同样遵循“只控制方向”的产品约束：左右选择，上下确认；P1 可使用 WASD，P2 可使用方向键。`npm run verify` 会额外检查 15 项升级效果、同种子复现、类别覆盖、满级过滤、早期稀有度权重、叠层和玩法/视觉随机源隔离，并验证 9 种生态、64 种敌军构筑、第一章安全包络与后期模块多样性。
+构筑页同样遵循“只控制方向”的产品约束：左右选择，上下确认；P1 可使用 WASD，P2 可使用方向键。`npm run verify` 会额外检查 15 项升级效果、同种子复现、类别覆盖、满级过滤、早期稀有度权重、叠层和玩法/视觉随机源隔离，并验证 9 种生态、1,024 种五槽敌军构筑、第一章安全包络与后期模块多样性。
 
 ### 遗物协议测试
 
@@ -57,6 +57,18 @@ http://127.0.0.1:4173/?qa-fast&qa-protocol=cometDrive&qa-path=1&qa-encounter=rel
 ```
 
 可选稳定 ID：`cometDrive`、`phaseLance`、`prismChoir`、`stormCircuit`、`aegisNova`、`salvageReactor`、`resonantGyro`。检查 `data-protocols`、`data-protocol-count` 和 `data-protocol-procs`，并确认构筑托盘 SVG、HUD、3D 轨道遗物与自动触发音效。测试期间只发送方向输入，不得出现协议触发键。
+
+### Three.js 体素机体、五槽敌军与状态测试
+
+使用专用正常速度建模面，不触发动态遭遇或 Boss，并强制一个推进/武器/核心/AI/载荷五槽敌型：
+
+```text
+http://127.0.0.1:4173/?qa-voxel&qa-buffs&qa-status=chill&qa-path=1&qa-enemy=drift.orbit.barrier.oracle.cryo&seed=2
+```
+
+`qa-enemy` 必须是五段稳定 ID；当前每槽四种模块，完整目录为 1,024。`qa-buffs` 自动给双机上线军械超频、纳米花簇、神盾矩阵和磁通核心；`qa-status=chill|jam|fracture` 只给 P1 施加对应异常。全部开关仅在 localhost 生效，不增加战斗键。
+
+视觉验收必须同时检查：玩家白色尖鼻朝屏幕上方、敌军绕 Y 轴 180° 朝屏幕下方；纵向座舱、连续后掠翼、尾翼与推进焰构成清晰战机剪影；Buff/Debuff 贴合机体而非形成虫形附肢；彩色体素弹幕、体素星球/生态、3D 网格和远近雾有纵深；静止截图和连续运行中均无共面闪烁。`npm run verify` 会拒绝原生 shader/buffer/draw call、手写面片以及 Plane/Sphere/Torus/Octahedron/Cone 几何回退。
 
 ### 星门分支测试
 
@@ -94,7 +106,7 @@ http://127.0.0.1:4173/?qa-fast&qa-rush&qa-path=1&qa-encounter=relay&seed=2
 npm run smoke:electron
 ```
 
-成功输出必须同时包含 `talentPurchase.owned: true`、`talentCount: "1"`、`protocols: "cometDrive"`、`protocolCount: "1"`、大于 0 的 `protocolProcs`、双机 `playerSpeed` 大于 109、`rushActive: "true"`、`rushCount: "1"`、`encounterHistory: "relay:success"`、`webgl: true`、`consoleErrors: 0`、接近 60 的 `fps` 和不低于 CSS 显示尺寸的 `hudResolution`；`settledRush` 还必须记录 `rushActive: "false"` 和大于 0 的 `rushLastBonus`。这项测试不能替代可见窗口下对其余六协议、自然构筑/充能、九天赋组合、其余四类目标、Boss 音频、双人和手柄的人工回归。
+成功输出必须同时包含 `talentPurchase.owned: true`、`talentCount: "1"`、`protocols: "cometDrive"`、`protocolCount: "1"`、大于 0 的 `protocolProcs`、双机 `playerSpeed` 大于 109、`rushActive: "true"`、`rushCount: "1"`、`encounterHistory: "relay:success"`、`rendererState.backend: "three-r185-instanced-voxel"`、`webgl: true`、`consoleErrors: 0`、接近 60 的 `fps` 和不低于 CSS 显示尺寸的 `hudResolution`；`settledRush` 还必须记录 `rushActive: "false"` 和大于 0 的 `rushLastBonus`。脚本依次生成完整战斗、状态体素和无 Buff 干净机体三张截图。这项测试不能替代可见窗口下对其余六协议、自然构筑/充能、九天赋组合、其余四类目标、Boss 音频、双人和手柄的人工回归。
 
 ## 桌面版本
 
@@ -131,14 +143,16 @@ npm start
 17. 使用测试钱包按三条依赖链点亮九项天赋，检查精确扣款、刷新持久化、双机属性、前置拒绝、v4 迁移和清档恢复。
 18. 在自然充能和 `qa-rush` 两条路径检查自动触发、火力倍率、拾取牵引、光链消弹、击破延时、3D 能量环、动态音乐、结算与七项诊断。
 19. 逐项覆盖七种遗物协议，检查第二次构筑配套注入、方向确认、自动触发、SVG/HUD/3D、协议音乐、结果摘要与 CSP 控制台。
-20. 更新 `CHANGELOG.md`、[当前项目状态](./PROJECT-STATE.md)、发行说明和相关设计文档。
+20. 用有/无状态两种 `qa-voxel` 画面检查玩家/敌军相反朝向、尖鼻/后掠翼/尾焰、五槽外挂、体素弹幕/背景、稳定发光层和 60 FPS；确认没有面片闪烁。
+21. 更新 `CHANGELOG.md`、[当前项目状态](./PROJECT-STATE.md)、发行说明和相关设计文档。
 
 ## 架构
 
-- `src/renderer3d.js`：原生 WebGL 渲染、矩阵、着色器和 3D 模型。
+- `src/renderer3d.js`：Three.js WebGL2、实例化 `BoxGeometry`、PBR/自发光/辉光分层、点光源、体素背景和全部 3D 模型。
 - `src/game.js`：固定时间步、关卡、碰撞、AI、音频和 HUD。
 - `src/roguelike.js`：局内升级池、确定性 RNG、候选生成和升级效果。
 - `src/relics.js`：七种两件套协议、激活判定、配套候选注入和自动协同倍率。
+- `src/status.js`：四种自动 Buff、三种敌方 Debuff、拾取映射、计时目录和战斗倍率。
 - `src/constellation.js`：九项长期天赋、前置依赖、购买判定、存档清洗和玩家效果。
 - `src/rush.js`：星链狂潮阈值、事件充能、共振增益/衰减和自动战斗倍率。
 - `src/expedition.js`：生态航线、星门协议/航道判定、动态遭遇计划/结果判定、敌型权重与模块化敌军组装规则。
@@ -152,6 +166,8 @@ npm start
 - `scripts/verify-constellation.mjs`：验证九项天赋、三条依赖、购买门槛、存档清洗与实际属性效果。
 - `scripts/verify-rush.mjs`：验证六类事件、充能边界、共振速率、战斗倍率、QA 与 3D 接线。
 - `scripts/verify-expedition.mjs`：验证生态、星门、动态遭遇、敌军组合、早期安全、后期多样性与 3D 集成。
+- `scripts/verify-renderer3d.mjs`：验证 Three.js 精确依赖、实例化方块、分层深度、相反机头和禁止原生面片/光滑几何回退。
+- `scripts/verify-status.mjs`：验证四 Buff、三 Debuff、双语、自动规则与玩法/音频/HUD/3D 接线。
 - `scripts/smoke-electron.cjs`：启动隔离的真实 Electron/WebGL 会话，验证方向交互并生成截图。
 - `scripts/verify-docs.mjs`：检查必需文档、Codex 指令大小和仓库内 Markdown 链接。
 

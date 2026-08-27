@@ -6,13 +6,14 @@ const roguelikeSource = fs.readFileSync(new URL("../src/roguelike.js", import.me
 const expeditionSource = fs.readFileSync(new URL("../src/expedition.js", import.meta.url), "utf8");
 const gameSource = fs.readFileSync(new URL("../src/game.js", import.meta.url), "utf8");
 const rendererSource = fs.readFileSync(new URL("../src/renderer3d.js", import.meta.url), "utf8");
+const i18nSource = fs.readFileSync(new URL("../src/i18n.js", import.meta.url), "utf8");
 const sandbox = { window: {} };
 vm.runInNewContext(roguelikeSource, sandbox, { filename: "src/roguelike.js" });
 vm.runInNewContext(expeditionSource, sandbox, { filename: "src/expedition.js" });
 
 const expedition = sandbox.window.SpaceExpedition;
 const { createRng } = sandbox.window.SpaceRoguelike;
-const { BIOMES, MOVEMENT_MODULES, WEAPON_MODULES, CORE_MODULES, PATH_PROTOCOLS, ENCOUNTER_PROTOCOLS } = expedition;
+const { BIOMES, MOVEMENT_MODULES, WEAPON_MODULES, CORE_MODULES, AI_MODULES, PAYLOAD_MODULES, PATH_PROTOCOLS, ENCOUNTER_PROTOCOLS } = expedition;
 
 assert.equal(BIOMES.length, 9, "v0.9 must ship nine ecosystems");
 assert.equal(new Set(BIOMES.map((biome) => biome.id)).size, 9, "ecosystem IDs must be unique");
@@ -99,20 +100,31 @@ assert.equal(expedition.evaluateEncounter(meteorEncounter, { hits: 2, timeRemain
 assert.equal(MOVEMENT_MODULES.length, 4);
 assert.equal(WEAPON_MODULES.length, 4);
 assert.equal(CORE_MODULES.length, 4);
+assert.equal(AI_MODULES.length, 4);
+assert.equal(PAYLOAD_MODULES.length, 4);
+for (const module of [...MOVEMENT_MODULES, ...WEAPON_MODULES, ...CORE_MODULES, ...AI_MODULES, ...PAYLOAD_MODULES]) {
+  assert.equal(i18nSource.split(`"${module.nameKey}"`).length - 1, 2, `${module.id} must be named in both locales`);
+}
 const builds = [];
 for (const movement of MOVEMENT_MODULES) {
   for (const weapon of WEAPON_MODULES) {
     for (const core of CORE_MODULES) {
-      const build = expedition.build(movement.id, weapon.id, core.id, 2);
-      builds.push(build);
-      assert.ok(build.speed > 0 && build.hp > 0 && build.scale > 0 && build.score > 0);
-      assert.ok(build.bulletSpeed > 0 && build.cooldown > 0 && build.spread > 0);
-      for (const value of Object.values(build)) if (typeof value === "number") assert.ok(Number.isFinite(value), `${build.signature} contains a non-finite value`);
+      for (const ai of AI_MODULES) {
+        for (const payload of PAYLOAD_MODULES) {
+          const build = expedition.build(movement.id, weapon.id, core.id, ai.id, payload.id, 2);
+          builds.push(build);
+          assert.ok(build.speed > 0 && build.hp > 0 && build.scale > 0 && build.score > 0);
+          assert.ok(build.bulletSpeed > 0 && build.cooldown > 0 && build.spread > 0);
+          assert.ok(["nearest", "weakest", "isolated", "leading"].includes(build.targeting));
+          assert.equal(build.debuff, payload.debuff);
+          for (const value of Object.values(build)) if (typeof value === "number") assert.ok(Number.isFinite(value), `${build.signature} contains a non-finite value`);
+        }
+      }
     }
   }
 }
-assert.equal(builds.length, 64, "four modules per slot must produce 64 complete builds");
-assert.equal(new Set(builds.map((build) => build.signature)).size, 64, "all modular build signatures must be unique");
+assert.equal(builds.length, 1024, "five four-way slots must produce 1024 complete builds");
+assert.equal(new Set(builds.map((build) => build.signature)).size, 1024, "all modular build signatures must be unique");
 
 for (const biome of BIOMES.filter((entry) => entry.stageIndex === 0)) {
   assert.ok(biome.enemyHp <= 1.02, `${biome.id} violates early HP safety`);
@@ -121,7 +133,7 @@ for (const biome of BIOMES.filter((entry) => entry.stageIndex === 0)) {
   for (let i = 0; i < 100; i += 1) {
     const random = createRng(i + 1);
     assert.equal(expedition.chooseEnemyHull({ stageIndex: 0, progress: .25, biome, random }), "scout");
-    assert.equal(expedition.assembleEnemy({ stageIndex: 0, progress: .25, biome, branch: PATH_PROTOCOLS[i % PATH_PROTOCOLS.length], random }).signature, "standard.pulse.light");
+    assert.equal(expedition.assembleEnemy({ stageIndex: 0, progress: .25, biome, branch: PATH_PROTOCOLS[i % PATH_PROTOCOLS.length], random }).signature, "standard.pulse.light.sentry.clean");
   }
 }
 
@@ -133,7 +145,7 @@ for (let i = 0; i < 400; i += 1) {
   laterSignatures.add(expedition.assembleEnemy({ stageIndex: 2, progress: .85, biome: laterBiome, random: laterRandom }).signature);
   laterHulls.add(expedition.chooseEnemyHull({ stageIndex: 2, progress: .85, biome: laterBiome, random: laterRandom }));
 }
-assert.ok(laterSignatures.size >= 24, "late game must expose broad modular variety");
+assert.ok(laterSignatures.size >= 80, "late game must expose broad five-slot modular variety");
 assert.ok(laterHulls.size >= 4, "late game must expose broad hull variety");
 for (let i = 0; i < 100; i += 1) {
   const elite = expedition.assembleEnemy({ stageIndex: 2, progress: .8, biome: laterBiome, elite: true, random: createRng(i + 300) });
@@ -170,6 +182,10 @@ assert.match(gameSource, /encounter\?\.kind === "siege"/);
 assert.match(rendererSource, /enemy\.movementModule/);
 assert.match(rendererSource, /enemy\.weaponModule/);
 assert.match(rendererSource, /enemy\.coreModule/);
+assert.match(rendererSource, /enemy\.aiModule/);
+assert.match(rendererSource, /enemy\.payloadModule/);
+assert.match(gameSource, /function updateEnemyIntelligence\(enemy, dt\)/);
+assert.match(gameSource, /function applyEnemyDebuff\(player, bullet\)/);
 assert.match(rendererSource, /drawBiomeFeatures\(biome\)/);
 assert.match(rendererSource, /drawRouteGates\(choice\)/);
 assert.match(rendererSource, /drawEncounter\(encounter\)/);

@@ -36,6 +36,20 @@
     { id: "volatile", nameKey: "enemyModule.volatile", hp: .86, speed: 1.08, scale: .95, score: 1.22, barrier: 0, volatileRadius: 44 },
   ]);
 
+  const AI_MODULES = freezeAll([
+    { id: "sentry", nameKey: "enemyModule.sentry", targeting: "nearest", steer: 0, flank: 0, lead: 0, evasion: 0, cooldown: 1 },
+    { id: "hunter", nameKey: "enemyModule.hunter", targeting: "weakest", steer: .44, flank: 0, lead: .08, evasion: .08, cooldown: 1.04 },
+    { id: "flanker", nameKey: "enemyModule.flanker", targeting: "isolated", steer: .34, flank: 46, lead: .12, evasion: .16, cooldown: 1.08 },
+    { id: "oracle", nameKey: "enemyModule.oracle", targeting: "leading", steer: .22, flank: 0, lead: .34, evasion: .28, cooldown: 1.12 },
+  ]);
+
+  const PAYLOAD_MODULES = freezeAll([
+    { id: "clean", nameKey: "enemyModule.clean", debuff: "", duration: 0, intensity: 0, color: "#ff8aa3", score: 1 },
+    { id: "cryo", nameKey: "enemyModule.cryo", debuff: "chill", duration: 1.25, intensity: .18, color: "#70eaff", score: 1.12 },
+    { id: "glitch", nameKey: "enemyModule.glitch", debuff: "jam", duration: 1, intensity: .16, color: "#ff83d7", score: 1.14 },
+    { id: "fracture", nameKey: "enemyModule.fracture", debuff: "fracture", duration: 1.4, intensity: .12, color: "#ffb45f", score: 1.16 },
+  ]);
+
   const PATH_PROTOCOLS = freezeAll([
     { id: "arsenal", group: "offense", nameKey: "path.arsenal.name", descriptionKey: "path.arsenal.description", riskKey: "path.arsenal.risk", rewardKey: "path.arsenal.reward", color: "#ffcf6e", enemyHp: 1.02, spawnRate: 1, bulletSpeed: .98, score: 1.1, bpmOffset: 3, musicShift: 0, preferredWeapon: "twin", reward: { weapon: 1 } },
     { id: "resonance", group: "offense", nameKey: "path.resonance.name", descriptionKey: "path.resonance.description", riskKey: "path.resonance.risk", rewardKey: "path.resonance.reward", color: "#68d9ff", enemyHp: 1.03, spawnRate: 1, bulletSpeed: .95, score: 1.12, bpmOffset: -2, musicShift: 2, preferredWeapon: "orbit", reward: { energy: 24, link: 1.12 } },
@@ -157,9 +171,9 @@
 
   function assembleEnemy({ stageIndex, progress, biome, branch, elite = false, random }) {
     const earlySafety = stageIndex === 0 && progress < .4 && !elite;
-    if (earlySafety) return build("standard", "pulse", "light", stageIndex);
+    if (earlySafety) return build("standard", "pulse", "light", "sentry", "clean", stageIndex);
 
-    const budget = Math.min(3, stageIndex + (progress >= .42 ? 1 : 0) + (progress >= .76 ? 1 : 0) + (elite ? 1 : 0));
+    const budget = Math.min(5, stageIndex + (progress >= .42 ? 1 : 0) + (progress >= .76 ? 1 : 0) + (stageIndex >= 2 ? 1 : 0) + (elite ? 1 : 0));
     const movementPool = budget >= 1 ? MOVEMENT_MODULES : MOVEMENT_MODULES.slice(0, 1);
     const movement = biasedPick(movementPool, branch?.preferredMove || biome?.preferredMove, random);
     let weapon = WEAPON_MODULES[0];
@@ -170,13 +184,17 @@
     let core = CORE_MODULES[0];
     if (elite) core = pick(CORE_MODULES.slice(1, 3), random);
     else if (budget >= 3) core = biasedPick(CORE_MODULES, branch?.preferredCore, random);
-    return build(movement.id, weapon.id, core.id, stageIndex);
+    const ai = budget >= 4 ? pick(AI_MODULES, random) : AI_MODULES[0];
+    const payload = budget >= 5 ? pick(PAYLOAD_MODULES, random) : PAYLOAD_MODULES[0];
+    return build(movement.id, weapon.id, core.id, ai.id, payload.id, stageIndex);
   }
 
-  function build(movementId, weaponId, coreId, stageIndex = 0) {
+  function build(movementId, weaponId, coreId, aiId = "sentry", payloadId = "clean", stageIndex = 0) {
     const movement = byId(MOVEMENT_MODULES, movementId);
     const weapon = byId(WEAPON_MODULES, weaponId);
     const core = byId(CORE_MODULES, coreId);
+    const ai = byId(AI_MODULES, aiId);
+    const payload = byId(PAYLOAD_MODULES, payloadId);
     return Object.freeze({
       movementId: movement.id,
       movementNameKey: movement.nameKey,
@@ -184,6 +202,10 @@
       weaponNameKey: weapon.nameKey,
       coreId: core.id,
       coreNameKey: core.nameKey,
+      aiId: ai.id,
+      aiNameKey: ai.nameKey,
+      payloadId: payload.id,
+      payloadNameKey: payload.nameKey,
       speed: movement.speed * core.speed,
       sway: movement.sway,
       drift: movement.drift,
@@ -194,10 +216,20 @@
       spread: weapon.spread,
       hp: core.hp,
       scale: core.scale,
-      score: core.score,
+      score: core.score * payload.score,
       barrier: core.barrier ? core.barrier + stageIndex * 1.5 : 0,
       volatileRadius: core.volatileRadius,
-      signature: `${movement.id}.${weapon.id}.${core.id}`,
+      targeting: ai.targeting,
+      aiSteer: ai.steer,
+      aiFlank: ai.flank,
+      aiLead: ai.lead,
+      aiEvasion: ai.evasion,
+      aiCooldown: ai.cooldown,
+      debuff: payload.debuff,
+      debuffDuration: payload.duration,
+      debuffIntensity: payload.intensity,
+      payloadColor: payload.color,
+      signature: `${movement.id}.${weapon.id}.${core.id}.${ai.id}.${payload.id}`,
     });
   }
 
@@ -206,6 +238,8 @@
     MOVEMENT_MODULES,
     WEAPON_MODULES,
     CORE_MODULES,
+    AI_MODULES,
+    PAYLOAD_MODULES,
     PATH_PROTOCOLS,
     ENCOUNTER_PROTOCOLS,
     generateRoute,

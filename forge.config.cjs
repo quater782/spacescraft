@@ -12,7 +12,8 @@ module.exports = {
       /^\/\.github/,
       /^\/CHANGELOG\.md$/,
       /^\/dist/,
-      /^\/out/
+      /^\/out/,
+      /^\/node_modules\/three\/(?!build(?:$|\/three\.module\.min\.js$))/
     ]
   },
   rebuildConfig: {},

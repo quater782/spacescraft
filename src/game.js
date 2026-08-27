@@ -80,6 +80,10 @@ const QA_WALLET_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-wallet");
 const QA_CONTRACTS_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-contracts");
 const QA_DRAFT_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-draft");
 const QA_RUSH_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-rush");
+const QA_BUFFS_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-buffs");
+const QA_VOXEL_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-voxel");
+const REQUESTED_QA_STATUS = LOCAL_QA_HOST ? URL_PARAMS.get("qa-status") : null;
+const QA_STATUS_ID = SpaceStatus.DEBUFF_MODULES.some((debuff) => debuff.id === REQUESTED_QA_STATUS) ? REQUESTED_QA_STATUS : null;
 const REQUESTED_QA_PROTOCOL = LOCAL_QA_HOST ? URL_PARAMS.get("qa-protocol") : null;
 const QA_PROTOCOL_ID = SpaceRelics.PROTOCOLS.some((protocol) => protocol.id === REQUESTED_QA_PROTOCOL)
   ? REQUESTED_QA_PROTOCOL
@@ -90,13 +94,23 @@ const REQUESTED_QA_ENCOUNTER = LOCAL_QA_HOST ? URL_PARAMS.get("qa-encounter") : 
 const QA_ENCOUNTER_ID = SpaceExpedition.ENCOUNTER_PROTOCOLS.some((encounter) => encounter.id === REQUESTED_QA_ENCOUNTER)
   ? REQUESTED_QA_ENCOUNTER
   : null;
+const REQUESTED_QA_ENEMY = LOCAL_QA_HOST ? URL_PARAMS.get("qa-enemy") : null;
+const QA_ENEMY_BUILD = (() => {
+  if (!REQUESTED_QA_ENEMY) return null;
+  const parts = REQUESTED_QA_ENEMY.split(".");
+  const pools = [SpaceExpedition.MOVEMENT_MODULES, SpaceExpedition.WEAPON_MODULES, SpaceExpedition.CORE_MODULES, SpaceExpedition.AI_MODULES, SpaceExpedition.PAYLOAD_MODULES];
+  if (parts.length !== pools.length || parts.some((id, index) => !pools[index].some((module) => module.id === id))) return null;
+  return SpaceExpedition.build(...parts, 2);
+})();
 const REQUESTED_RUN_SEED = Number.parseInt(URL_PARAMS.get("seed") || "", 10);
-const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_RUSH_MODE && "rush", QA_PROTOCOL_ID && `protocol-${QA_PROTOCOL_ID}`, QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`].filter(Boolean).join("+") || "off";
+const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_RUSH_MODE && "rush", QA_BUFFS_MODE && "buffs", QA_VOXEL_MODE && "voxel", QA_STATUS_ID && `status-${QA_STATUS_ID}`, QA_PROTOCOL_ID && `protocol-${QA_PROTOCOL_ID}`, QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`, QA_ENEMY_BUILD && `enemy-${QA_ENEMY_BUILD.signature}`].filter(Boolean).join("+") || "off";
 const t = (key, variables) => SpaceI18n.t(key, variables);
 const UPGRADE_DEFS = SpaceRoguelike.UPGRADE_DEFS;
 const TALENT_NODES = SpaceConstellation.TALENT_NODES;
 const RUSH_CONFIG = SpaceRush.RUSH_CONFIG;
 const PROTOCOLS = SpaceRelics.PROTOCOLS;
+const BUFF_MODULES = SpaceStatus.BUFF_MODULES;
+const DEBUFF_MODULES = SpaceStatus.DEBUFF_MODULES;
 
 ctx.imageSmoothingEnabled = false;
 
@@ -792,6 +806,15 @@ class AudioEngine {
       this.tone(root + 19 + signature + (s === 13 ? 12 : 0), .12, "triangle", .022 * intensity, when, this.musicBus, 4);
       this.tone(root + 31 + signature, .055, "square", .012, when + .035, this.musicBus, -3);
     }
+    const activeBuffCount = world.players?.reduce((count, player) => count + SpaceStatus.activeBuffs(player.buffs).length, 0) || 0;
+    const activeDebuffCount = world.players?.reduce((count, player) => count + SpaceStatus.activeDebuffs(player.debuffs).length, 0) || 0;
+    if (activeBuffCount && (s === 3 || s === 11)) {
+      this.tone(root + 24 + Math.min(7, activeBuffCount * 2), .09, "square", .014 + activeBuffCount * .003, when, this.musicBus, 5);
+      this.tone(root + 36, .045, "triangle", .012, when + .028, this.musicBus, -2);
+    }
+    if (activeDebuffCount && s % 4 === 1) {
+      this.tone(root + 13 - activeDebuffCount, .045, "sawtooth", .01, when, this.musicBus, -9);
+    }
   }
 
   sfx(name, owner = 0) {
@@ -816,6 +839,13 @@ class AudioEngine {
       this.noise(0.22, 0.12, now, 220);
     } else if (name === "pickup") {
       [72, 76, 79].forEach((note, i) => this.tone(note, 0.08, "square", 0.05, now + i * 0.055, this.sfxBus));
+    } else if (name === "buffOnline") {
+      [55, 62, 67, 74, 79].forEach((note, index) => this.tone(note + owner * 2, .15, index % 2 ? "triangle" : "square", .042, now + index * .038, this.sfxBus, 5));
+      this.tone(43 + owner * 2, .28, "sine", .045, now, this.sfxBus, 9);
+      this.noise(.12, .025, now + .045, 3400);
+    } else if (name === "debuff") {
+      [72, 66, 59].forEach((note, index) => this.tone(note - owner, .11, index === 1 ? "square" : "sawtooth", .033, now + index * .025, this.sfxBus, -11));
+      this.noise(.1, .035, now, 850);
     } else if (name === "nova") {
       [48, 55, 60, 67, 72].forEach((note, i) => this.tone(note, 0.26, "square", 0.06, now + i * 0.03, this.sfxBus, 5));
       this.noise(.35, .08, now, 1200);
@@ -1611,13 +1641,20 @@ function createPlayer(index) {
     revive: 0,
     shots: 0,
     protocolCooldown: 0,
+    buffs: Object.fromEntries(BUFF_MODULES.map((buff) => [buff.id, 0])),
+    debuffs: Object.fromEntries(DEBUFF_MODULES.map((debuff) => [debuff.id, 0])),
+    nanobloomTick: 0,
+    aegisPulse: 0,
+    buffFlash: 0,
+    statusFlash: 0,
+    statusSoundTimer: 0,
   };
   return SpaceConstellation.applyToPlayer(player, profile.talents);
 }
 
 function prepareRouteChoice(stageIndex) {
   const options = world.branchSets[stageIndex] || [];
-  const total = QA_FAST_MODE ? .22 : 5.8;
+  const total = QA_FAST_MODE || QA_VOXEL_MODE ? .22 : 5.8;
   world.activeBranch = null;
   world.routeChoice = {
     options,
@@ -1642,7 +1679,7 @@ function confirmRouteChoice(index) {
   world.activeBranch = branch;
   world.branchHistory[world.stageIndex] = branch;
   world.routeChoice = null;
-  world.introTimer = QA_FAST_MODE ? .5 : 2.8;
+  world.introTimer = QA_FAST_MODE || QA_VOXEL_MODE ? .5 : 2.8;
   world.cinematic = { type: "warp", timer: 1.35, total: 1.35 };
   world.flash = Math.max(world.flash, .34);
   world.shake = Math.max(world.shake, .24);
@@ -1797,6 +1834,13 @@ function resetWorld() {
   world.variantNoticeCooldown = 0;
   world.volatileResolving = false;
   world.players = [createPlayer(0), createPlayer(1)];
+  if (QA_BUFFS_MODE) {
+    for (const player of world.players) {
+      for (const buff of BUFF_MODULES) player.buffs[buff.id] = 30;
+      player.buffFlash = .48;
+    }
+  }
+  if (QA_STATUS_ID) world.players[0].debuffs[QA_STATUS_ID] = 30;
   if (QA_PROTOCOL_ID) {
     const protocol = PROTOCOLS.find((entry) => entry.id === QA_PROTOCOL_ID);
     for (const upgradeId of protocol.required) {
@@ -1865,6 +1909,68 @@ function burst(x, y, color, count = 8, speed = 55) {
 }
 
 const relicBonuses = () => SpaceRelics.combatBonuses(world.upgrades);
+const statusBonuses = (player) => SpaceStatus.combatBonuses(player?.buffs, player?.debuffs);
+
+function grantBuff(player, pickupType) {
+  const buff = SpaceStatus.buffForPickup(pickupType);
+  const current = player.buffs[buff.id] || 0;
+  player.buffs[buff.id] = Math.min(buff.duration * 1.8, current + buff.duration);
+  player.buffFlash = .48;
+  if (buff.id === "nanobloom") player.nanobloomTick = Math.min(player.nanobloomTick, .18);
+  if (buff.id === "aegis") player.aegisPulse = Math.min(player.aegisPulse, .12);
+  burst(player.x, player.y, buff.color, 22, 92);
+  audio.sfx("buffOnline", player.index);
+  return buff;
+}
+
+function applyEnemyDebuff(player, bullet) {
+  if (!bullet.debuff || !SpaceStatus.debuffById(bullet.debuff) || player.downed) return false;
+  const bonuses = statusBonuses(player);
+  const duration = Math.max(.25, (bullet.debuffDuration || 1) * bonuses.statusResistance);
+  player.debuffs[bullet.debuff] = Math.max(player.debuffs[bullet.debuff] || 0, duration);
+  if (bullet.debuff === "fracture") player.energy = Math.max(0, player.energy - 6);
+  player.statusFlash = .44;
+  burst(player.x, player.y, bullet.payloadColor || bullet.color, 10, 52);
+  if (player.statusSoundTimer <= 0) {
+    audio.sfx("debuff", player.index);
+    player.statusSoundTimer = .18;
+  }
+  return true;
+}
+
+function updatePlayerStatus(player, dt) {
+  for (const buff of BUFF_MODULES) player.buffs[buff.id] = Math.max(0, (player.buffs[buff.id] || 0) - dt);
+  for (const debuff of DEBUFF_MODULES) player.debuffs[debuff.id] = Math.max(0, (player.debuffs[debuff.id] || 0) - dt);
+  player.buffFlash = Math.max(0, player.buffFlash - dt);
+  player.statusFlash = Math.max(0, player.statusFlash - dt);
+  player.statusSoundTimer = Math.max(0, (player.statusSoundTimer || 0) - dt);
+  const bonuses = statusBonuses(player);
+  if (bonuses.nanobloom) {
+    player.nanobloomTick -= dt;
+    if (player.nanobloomTick <= 0) {
+      player.nanobloomTick = 1.1;
+      player.hp = Math.min(player.maxHp, player.hp + .25);
+      burst(player.x, player.y, "#78f5aa", 5, 28);
+    }
+  } else {
+    player.nanobloomTick = 0;
+  }
+  if (bonuses.aegis) {
+    player.aegisPulse -= dt;
+    if (player.aegisPulse <= 0) {
+      player.aegisPulse = .26;
+      const threat = world.enemyBullets
+        .filter((bullet) => !bullet.dead && distance(player, bullet) <= 33)
+        .sort((a, b) => distance(player, a) - distance(player, b))[0];
+      if (threat) {
+        threat.dead = true;
+        burst(threat.x, threat.y, "#76dbff", 5, 34);
+      }
+    }
+  } else {
+    player.aegisPulse = 0;
+  }
+}
 
 function markProtocolProc(protocolId, x, y) {
   const protocol = PROTOCOLS.find((entry) => entry.id === protocolId);
@@ -1969,10 +2075,20 @@ function updateRush(dt) {
   if (world.rushCharge >= RUSH_CONFIG.threshold && world.rushCooldown <= 0) startRush();
 }
 
-function aimedVelocity(source, speed, spread = 0) {
+function enemyTarget(source) {
   const targets = world.players.filter((player) => !player.downed);
-  const target = targets.length ? targets.reduce((best, player) => (distance(source, player) < distance(source, best) ? player : best)) : { x: W / 2, y: H };
-  const angle = Math.atan2(target.y - source.y, target.x - source.x) + rand(-spread, spread);
+  if (!targets.length) return { x: W / 2, y: H, vx: 0, vy: 0 };
+  if (source.aiTargeting === "weakest") return targets.reduce((best, player) => player.hp / player.maxHp < best.hp / best.maxHp ? player : best);
+  if (source.aiTargeting === "isolated") return targets.reduce((best, player) => Math.abs(player.x - W / 2) > Math.abs(best.x - W / 2) ? player : best);
+  return targets.reduce((best, player) => distance(source, player) < distance(source, best) ? player : best);
+}
+
+function aimedVelocity(source, speed, spread = 0) {
+  const target = enemyTarget(source);
+  const lead = source.aiLead || 0;
+  const targetX = target.x + (target.vx || 0) * lead;
+  const targetY = target.y + (target.vy || 0) * lead;
+  const angle = Math.atan2(targetY - source.y, targetX - source.x) + rand(-spread, spread);
   return { vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed };
 }
 
@@ -1987,7 +2103,7 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
   const elite = Boolean(options.elite);
   const stage = activeStage();
   const progress = clamp(world.stageTime / stage.duration, 0, 1);
-  const build = options.build || SpaceExpedition.assembleEnemy({
+  const build = options.build || QA_ENEMY_BUILD || SpaceExpedition.assembleEnemy({
     stageIndex: world.stageIndex,
     progress,
     biome: stage.biome,
@@ -2025,6 +2141,10 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     weaponNameKey: build.weaponNameKey,
     coreModule: build.coreId,
     coreNameKey: build.coreNameKey,
+    aiModule: build.aiId,
+    aiNameKey: build.aiNameKey,
+    payloadModule: build.payloadId,
+    payloadNameKey: build.payloadNameKey,
     buildSignature: build.signature,
     moduleScale: build.scale,
     moveSpeed: build.speed,
@@ -2033,14 +2153,23 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     weaponBulletSpeed: build.bulletSpeed,
     weaponExtraShots: build.extraShots,
     weaponRingBonus: build.ringBonus,
-    weaponCooldown: build.cooldown,
+    weaponCooldown: build.cooldown * build.aiCooldown,
     weaponSpread: build.spread,
     moduleBarrier: build.barrier,
     moduleBarrierMax: build.barrier,
     volatileRadius: build.volatileRadius,
+    aiTargeting: build.targeting,
+    aiSteer: build.aiSteer,
+    aiFlank: build.aiFlank,
+    aiLead: build.aiLead,
+    aiEvasion: build.aiEvasion,
+    debuff: build.debuff,
+    debuffDuration: build.debuffDuration,
+    debuffIntensity: build.debuffIntensity,
+    payloadColor: build.payloadColor,
     moduleColor: world.activeBranch?.color || stage.biome?.secondary || stage.accent,
   };
-  if (build.signature !== "standard.pulse.light" && !world.discoveredVariants.has(build.signature)) {
+  if (build.signature !== "standard.pulse.light.sentry.clean" && !world.discoveredVariants.has(build.signature)) {
     world.discoveredVariants.add(build.signature);
     if (world.variantNoticeCooldown <= 0) {
       world.variantNotice = { enemy, timer: 2.8, total: 2.8 };
@@ -2167,14 +2296,29 @@ function enterBossPhase(boss, nextPhase) {
   showToast(`${t("hud.phaseTitle", { phase: nextPhase })} // ${bossPhaseText(world.stageIndex, nextPhase)}`);
 }
 
-function enemyBullet(x, y, vx, vy, color = "#ff7d8b", size = 3) {
+function enemyBullet(x, y, vx, vy, color = "#ff7d8b", size = 3, source = null) {
   const stage = activeStage();
   const progress = world.stageTime / stage.duration;
   const branchSpeed = world.stageIndex === 0 && progress < .4
     ? Math.min(1, world.activeBranch?.bulletSpeed || 1)
     : world.activeBranch?.bulletSpeed || 1;
   const speedMultiplier = (world.contract?.bulletSpeed || 1) * (stage.biome?.bulletSpeed || 1) * branchSpeed;
-  world.enemyBullets.push({ x, y, vx: vx * speedMultiplier, vy: vy * speedMultiplier, r: size, color, age: 0, dead: false });
+  world.enemyBullets.push({
+    x,
+    y,
+    vx: vx * speedMultiplier,
+    vy: vy * speedMultiplier,
+    r: size,
+    color: source?.debuff ? source.payloadColor : color,
+    age: 0,
+    dead: false,
+    weaponModule: source?.weaponModule || "pulse",
+    payloadModule: source?.payloadModule || "clean",
+    debuff: source?.debuff || "",
+    debuffDuration: source?.debuffDuration || 0,
+    debuffIntensity: source?.debuffIntensity || 0,
+    payloadColor: source?.payloadColor || color,
+  });
 }
 
 function fireAimed(enemy, speed = 62, count = 1, spread = 0.12, color) {
@@ -2185,7 +2329,7 @@ function fireAimed(enemy, speed = 62, count = 1, spread = 0.12, color) {
     const offset = (i - (finalCount - 1) / 2) * finalSpread;
     const velocity = aimedVelocity(enemy, finalSpeed);
     const angle = Math.atan2(velocity.vy, velocity.vx) + offset;
-    enemyBullet(enemy.x, enemy.y + enemy.r * 0.5, Math.cos(angle) * finalSpeed, Math.sin(angle) * finalSpeed, color);
+    enemyBullet(enemy.x, enemy.y + enemy.r * 0.5, Math.cos(angle) * finalSpeed, Math.sin(angle) * finalSpeed, color, enemy.weaponModule === "sniper" ? 2.25 : 3, enemy);
   }
   const sound = enemy.weaponModule === "twin" ? "enemyTwin" : enemy.weaponModule === "sniper" ? "enemySniper" : "enemyShoot";
   audio.sfx(sound);
@@ -2196,9 +2340,24 @@ function fireRing(enemy, count, speed, phase = 0, color = "#ff6b8c") {
   const finalCount = count + (enemy.weaponRingBonus || 0);
   for (let i = 0; i < finalCount; i += 1) {
     const angle = phase + (i / finalCount) * TAU;
-    enemyBullet(enemy.x, enemy.y, Math.cos(angle) * finalSpeed, Math.sin(angle) * finalSpeed, color, 2.5);
+    enemyBullet(enemy.x, enemy.y, Math.cos(angle) * finalSpeed, Math.sin(angle) * finalSpeed, color, 2.5, enemy);
   }
   audio.sfx(enemy.weaponModule === "orbit" ? "enemyOrbit" : "enemyShoot");
+}
+
+function updateEnemyIntelligence(enemy, dt) {
+  if ((!enemy.aiSteer && !enemy.aiEvasion) || enemy.y < 18 || enemy.y > H - 54) return;
+  const target = enemyTarget(enemy);
+  const flankSide = Math.sin(enemy.seed * 2.17) >= 0 ? 1 : -1;
+  const desiredX = target.x + (enemy.aiFlank || 0) * flankSide;
+  const steering = clamp((desiredX - enemy.x) / 70, -1, 1) * (enemy.aiSteer || 0) * 34;
+  enemy.x += steering * dt;
+  if (enemy.aiEvasion > 0) {
+    const threat = world.bullets
+      .filter((bullet) => !bullet.dead && bullet.y < enemy.y + 38 && distance(enemy, bullet) < 58)
+      .sort((a, b) => distance(enemy, a) - distance(enemy, b))[0];
+    if (threat) enemy.x += Math.sign(enemy.x - threat.x || flankSide) * enemy.aiEvasion * 52 * dt;
+  }
 }
 
 function updateEnemy(enemy, dt) {
@@ -2229,6 +2388,7 @@ function updateEnemy(enemy, dt) {
 
   enemy.x += enemy.vx * dt;
   enemy.x += Math.sin(enemy.age * .85 + enemy.seed) * (enemy.moveDrift || 0) * dt;
+  updateEnemyIntelligence(enemy, dt);
 
   if (enemy.type === "scout") {
     enemy.y += (29 + world.stageIndex * 5) * (enemy.moveSpeed || 1) * dt;
@@ -2321,6 +2481,7 @@ function playerShoot(player) {
   const config = PLAYER_CONFIG[player.index];
   const rush = SpaceRush.combatMultipliers(rushActive());
   const relic = relicBonuses();
+  const status = statusBonuses(player);
   const movingFast = Math.hypot(player.vx, player.vy) > player.speed * .42;
   const patterns = [
     [{ x: 0, vx: 0, damage: 1.25 }],
@@ -2336,7 +2497,7 @@ function playerShoot(player) {
       vx: shot.vx,
       vy: -player.projectileSpeed,
       r: shot.r || (relic.phaseLance ? 2.7 : 2),
-      damage: shot.damage * player.damage * damageScale * rush.damage * relic.phaseDamage * (world.activeBranch?.reward.damage || 1),
+      damage: shot.damage * player.damage * damageScale * rush.damage * relic.phaseDamage * status.damage * (world.activeBranch?.reward.damage || 1),
       owner: player.index,
       color: shot.color || (relic.phaseLance ? "#d7f1ff" : config.color),
       pierceLeft: player.pierce + (relic.phaseLance ? 1 : 0),
@@ -2366,7 +2527,7 @@ function playerShoot(player) {
     addShot({ x: 9, vx: 54, damage: .62, color: "#69f7e4" });
     markProtocolProc("cometDrive", player.x, player.y);
   }
-  player.fireTimer = Math.max(0.06, (0.2 - player.weapon * 0.016) / (player.fireRate * rush.fireRate * (movingFast ? relic.movingFireRate : 1)));
+  player.fireTimer = Math.max(0.06, (0.2 - player.weapon * 0.016) / (player.fireRate * rush.fireRate * status.fireRate * (movingFast ? relic.movingFireRate : 1)));
   player.shots += 1;
   audio.sfx("shoot", player.index);
 }
@@ -2479,6 +2640,7 @@ function updatePlayers(dt) {
     player.invulnerability = Math.max(0, player.invulnerability - dt);
     player.fireTimer -= dt;
     player.protocolCooldown = Math.max(0, player.protocolCooldown - dt);
+    updatePlayerStatus(player, dt);
 
     if (player.downed) {
       player.downTimer -= dt;
@@ -2505,7 +2667,8 @@ function updatePlayers(dt) {
       }
     }
 
-    const speed = player.speed;
+    const status = statusBonuses(player);
+    const speed = player.speed * status.speed;
     player.vx = lerp(player.vx, controls.x * speed, 1 - Math.exp(-dt * player.handling));
     player.vy = lerp(player.vy, controls.y * speed, 1 - Math.exp(-dt * player.handling));
     player.x = clamp(player.x + player.vx * dt, 13, W - 13);
@@ -2540,10 +2703,11 @@ function updatePlayers(dt) {
       world.beamTimer = 0.12 / rush.linkRate;
       for (const enemy of world.enemies) {
         if (!enemy.dead && pointToSegmentDistance(enemy.x, enemy.y, p1.x, p1.y, p2.x, p2.y) < enemy.r + 3 + relic.beamRadius) {
-          damageEnemy(enemy, 1.2 * rush.linkDamage * relic.beamDamage * ((p1.beamDamage + p2.beamDamage) * .5));
+          const statusBeam = (statusBonuses(p1).beamDamage + statusBonuses(p2).beamDamage) * .5;
+          damageEnemy(enemy, 1.2 * rush.linkDamage * relic.beamDamage * statusBeam * ((p1.beamDamage + p2.beamDamage) * .5));
           if (relic.resonantGyro && world.protocolSoundTimer <= 0) markProtocolProc("resonantGyro", enemy.x, enemy.y);
-          p1.energy = clamp(p1.energy + 0.45 * p1.energyGain, 0, 100);
-          p2.energy = clamp(p2.energy + 0.45 * p2.energyGain, 0, 100);
+          p1.energy = clamp(p1.energy + 0.45 * p1.energyGain * statusBonuses(p1).energyGain, 0, 100);
+          p2.energy = clamp(p2.energy + 0.45 * p2.energyGain * statusBonuses(p2).energyGain, 0, 100);
           if (enemy.hp <= 0) killEnemy(enemy, 0);
         }
       }
@@ -2563,7 +2727,7 @@ function killEnemy(enemy, owner = 0) {
   const rush = SpaceRush.combatMultipliers(rushActive());
   world.score += Math.round(enemy.score * multiplier * rush.score * (world.contract?.score || 1) * (world.activeBranch?.score || 1));
   const player = world.players[owner];
-  if (player) player.energy = clamp(player.energy + (enemy.boss ? 35 : 4.5) * player.energyGain, 0, 100);
+  if (player) player.energy = clamp(player.energy + (enemy.boss ? 35 : 4.5) * player.energyGain * statusBonuses(player).energyGain, 0, 100);
   burst(enemy.x, enemy.y, enemy.boss ? "#fff2a6" : activeStage().accent, enemy.boss ? 80 : 12, enemy.boss ? 150 : 65);
   addRushCharge("kill");
   if (enemy.elite) addRushCharge("elite");
@@ -2631,12 +2795,13 @@ function applyPickup(player, pickup) {
   if (pickup.type === "weapon") player.weapon = Math.min(4, player.weapon + 1);
   else if (pickup.type === "repair") player.hp = Math.min(player.maxHp, player.hp + 2);
   else if (pickup.type === "shield") player.shield = Math.min(player.maxShield, player.shield + 2);
-  else player.energy = Math.min(100, player.energy + 40 * player.energyGain);
+  else player.energy = Math.min(100, player.energy + 40 * player.energyGain * statusBonuses(player).energyGain);
+  const buff = grantBuff(player, pickup.type);
   pickup.dead = true;
   addRushCharge("pickup");
   const relic = relicBonuses();
   if (relic.salvageReactor) {
-    player.energy = Math.min(100, player.energy + relic.pickupEnergy * player.energyGain);
+    player.energy = Math.min(100, player.energy + relic.pickupEnergy * player.energyGain * statusBonuses(player).energyGain);
     if (!rushActive()) world.rushCharge = SpaceRush.clampCharge(world.rushCharge + relic.pickupRush);
     for (let index = 0; index < 8; index += 1) {
       const angle = index / 8 * TAU;
@@ -2659,7 +2824,7 @@ function applyPickup(player, pickup) {
   burst(pickup.x, pickup.y, PLAYER_CONFIG[player.index].light, 15, 65);
   audio.sfx("pickup");
   pulseGamepad(player.index, 75, 0.08, 0.28);
-  showToast(t("toast.pickup", { player: player.index + 1, pickup: t(`pickup.${pickup.type}`) }));
+  showToast(t("toast.pickupBuff", { player: player.index + 1, pickup: t(`pickup.${pickup.type}`), buff: t(buff.nameKey), time: buff.duration }));
 }
 
 function handleBossDefeat() {
@@ -2864,15 +3029,15 @@ function updateStage(dt) {
   }
   if (world.bossSpawned) return;
 
-  world.stageTime += dt * (QA_FAST_MODE ? 6 : 1);
+  world.stageTime += dt * (QA_FAST_MODE && !QA_VOXEL_MODE ? 6 : 1);
   world.spawnTimer -= dt;
   const nextEncounter = world.encounterPlans[world.stageIndex]?.[world.encounterIndex];
-  if (!world.activeEncounter && nextEncounter && world.stageTime >= nextEncounter.at * stage.duration) {
+  if (!QA_VOXEL_MODE && !world.activeEncounter && nextEncounter && world.stageTime >= nextEncounter.at * stage.duration) {
     startEncounter(nextEncounter);
     world.encounterIndex += 1;
   }
   const nextEvent = STAGE_EVENTS[world.stageIndex][world.eventIndex];
-  if (nextEvent && world.stageTime >= nextEvent.at) {
+  if (!QA_VOXEL_MODE && nextEvent && world.stageTime >= nextEvent.at) {
     spawnStageEvent(nextEvent);
     world.eventIndex += 1;
   }
@@ -2895,7 +3060,7 @@ function updateStage(dt) {
       : world.activeEncounter?.spawnRate || 1;
     world.spawnTimer = Math.max(0.62, (1.72 - world.stageIndex * 0.13 - progress * 0.55) / ((world.contract?.spawnRate || 1) * ecologyRate * routeRate * encounterRate));
   }
-  if (world.stageTime >= stage.duration) spawnBoss();
+  if (!QA_VOXEL_MODE && world.stageTime >= stage.duration) spawnBoss();
 }
 
 function updateObjects(dt) {
@@ -2932,8 +3097,8 @@ function updateObjects(dt) {
     pickup.y += pickup.vy * dt;
     const rushMagnet = SpaceRush.combatMultipliers(rushActive()).pickupMagnet;
     const magnetTarget = world.players
-      .filter((player) => !player.downed && player.pickupMagnetRadius + rushMagnet > 0)
-      .map((player) => ({ player, range: distance(pickup, player), radius: player.pickupMagnetRadius + rushMagnet }))
+      .filter((player) => !player.downed && player.pickupMagnetRadius + rushMagnet + statusBonuses(player).pickupMagnet > 0)
+      .map((player) => ({ player, range: distance(pickup, player), radius: player.pickupMagnetRadius + rushMagnet + statusBonuses(player).pickupMagnet }))
       .filter(({ range, radius }) => range <= radius)
       .sort((a, b) => a.range - b.range)[0];
     if (magnetTarget) {
@@ -3010,7 +3175,7 @@ function handleCollisions() {
         if (damage.barrier > 0 && bullet.phaseBarrier) markProtocolProc("phaseLance", bullet.x, bullet.y);
         if (enemy.boss) world.shake = Math.max(world.shake, .035);
         const owner = world.players[bullet.owner];
-        owner.energy = clamp(owner.energy + 0.28 * owner.energyGain, 0, 100);
+        owner.energy = clamp(owner.energy + 0.28 * owner.energyGain * statusBonuses(owner).energyGain, 0, 100);
         burst(bullet.x, bullet.y, bullet.color, 2, 20);
         if (enemy.hp <= 0) killEnemy(enemy, bullet.owner);
         break;
@@ -3025,7 +3190,7 @@ function handleCollisions() {
       const hitRadius = Math.max(3, bullet.r + player.r - 2.5);
       if ((bullet.x - player.x) ** 2 + (bullet.y - player.y) ** 2 < hitRadius ** 2) {
         bullet.dead = true;
-        damagePlayer(player);
+        if (damagePlayer(player)) applyEnemyDebuff(player, bullet);
         break;
       }
     }
@@ -3063,7 +3228,7 @@ function handleCollisions() {
       if (object.type === "salvage" && world.activeEncounter?.kind === "collect") {
         object.dead = true;
         world.activeEncounter.progress = Math.min(world.activeEncounter.goal, world.activeEncounter.progress + 1);
-        player.energy = Math.min(100, player.energy + 5 * player.energyGain);
+        player.energy = Math.min(100, player.energy + 5 * player.energyGain * statusBonuses(player).energyGain);
         burst(object.x, object.y, object.color, 12, 58);
         audio.sfx("encounterTick");
         pulseGamepad(player.index, 65, .08, .22);
@@ -3762,6 +3927,21 @@ function drawHud() {
     const protocol = world.activeProtocols[0];
     pixelText(t("hud.protocolActive", { protocol: localizedName(protocol), procs: world.protocolProcs }), 9, H - 8, protocol.color, "left", 5.5);
   }
+  for (const player of world.players) {
+    const buffs = SpaceStatus.activeBuffs(player.buffs);
+    const debuffs = SpaceStatus.activeDebuffs(player.debuffs);
+    const align = player.index === 0 ? "left" : "right";
+    const x = player.index === 0 ? 9 : W - 9;
+    const statusY = player.index === 0 && world.activeProtocols.length ? H - 26 : H - 17;
+    if (buffs.length) {
+      const names = buffs.slice(0, 2).map((buff) => t(buff.nameKey)).join("+");
+      pixelText(t("hud.buffModules", { buffs: names }), x, statusY, buffs[0].color, align, 5);
+    }
+    if (debuffs.length) {
+      const names = debuffs.slice(0, 2).map((debuff) => t(debuff.nameKey)).join("+");
+      pixelText(t("hud.debuffModules", { debuffs: names }), x, statusY + 9, debuffs[0].color, align, 5);
+    }
+  }
 
   if (world.boss) {
     pixelText(stageText(stage, "boss"), W / 2, 34, stage.accent, "center", 7);
@@ -3834,7 +4014,7 @@ function drawVariantNotice() {
   if (!notice || world.introTimer > 0 || world.clearTimer > 0 || world.stageEvent) return;
   const reveal = clamp((notice.total - notice.timer) * 5, 0, 1) * clamp(notice.timer * 2.6, 0, 1);
   const enemy = notice.enemy;
-  const moduleNames = [enemy.movementNameKey, enemy.weaponNameKey, enemy.coreNameKey].map((key) => t(key)).join(" // ");
+  const moduleNames = [enemy.movementNameKey, enemy.weaponNameKey, enemy.coreNameKey, enemy.aiNameKey, enemy.payloadNameKey].map((key) => t(key)).join(" // ");
   const width = 218;
   const x = W / 2 - width / 2;
   const y = 57;
@@ -3980,6 +4160,11 @@ function draw() {
   canvas.dataset.biome = activeStage().biome?.id || "";
   canvas.dataset.enemyVariants = String(world.discoveredVariants.size);
   canvas.dataset.activeBuilds = [...new Set(world.enemies.filter((enemy) => !enemy.boss).map((enemy) => enemy.buildSignature))].filter(Boolean).join(",");
+  canvas.dataset.enemyModuleSlots = "5";
+  canvas.dataset.enemyBuildCatalog = String(SpaceExpedition.MOVEMENT_MODULES.length * SpaceExpedition.WEAPON_MODULES.length * SpaceExpedition.CORE_MODULES.length * SpaceExpedition.AI_MODULES.length * SpaceExpedition.PAYLOAD_MODULES.length);
+  canvas.dataset.qaEnemyBuild = QA_ENEMY_BUILD?.signature || "";
+  canvas.dataset.playerBuffs = world.players.map((player) => SpaceStatus.activeBuffs(player.buffs).map((buff) => buff.id).join("|") || "none").join(",");
+  canvas.dataset.playerDebuffs = world.players.map((player) => SpaceStatus.activeDebuffs(player.debuffs).map((debuff) => debuff.id).join("|") || "none").join(",");
   canvas.dataset.pathPlan = world.branchPlanSignature;
   canvas.dataset.activePath = world.activeBranch?.id || "";
   canvas.dataset.pathOptions = world.routeChoice?.options.map((path) => path.id).join(",") || "";
