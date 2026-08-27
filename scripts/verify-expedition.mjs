@@ -12,7 +12,7 @@ vm.runInNewContext(expeditionSource, sandbox, { filename: "src/expedition.js" })
 
 const expedition = sandbox.window.SpaceExpedition;
 const { createRng } = sandbox.window.SpaceRoguelike;
-const { BIOMES, MOVEMENT_MODULES, WEAPON_MODULES, CORE_MODULES } = expedition;
+const { BIOMES, MOVEMENT_MODULES, WEAPON_MODULES, CORE_MODULES, PATH_PROTOCOLS } = expedition;
 
 assert.equal(BIOMES.length, 9, "v0.9 must ship nine ecosystems");
 assert.equal(new Set(BIOMES.map((biome) => biome.id)).size, 9, "ecosystem IDs must be unique");
@@ -29,6 +29,32 @@ for (const biome of BIOMES) {
 assert.deepEqual([...expedition.generateRoute(20260827)].map((biome) => biome.id), [...expedition.generateRoute(20260827)].map((biome) => biome.id), "same seed must reproduce the ecosystem route");
 assert.notDeepEqual([...expedition.generateRoute(20260826)].map((biome) => biome.id), [...expedition.generateRoute(20260827)].map((biome) => biome.id), "different seeds should produce different ecosystem routes");
 for (const [stageIndex, biome] of [...expedition.generateRoute(42)].entries()) assert.equal(biome.stageIndex, stageIndex, "route ecosystems must match their stage slot");
+
+assert.equal(PATH_PROTOCOLS.length, 7, "v0.10 must ship seven branch protocols");
+assert.equal(new Set(PATH_PROTOCOLS.map((path) => path.id)).size, PATH_PROTOCOLS.length, "path IDs must be unique");
+for (const path of PATH_PROTOCOLS) {
+  assert.ok(["support", "offense", "hazard"].includes(path.group));
+  assert.match(path.color, /^#[0-9a-f]{6}$/i);
+  assert.match(path.nameKey, /^path\.[^.]+\.name$/);
+  assert.match(path.descriptionKey, /^path\.[^.]+\.description$/);
+  assert.match(path.riskKey, /^path\.[^.]+\.risk$/);
+  assert.match(path.rewardKey, /^path\.[^.]+\.reward$/);
+  for (const value of [path.enemyHp, path.spawnRate, path.bulletSpeed, path.score, path.bpmOffset, path.musicShift]) assert.ok(Number.isFinite(value));
+  assert.ok(Object.keys(path.reward).length > 0, `${path.id} must grant a tangible reward`);
+}
+const branchIds = (seed) => [...expedition.generateBranchSets(seed)].map((set) => set.map((path) => path.id));
+assert.deepEqual(branchIds(20260827), branchIds(20260827), "same seed must reproduce all branch gates");
+assert.notDeepEqual(branchIds(20260826), branchIds(20260827), "different seeds should rearrange branch gates");
+for (const options of expedition.generateBranchSets(20260827)) {
+  assert.equal(options.length, 3);
+  assert.equal(new Set(options.map((path) => path.id)).size, 3, "a gate set must not repeat paths");
+  assert.deepEqual(new Set(options.map((path) => path.group)), new Set(["support", "offense", "hazard"]), "every gate set must offer support, offense, and hazard choices");
+}
+assert.deepEqual({ ...expedition.evaluateGateChoice([82, 96]) }, { selectedIndex: 0, converged: true });
+assert.deepEqual({ ...expedition.evaluateGateChoice([225, 252]) }, { selectedIndex: 1, converged: true });
+assert.deepEqual({ ...expedition.evaluateGateChoice([185, 295]) }, { selectedIndex: 1, converged: false });
+assert.deepEqual({ ...expedition.evaluateGateChoice([88, 392]) }, { selectedIndex: 1, converged: false });
+assert.deepEqual({ ...expedition.evaluateGateChoice([]) }, { selectedIndex: 1, converged: false });
 
 assert.equal(MOVEMENT_MODULES.length, 4);
 assert.equal(WEAPON_MODULES.length, 4);
@@ -55,7 +81,7 @@ for (const biome of BIOMES.filter((entry) => entry.stageIndex === 0)) {
   for (let i = 0; i < 100; i += 1) {
     const random = createRng(i + 1);
     assert.equal(expedition.chooseEnemyHull({ stageIndex: 0, progress: .25, biome, random }), "scout");
-    assert.equal(expedition.assembleEnemy({ stageIndex: 0, progress: .25, biome, random }).signature, "standard.pulse.light");
+    assert.equal(expedition.assembleEnemy({ stageIndex: 0, progress: .25, biome, branch: PATH_PROTOCOLS[i % PATH_PROTOCOLS.length], random }).signature, "standard.pulse.light");
   }
 }
 
@@ -74,13 +100,28 @@ for (let i = 0; i < 100; i += 1) {
   assert.ok(["plated", "barrier"].includes(elite.coreId), "elite cores must remain readable defensive variants");
 }
 
+const rushPath = PATH_PROTOCOLS.find((path) => path.id === "overdrive");
+const rushRandom = createRng(7331);
+let rushBuilds = 0;
+for (let i = 0; i < 400; i += 1) {
+  const build = expedition.assembleEnemy({ stageIndex: 2, progress: .85, biome: laterBiome, branch: rushPath, random: rushRandom });
+  if (build.movementId === "rush") rushBuilds += 1;
+}
+assert.ok(rushBuilds > 190, "selected branches must materially bias modular assembly");
+
 assert.match(gameSource, /SpaceExpedition\.generateRoute/);
+assert.match(gameSource, /SpaceExpedition\.generateBranchSets/);
 assert.match(gameSource, /SpaceExpedition\.chooseEnemyHull/);
 assert.match(gameSource, /SpaceExpedition\.assembleEnemy/);
 assert.match(gameSource, /stage\.biome\?\.spawnRate/);
+assert.match(gameSource, /function updateRouteChoice\(dt\)/);
+assert.match(gameSource, /world\.gameMode === "solo" && player\.index === 1/);
+assert.match(gameSource, /Math\.min\(1, world\.activeBranch\?\.bulletSpeed/);
+assert.match(gameSource, /Math\.min\(1, world\.activeBranch\?\.spawnRate/);
 assert.match(rendererSource, /enemy\.movementModule/);
 assert.match(rendererSource, /enemy\.weaponModule/);
 assert.match(rendererSource, /enemy\.coreModule/);
 assert.match(rendererSource, /drawBiomeFeatures\(biome\)/);
+assert.match(rendererSource, /drawRouteGates\(choice\)/);
 
-console.log(`Expedition verified: ${BIOMES.length} ecosystems, ${builds.length} modular builds, seeded routes, early safety envelope, late-game diversity, and 3D module integration.`);
+console.log(`Expedition verified: ${BIOMES.length} ecosystems, ${PATH_PROTOCOLS.length} branch protocols, three deterministic gate choices per stage, ${builds.length} modular builds, early safety envelope, branch bias, late-game diversity, and 3D integration.`);

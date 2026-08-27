@@ -77,8 +77,10 @@ const QA_FAST_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-fast");
 const QA_WALLET_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-wallet");
 const QA_CONTRACTS_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-contracts");
 const QA_DRAFT_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-draft");
+const REQUESTED_QA_PATH = LOCAL_QA_HOST ? Number.parseInt(URL_PARAMS.get("qa-path") || "", 10) : Number.NaN;
+const QA_PATH_INDEX = [0, 1, 2].includes(REQUESTED_QA_PATH) ? REQUESTED_QA_PATH : null;
 const REQUESTED_RUN_SEED = Number.parseInt(URL_PARAMS.get("seed") || "", 10);
-const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft"].filter(Boolean).join("+") || "off";
+const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`].filter(Boolean).join("+") || "off";
 const t = (key, variables) => SpaceI18n.t(key, variables);
 const UPGRADE_DEFS = SpaceRoguelike.UPGRADE_DEFS;
 
@@ -474,6 +476,7 @@ const localizedName = (item) => t(item.nameKey);
 const localizedDescription = (item) => t(item.descriptionKey);
 const stageText = (stage, field) => t(stage[`${field}Key`]);
 const biomeText = (biome, field) => t(biome[`${field}Key`]);
+const pathText = (path, field) => t(path[`${field}Key`]);
 const eventText = (event, field) => t(event[`${field}Key`]);
 const bossPhaseText = (stageIndex, phase) => t(BOSS_PHASE_KEYS[stageIndex][phase - 1]);
 
@@ -701,7 +704,7 @@ class AudioEngine {
     if (!this.context || this.context.state !== "running") return;
     while (this.nextStep < this.context.currentTime + 0.1) {
       this.scheduleStep(this.step, this.nextStep);
-      const bpm = world.routeStages?.[this.stage]?.bpm || STAGES[this.stage]?.bpm || 132;
+      const bpm = (world.routeStages?.[this.stage]?.bpm || STAGES[this.stage]?.bpm || 132) + (world.activeBranch?.bpmOffset || 0);
       this.nextStep += 60 / bpm / 4;
       this.step += 1;
     }
@@ -709,7 +712,7 @@ class AudioEngine {
 
   scheduleStep(step, when) {
     const roots = [45, 42, 40];
-    const root = roots[this.stage] + (world.routeStages?.[this.stage]?.musicShift || 0);
+    const root = roots[this.stage] + (world.routeStages?.[this.stage]?.musicShift || 0) + (world.activeBranch?.musicShift || 0);
     const leads = [
       [12, 15, 19, 22, 19, 15, 17, 15, 12, 15, 20, 22, 20, 19, 15, 10],
       [12, 14, 17, 21, 24, 21, 17, 14, 12, 17, 19, 24, 22, 19, 17, 14],
@@ -814,6 +817,13 @@ class AudioEngine {
       this.tone(48, .2, "sawtooth", .07, now, this.sfxBus, -19);
       this.tone(60, .1, "square", .04, now + .015, this.sfxBus, -12);
       this.noise(.2, .09, now, 520);
+    } else if (name === "routeScan") {
+      [48, 55, 62].forEach((note, index) => this.tone(note, .28, "triangle", .032, now + index * .07, this.sfxBus, 7));
+      this.noise(.16, .022, now + .04, 3600);
+    } else if (name === "routeLock") {
+      [60, 67, 72, 79].forEach((note, index) => this.tone(note, .2, index % 2 ? "square" : "triangle", .055, now + index * .045, this.sfxBus, 5));
+      this.tone(43, .24, "square", .05, now, this.sfxBus, -9);
+      this.noise(.18, .045, now + .03, 1500);
     } else if (name === "stageClear") {
       [60, 64, 67, 72, 76, 79].forEach((note, i) => this.tone(note, .22, i % 2 ? "square" : "triangle", .06, now + i * .075, this.sfxBus));
     } else if (name === "unlock") {
@@ -891,6 +901,11 @@ const world = {
   variantNotice: null,
   variantNoticeCooldown: 0,
   volatileResolving: false,
+  branchSets: [],
+  branchPlanSignature: "",
+  branchHistory: [],
+  routeChoice: null,
+  activeBranch: null,
 };
 
 const activeStage = (index = world.stageIndex) => world.routeStages[index] || STAGES[index] || STAGES[0];
@@ -903,6 +918,15 @@ function aiPilotControls(player) {
   const partner = world.players[0];
   let targetX = partner?.x ?? W * 0.55;
   let targetY = H - 43;
+
+  if (world.routeChoice && partner) {
+    const targetLane = partner.x < W / 3 ? 0 : partner.x > W * 2 / 3 ? 2 : 1;
+    targetX = [W * .19, W * .5, W * .81][targetLane];
+    const dx = targetX - player.x;
+    const dy = targetY - player.y;
+    const magnitude = Math.hypot(dx, dy);
+    return magnitude > 3 ? { x: dx / Math.max(3, magnitude), y: dy / Math.max(3, magnitude) } : { x: 0, y: 0 };
+  }
 
   if (partner?.downed) {
     targetX = partner.x;
@@ -1031,11 +1055,13 @@ function renderResultBuild() {
   const seedChip = `<span>${t("result.runSeed", { seed: String(world.runSeed).padStart(8, "0") })}</span>`;
   const route = world.biomes.map((biome) => biomeText(biome, "name")).join(t("result.routeSeparator"));
   const routeChip = route ? `<span>${t("result.ecosystems", { route })}</span>` : "";
+  const paths = world.branchHistory.map((path) => pathText(path, "name")).join(t("result.routeSeparator"));
+  const pathChip = paths ? `<span>${t("result.paths", { paths })}</span>` : "";
   const upgradeChips = uniqueIds.map((id) => {
     const upgrade = UPGRADE_DEFS.find((entry) => entry.id === id);
     return upgrade ? `<span>${upgradeIcon(id)}${localizedName(upgrade)} <b>Lv.${upgradeLevel(id)}</b></span>` : "";
   }).join("");
-  resultBuild.innerHTML = seedChip + routeChip + (upgradeChips || `<span>${t("result.buildEmpty")}</span>`);
+  resultBuild.innerHTML = seedChip + routeChip + pathChip + (upgradeChips || `<span>${t("result.buildEmpty")}</span>`);
 }
 
 function renderUpgradeDraft(focusSelected = false) {
@@ -1378,10 +1404,91 @@ function createPlayer(index) {
   };
 }
 
+function prepareRouteChoice(stageIndex) {
+  const options = world.branchSets[stageIndex] || [];
+  const total = QA_FAST_MODE ? .22 : 5.8;
+  world.activeBranch = null;
+  world.routeChoice = {
+    options,
+    timer: total,
+    total,
+    elapsed: 0,
+    selectedIndex: 1,
+    hold: 0,
+    converged: false,
+  };
+  world.introTimer = 0;
+  world.variantNotice = null;
+  world.variantNoticeCooldown = 0;
+}
+
+function confirmRouteChoice(index) {
+  const choice = world.routeChoice;
+  if (!choice) return;
+  const selectedIndex = clamp(Math.round(index), 0, choice.options.length - 1);
+  const branch = choice.options[selectedIndex];
+  if (!branch) return;
+  world.activeBranch = branch;
+  world.branchHistory[world.stageIndex] = branch;
+  world.routeChoice = null;
+  world.introTimer = QA_FAST_MODE ? .5 : 2.8;
+  world.cinematic = { type: "warp", timer: 1.35, total: 1.35 };
+  world.flash = Math.max(world.flash, .34);
+  world.shake = Math.max(world.shake, .24);
+  for (const player of world.players) {
+    player.hp = Math.min(player.maxHp, player.hp + (branch.reward.repair || 0));
+    player.shield = Math.min(player.maxShield, player.shield + (branch.reward.shield || 0));
+    player.energy = Math.min(100, player.energy + (branch.reward.energy || 0));
+    player.weapon = Math.min(4, player.weapon + (branch.reward.weapon || 0));
+    player.x = player.index === 0 ? W * .39 : W * .61;
+    player.y = H - 38;
+    player.vx = 0;
+    player.vy = 0;
+    player.invulnerability = Math.max(player.invulnerability, 2);
+  }
+  audio.sfx("routeLock");
+  pulseGamepad(0, 180, .42, .3);
+  pulseGamepad(1, 180, .42, .3);
+  showToast(t("toast.pathLocked", { path: pathText(branch, "name"), reward: pathText(branch, "reward") }));
+}
+
+function updateRouteChoice(dt) {
+  const choice = world.routeChoice;
+  if (!choice) return;
+  choice.elapsed += dt;
+  choice.timer -= dt;
+  for (const player of world.players) {
+    const controls = world.gameMode === "solo" && player.index === 1
+      ? aiPilotControls(player)
+      : input.player(player.index);
+    const speed = player.speed * .92;
+    player.vx = lerp(player.vx, controls.x * speed, 1 - Math.exp(-dt * player.handling));
+    player.vy = lerp(player.vy, controls.y * speed, 1 - Math.exp(-dt * player.handling));
+    player.x = clamp(player.x + player.vx * dt, 13, W - 13);
+    player.y = clamp(player.y + player.vy * dt, H - 72, H - 14);
+    player.invulnerability = Math.max(player.invulnerability, 2);
+  }
+  const pilots = world.players.filter((player) => !player.downed);
+  const gateState = SpaceExpedition.evaluateGateChoice(pilots.map((player) => player.x), W, 42);
+  choice.selectedIndex = gateState.selectedIndex;
+  choice.converged = gateState.converged;
+  if (choice.elapsed > .9 && gateState.converged) {
+    choice.hold += dt;
+  } else {
+    choice.hold = Math.max(0, choice.hold - dt * 2.4);
+  }
+  if (choice.hold >= .68 || choice.timer <= 0) confirmRouteChoice(QA_PATH_INDEX ?? choice.selectedIndex);
+}
+
 function resetWorld() {
   world.runSeed = createRunSeed();
   setRunRandomSeed(world.runSeed);
   world.biomes = [...SpaceExpedition.generateRoute(world.runSeed)];
+  world.branchSets = [...SpaceExpedition.generateBranchSets(world.runSeed)];
+  world.branchPlanSignature = world.branchSets.map((set) => set.map((path) => path.id).join("|")).join(">");
+  world.branchHistory = [];
+  world.routeChoice = null;
+  world.activeBranch = null;
   world.routeStages = STAGES.map((stage, index) => {
     const biome = world.biomes[index];
     return {
@@ -1406,7 +1513,7 @@ function resetWorld() {
   world.time = 0;
   world.stageIndex = 0;
   world.stageTime = 0;
-  world.introTimer = QA_FAST_MODE ? .8 : 3.2;
+  world.introTimer = 0;
   world.clearTimer = 0;
   world.eventIndex = 0;
   world.stageEvent = null;
@@ -1450,6 +1557,7 @@ function resetWorld() {
   world.pickups = [];
   world.particles = [];
   makeStars();
+  prepareRouteChoice(0);
   upgradePanel.hidden = true;
   buildTray.hidden = true;
   buildTray.innerHTML = "";
@@ -1468,7 +1576,10 @@ function startGame() {
   hangarPanel.hidden = true;
   upgradePanel.hidden = true;
   renderBuildTray();
-  audio.start().then(() => audio.setStage(0, false));
+  audio.start().then(() => {
+    audio.setStage(0, false);
+    audio.sfx("routeScan");
+  });
   const frame = SHIP_FRAMES.find((entry) => entry.id === profile.selectedFrame) || SHIP_FRAMES[0];
   showToast(t(world.gameMode === "solo" ? "toast.soloStart" : "toast.coopStart", { contract: localizedName(world.contract), frame: localizedName(frame) }));
 }
@@ -1520,10 +1631,14 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     stageIndex: world.stageIndex,
     progress,
     biome: stage.biome,
+    branch: world.activeBranch,
     elite,
     random,
   });
-  const contractHealth = (world.contract?.enemyHp || 1) * (stage.biome?.enemyHp || 1);
+  const branchHealth = world.stageIndex === 0 && progress < .4
+    ? Math.min(1, world.activeBranch?.enemyHp || 1)
+    : world.activeBranch?.enemyHp || 1;
+  const contractHealth = (world.contract?.enemyHp || 1) * (stage.biome?.enemyHp || 1) * branchHealth;
   const maxHp = stats.hp * (elite ? 3.1 : 1) * contractHealth * build.hp;
   const enemy = {
     id: ++world.enemySerial,
@@ -1563,7 +1678,7 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     moduleBarrier: build.barrier,
     moduleBarrierMax: build.barrier,
     volatileRadius: build.volatileRadius,
-    moduleColor: stage.biome?.secondary || stage.accent,
+    moduleColor: world.activeBranch?.color || stage.biome?.secondary || stage.accent,
   };
   if (build.signature !== "standard.pulse.light" && !world.discoveredVariants.has(build.signature)) {
     world.discoveredVariants.add(build.signature);
@@ -1639,7 +1754,7 @@ function spawnEnemy() {
 function spawnBoss() {
   const baseHealth = [340, 500, 700][world.stageIndex];
   const stage = activeStage();
-  const health = (QA_FAST_MODE ? baseHealth * .14 : baseHealth) * (world.contract?.enemyHp || 1) * (stage.biome?.enemyHp || 1);
+  const health = (QA_FAST_MODE ? baseHealth * .14 : baseHealth) * (world.contract?.enemyHp || 1) * (stage.biome?.enemyHp || 1) * (world.activeBranch?.enemyHp || 1);
   for (const enemy of world.enemies) {
     if (!enemy.dead) burst(enemy.x, enemy.y, stage.accent, enemy.elite ? 18 : 6, 55);
   }
@@ -1691,13 +1806,17 @@ function enterBossPhase(boss, nextPhase) {
 }
 
 function enemyBullet(x, y, vx, vy, color = "#ff7d8b", size = 3) {
-  const speedMultiplier = world.contract?.bulletSpeed || 1;
+  const stage = activeStage();
+  const progress = world.stageTime / stage.duration;
+  const branchSpeed = world.stageIndex === 0 && progress < .4
+    ? Math.min(1, world.activeBranch?.bulletSpeed || 1)
+    : world.activeBranch?.bulletSpeed || 1;
+  const speedMultiplier = (world.contract?.bulletSpeed || 1) * (stage.biome?.bulletSpeed || 1) * branchSpeed;
   world.enemyBullets.push({ x, y, vx: vx * speedMultiplier, vy: vy * speedMultiplier, r: size, color, age: 0, dead: false });
 }
 
 function fireAimed(enemy, speed = 62, count = 1, spread = 0.12, color) {
-  const biomeSpeed = activeStage().biome?.bulletSpeed || 1;
-  const finalSpeed = speed * (enemy.weaponBulletSpeed || 1) * biomeSpeed;
+  const finalSpeed = speed * (enemy.weaponBulletSpeed || 1);
   const finalCount = count + (enemy.weaponExtraShots || 0);
   const finalSpread = spread * (enemy.weaponSpread || 1);
   for (let i = 0; i < finalCount; i += 1) {
@@ -1711,8 +1830,7 @@ function fireAimed(enemy, speed = 62, count = 1, spread = 0.12, color) {
 }
 
 function fireRing(enemy, count, speed, phase = 0, color = "#ff6b8c") {
-  const biomeSpeed = activeStage().biome?.bulletSpeed || 1;
-  const finalSpeed = speed * (enemy.weaponBulletSpeed || 1) * biomeSpeed;
+  const finalSpeed = speed * (enemy.weaponBulletSpeed || 1);
   const finalCount = count + (enemy.weaponRingBonus || 0);
   for (let i = 0; i < finalCount; i += 1) {
     const angle = phase + (i / finalCount) * TAU;
@@ -1853,7 +1971,7 @@ function playerShoot(player) {
       vx: shot.vx,
       vy: -player.projectileSpeed,
       r: 2,
-      damage: shot.damage * player.damage * damageScale,
+      damage: shot.damage * player.damage * damageScale * (world.activeBranch?.reward.damage || 1),
       owner: player.index,
       color: config.color,
       pierceLeft: player.pierce,
@@ -2030,7 +2148,7 @@ function updatePlayers(dt) {
   }
 
   const [p1, p2] = world.players;
-  const linkRange = Math.max(p1.linkRange, p2.linkRange);
+  const linkRange = Math.max(p1.linkRange, p2.linkRange) * (world.activeBranch?.reward.link || 1);
   const linked = !p1.downed && !p2.downed && distance(p1, p2) < linkRange;
   if (linked) {
     world.beamTimer -= dt;
@@ -2057,7 +2175,7 @@ function killEnemy(enemy, owner = 0) {
   world.comboTimer = 2.4;
   world.bestCombo = Math.max(world.bestCombo, world.combo);
   const multiplier = 1 + Math.floor(world.combo / 8) * 0.5;
-  world.score += Math.round(enemy.score * multiplier * (world.contract?.score || 1));
+  world.score += Math.round(enemy.score * multiplier * (world.contract?.score || 1) * (world.activeBranch?.score || 1));
   const player = world.players[owner];
   if (player) player.energy = clamp(player.energy + (enemy.boss ? 35 : 4.5) * player.energyGain, 0, 100);
   burst(enemy.x, enemy.y, enemy.boss ? "#fff2a6" : activeStage().accent, enemy.boss ? 80 : 12, enemy.boss ? 150 : 65);
@@ -2132,7 +2250,7 @@ function applyPickup(player, pickup) {
 }
 
 function handleBossDefeat() {
-  world.score += Math.round(2500 * (world.stageIndex + 1) * (world.contract?.score || 1));
+  world.score += Math.round(2500 * (world.stageIndex + 1) * (world.contract?.score || 1) * (world.activeBranch?.score || 1));
   world.clearTimer = QA_FAST_MODE ? 1.1 : 4.2;
   world.enemyBullets = [];
   world.boss = null;
@@ -2152,7 +2270,7 @@ function advanceStage() {
   }
   world.stageIndex += 1;
   world.stageTime = 0;
-  world.introTimer = QA_FAST_MODE ? .8 : 3.2;
+  world.introTimer = 0;
   world.clearTimer = 0;
   world.eventIndex = 0;
   world.stageEvent = null;
@@ -2164,11 +2282,19 @@ function advanceStage() {
   world.enemyBullets = [];
   world.pickups = [];
   for (const player of world.players) {
+    if (player.downed) {
+      player.downed = false;
+      player.downTimer = 0;
+      player.revive = 0;
+      player.hp = Math.max(1, player.hp);
+    }
     player.hp = Math.min(player.maxHp, player.hp + 2 + player.stageRepair);
     player.weapon = Math.max(1 + player.weaponFloor, player.weapon - 1);
     player.invulnerability = 2;
   }
   audio.setStage(world.stageIndex, false);
+  prepareRouteChoice(world.stageIndex);
+  audio.sfx("routeScan");
 }
 
 function updateStage(dt) {
@@ -2205,7 +2331,10 @@ function updateStage(dt) {
       }
     }
     const ecologyRate = stage.biome?.spawnRate || 1;
-    world.spawnTimer = Math.max(0.62, (1.72 - world.stageIndex * 0.13 - progress * 0.55) / ((world.contract?.spawnRate || 1) * ecologyRate));
+    const routeRate = world.stageIndex === 0 && progress < .4
+      ? Math.min(1, world.activeBranch?.spawnRate || 1)
+      : world.activeBranch?.spawnRate || 1;
+    world.spawnTimer = Math.max(0.62, (1.72 - world.stageIndex * 0.13 - progress * 0.55) / ((world.contract?.spawnRate || 1) * ecologyRate * routeRate));
   }
   if (world.stageTime >= stage.duration) spawnBoss();
 }
@@ -2358,6 +2487,14 @@ function update(dt) {
   }
 
   world.time += dt;
+  if (world.routeChoice) {
+    world.shake = Math.max(0, world.shake - dt * 2.2);
+    world.flash = Math.max(0, world.flash - dt * 2.7);
+    updateStars(dt, true);
+    updateRouteChoice(dt);
+    input.endFrame();
+    return;
+  }
   world.variantNoticeCooldown = Math.max(0, world.variantNoticeCooldown - dt);
   if (world.variantNotice) {
     world.variantNotice.timer -= dt;
@@ -2852,6 +2989,75 @@ function pixelText(text, x, y, color = "#fff", align = "left", size = 7) {
   ctx.fillText(text, Math.round(x), Math.round(y));
 }
 
+function wrappedPixelText(text, x, y, maxWidth, lineHeight, color = "#fff", align = "center", size = 6, maxLines = 2) {
+  ctx.font = `bold ${size}px ui-monospace, monospace`;
+  const english = SpaceI18n.language === "en";
+  const units = english ? String(text).split(/\s+/) : [...String(text)];
+  const separator = english ? " " : "";
+  const lines = [];
+  let line = "";
+  for (const unit of units) {
+    const candidate = line ? `${line}${separator}${unit}` : unit;
+    if (ctx.measureText(candidate).width <= maxWidth || !line) {
+      line = candidate;
+    } else {
+      lines.push(line);
+      line = unit;
+    }
+  }
+  if (line) lines.push(line);
+  const visibleLines = lines.slice(0, maxLines);
+  if (lines.length > maxLines && visibleLines.length) {
+    let finalLine = visibleLines[visibleLines.length - 1];
+    while (finalLine.length > 1 && ctx.measureText(`${finalLine}…`).width > maxWidth) finalLine = finalLine.slice(0, -1);
+    visibleLines[visibleLines.length - 1] = `${finalLine}…`;
+  }
+  visibleLines.forEach((entry, index) => pixelText(entry, x, y + index * lineHeight, color, align, size));
+  return visibleLines.length;
+}
+
+function drawRouteChoice() {
+  const choice = world.routeChoice;
+  if (!choice) return;
+  const stage = activeStage();
+  ctx.save();
+  ctx.fillStyle = "rgba(3, 4, 14, .34)";
+  ctx.fillRect(0, 27, W, H - 27);
+  pixelText(`${stageText(stage, "code")} // ${biomeText(stage.biome, "name")}`, W / 2, 43, stage.accent, "center", 6);
+  pixelText(t("hud.choosePath"), W / 2, 56, "#ffffff", "center", 11);
+  pixelText(t("hud.choosePathHint"), W / 2, 66, "#aaa8be", "center", 5.5);
+  const cardWidth = 146;
+  const cardY = 74;
+  const cardHeight = 126;
+  choice.options.forEach((path, index) => {
+    const x = 10 + index * 157;
+    const selected = index === choice.selectedIndex;
+    ctx.fillStyle = selected ? "rgba(20, 22, 43, .94)" : "rgba(8, 9, 24, .86)";
+    ctx.fillRect(x, cardY, cardWidth, cardHeight);
+    ctx.fillStyle = path.color;
+    ctx.fillRect(x, cardY, cardWidth, selected ? 4 : 2);
+    if (selected) {
+      ctx.strokeStyle = path.color;
+      ctx.lineWidth = choice.converged ? 2 : 1;
+      ctx.strokeRect(x + .5, cardY + .5, cardWidth - 1, cardHeight - 1);
+    }
+    pixelText(t(`path.group.${path.group}`), x + cardWidth / 2, cardY + 15, path.color, "center", 5);
+    wrappedPixelText(pathText(path, "name"), x + cardWidth / 2, cardY + 29, cardWidth - 12, 9, "#ffffff", "center", 8, 2);
+    wrappedPixelText(pathText(path, "description"), x + cardWidth / 2, cardY + 54, cardWidth - 14, 7, "#aaa8be", "center", 5, 2);
+    wrappedPixelText(t("hud.pathRisk", { risk: pathText(path, "risk") }), x + cardWidth / 2, cardY + 79, cardWidth - 12, 7, "#ff9bad", "center", 5, 2);
+    wrappedPixelText(t("hud.pathReward", { reward: pathText(path, "reward") }), x + cardWidth / 2, cardY + 101, cardWidth - 12, 7, "#ffe784", "center", 5, 2);
+    pixelText(`×${path.score.toFixed(2)}`, x + cardWidth / 2, cardY + 119, path.color, "center", 6);
+  });
+  const holdRatio = clamp(choice.hold / .68, 0, 1);
+  ctx.fillStyle = "#17182f";
+  ctx.fillRect(W / 2 - 58, 210, 116, 5);
+  ctx.fillStyle = choice.options[choice.selectedIndex]?.color || stage.accent;
+  ctx.fillRect(W / 2 - 57, 211, Math.round(114 * holdRatio), 3);
+  pixelText(t(choice.converged ? "hud.pathConverged" : "hud.pathGather"), W / 2, 227, choice.converged ? "#ffffff" : "#aaa8be", "center", 6);
+  pixelText(t("hud.pathTimer", { time: Math.max(0, choice.timer).toFixed(1) }), W / 2, 240, "#85849e", "center", 5);
+  ctx.restore();
+}
+
 function drawBar(x, y, width, value, color, reverse = false) {
   const filled = Math.round((width - 2) * clamp(value, 0, 1));
   ctx.fillStyle = "#080916";
@@ -2886,7 +3092,10 @@ function drawHud() {
   pixelText(`${stageText(stage, "code")} // ${biomeText(stage.biome, "name")}`, W / 2, 10, "#d6d4e4", "center", 6);
   const progress = world.bossSpawned ? 1 : world.stageTime / stage.duration;
   drawBar(W / 2 - 46, 15, 92, progress, stage.accent);
-  pixelText(`${localizedName(world.contract)} ×${world.contract.score}`, W / 2, 24, "#85849e", "center", 5);
+  const routeStatus = world.activeBranch
+    ? `${pathText(world.activeBranch, "name")} ×${world.activeBranch.score.toFixed(2)}`
+    : t("hud.pathPending");
+  pixelText(routeStatus, W / 2, 24, world.activeBranch?.color || "#85849e", "center", 5);
 
   if (world.combo > 1) {
     const scale = Math.min(2, 1 + world.combo * 0.02);
@@ -2994,10 +3203,8 @@ function drawStageCard() {
   pixelText(stageText(stage, "name"), W / 2, 109, "#ffffff", "center", 15);
   pixelText(biomeText(stage.biome, "name"), W / 2, 126, stage.secondary, "center", 9);
   pixelText(biomeText(stage.biome, "description"), W / 2, 139, "#aaa8be", "center", 5.5);
-  const frame = SHIP_FRAMES.find((entry) => entry.id === world.loadoutFrame) || SHIP_FRAMES[0];
-  const module = CORE_MODULES.find((entry) => entry.id === world.loadoutModule) || CORE_MODULES[0];
-  pixelText(`${localizedName(frame)} // ${localizedName(module)}`, W / 2, 155, "#68f4df", "center", 6);
-  pixelText(t("hud.rewardLine", { score: world.contract.score, dust: world.contract.stardust }), W / 2, 168, "#ffe56d", "center", 5);
+  pixelText(t("hud.pathActive", { path: pathText(world.activeBranch, "name") }), W / 2, 155, world.activeBranch.color, "center", 6);
+  pixelText(t("hud.pathRewardLine", { reward: pathText(world.activeBranch, "reward"), score: world.activeBranch.score.toFixed(2) }), W / 2, 168, "#ffe56d", "center", 5);
   ctx.globalAlpha = 1;
 }
 
@@ -3030,6 +3237,7 @@ function draw() {
 
   if (world.mode !== "menu") {
     drawHud();
+    drawRouteChoice();
     drawStageCard();
     drawStageEvent();
     drawVariantNotice();
@@ -3080,6 +3288,11 @@ function draw() {
   canvas.dataset.biome = activeStage().biome?.id || "";
   canvas.dataset.enemyVariants = String(world.discoveredVariants.size);
   canvas.dataset.activeBuilds = [...new Set(world.enemies.filter((enemy) => !enemy.boss).map((enemy) => enemy.buildSignature))].filter(Boolean).join(",");
+  canvas.dataset.pathPlan = world.branchPlanSignature;
+  canvas.dataset.activePath = world.activeBranch?.id || "";
+  canvas.dataset.pathOptions = world.routeChoice?.options.map((path) => path.id).join(",") || "";
+  canvas.dataset.pathSelection = world.routeChoice ? String(world.routeChoice.selectedIndex) : "-1";
+  canvas.dataset.pathHistory = world.branchHistory.filter(Boolean).map((path) => path.id).join(",");
   canvas.dataset.hudResolution = `${canvas.width}x${canvas.height}`;
   canvas.dataset.hudScale = `${hudScaleX.toFixed(3)}x${hudScaleY.toFixed(3)}`;
 }

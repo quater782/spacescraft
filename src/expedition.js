@@ -36,6 +36,16 @@
     { id: "volatile", nameKey: "enemyModule.volatile", hp: .86, speed: 1.08, scale: .95, score: 1.22, barrier: 0, volatileRadius: 44 },
   ]);
 
+  const PATH_PROTOCOLS = freezeAll([
+    { id: "arsenal", group: "offense", nameKey: "path.arsenal.name", descriptionKey: "path.arsenal.description", riskKey: "path.arsenal.risk", rewardKey: "path.arsenal.reward", color: "#ffcf6e", enemyHp: 1.02, spawnRate: 1, bulletSpeed: .98, score: 1.1, bpmOffset: 3, musicShift: 0, preferredWeapon: "twin", reward: { weapon: 1 } },
+    { id: "resonance", group: "offense", nameKey: "path.resonance.name", descriptionKey: "path.resonance.description", riskKey: "path.resonance.risk", rewardKey: "path.resonance.reward", color: "#68d9ff", enemyHp: 1.03, spawnRate: 1, bulletSpeed: .95, score: 1.12, bpmOffset: -2, musicShift: 2, preferredWeapon: "orbit", reward: { energy: 24, link: 1.12 } },
+    { id: "sanctuary", group: "support", nameKey: "path.sanctuary.name", descriptionKey: "path.sanctuary.description", riskKey: "path.sanctuary.risk", rewardKey: "path.sanctuary.reward", color: "#7fffe2", enemyHp: 1.06, spawnRate: .88, bulletSpeed: .9, score: .96, bpmOffset: -6, musicShift: 0, preferredCore: "barrier", reward: { repair: 2, shield: 1 } },
+    { id: "salvage", group: "support", nameKey: "path.salvage.name", descriptionKey: "path.salvage.description", riskKey: "path.salvage.risk", rewardKey: "path.salvage.reward", color: "#ffe16c", enemyHp: 1.08, spawnRate: .92, bulletSpeed: .94, score: 1.06, bpmOffset: -4, musicShift: -2, preferredCore: "plated", reward: { repair: 1, energy: 18 } },
+    { id: "overdrive", group: "hazard", nameKey: "path.overdrive.name", descriptionKey: "path.overdrive.description", riskKey: "path.overdrive.risk", rewardKey: "path.overdrive.reward", color: "#ff6c94", enemyHp: .96, spawnRate: 1.12, bulletSpeed: 1.02, score: 1.18, bpmOffset: 8, musicShift: 1, preferredMove: "rush", reward: { energy: 32 } },
+    { id: "prism", group: "hazard", nameKey: "path.prism.name", descriptionKey: "path.prism.description", riskKey: "path.prism.risk", rewardKey: "path.prism.reward", color: "#bd8cff", enemyHp: 1, spawnRate: .98, bulletSpeed: 1.06, score: 1.16, bpmOffset: 5, musicShift: 3, preferredWeapon: "sniper", reward: { damage: 1.08 } },
+    { id: "anomaly", group: "hazard", nameKey: "path.anomaly.name", descriptionKey: "path.anomaly.description", riskKey: "path.anomaly.risk", rewardKey: "path.anomaly.reward", color: "#63e6a8", enemyHp: .92, spawnRate: 1.08, bulletSpeed: .97, score: 1.2, bpmOffset: 2, musicShift: -3, preferredCore: "volatile", reward: { energy: 22, shield: 1 } },
+  ].map((protocol) => ({ ...protocol, reward: Object.freeze(protocol.reward) })));
+
   const byId = (items, id) => items.find((item) => item.id === id) || items[0];
   const pick = (items, random) => items[Math.floor(random() * items.length)];
   const biasedPick = (items, preferredId, random) => {
@@ -47,6 +57,32 @@
   function generateRoute(seed) {
     const random = window.SpaceRoguelike.createRng((Number(seed) ^ 0xa511e9b3) >>> 0);
     return Object.freeze([0, 1, 2].map((stageIndex) => pick(BIOMES.filter((biome) => biome.stageIndex === stageIndex), random)));
+  }
+
+  function generateBranchSets(seed) {
+    const random = window.SpaceRoguelike.createRng((Number(seed) ^ 0x71d3a9c5) >>> 0);
+    const groups = ["support", "offense", "hazard"];
+    return Object.freeze([0, 1, 2].map(() => {
+      const options = groups.map((group) => pick(PATH_PROTOCOLS.filter((protocol) => protocol.group === group), random));
+      for (let index = options.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(random() * (index + 1));
+        [options[index], options[swapIndex]] = [options[swapIndex], options[index]];
+      }
+      return Object.freeze(options);
+    }));
+  }
+
+  function evaluateGateChoice(positions, width = 480, tolerance = 42) {
+    const valid = positions.filter(Number.isFinite);
+    const centers = [width * .19, width * .5, width * .81];
+    const laneForX = (x) => (x < width / 3 ? 0 : x > width * 2 / 3 ? 2 : 1);
+    const averageX = valid.length ? valid.reduce((sum, x) => sum + x, 0) / valid.length : centers[1];
+    const selectedIndex = laneForX(averageX);
+    const lanes = valid.map(laneForX);
+    const converged = lanes.length > 0
+      && lanes.every((lane) => lane === lanes[0])
+      && valid.every((x) => Math.abs(x - centers[lanes[0]]) < tolerance);
+    return Object.freeze({ selectedIndex: converged ? lanes[0] : selectedIndex, converged });
   }
 
   function weightedHull(items, bias, random) {
@@ -69,21 +105,21 @@
     return weightedHull(tables.filter((entry) => entry[1] > 0), biome?.typeBias, random);
   }
 
-  function assembleEnemy({ stageIndex, progress, biome, elite = false, random }) {
+  function assembleEnemy({ stageIndex, progress, biome, branch, elite = false, random }) {
     const earlySafety = stageIndex === 0 && progress < .4 && !elite;
     if (earlySafety) return build("standard", "pulse", "light", stageIndex);
 
     const budget = Math.min(3, stageIndex + (progress >= .42 ? 1 : 0) + (progress >= .76 ? 1 : 0) + (elite ? 1 : 0));
     const movementPool = budget >= 1 ? MOVEMENT_MODULES : MOVEMENT_MODULES.slice(0, 1);
-    const movement = biasedPick(movementPool, biome?.preferredMove, random);
+    const movement = biasedPick(movementPool, branch?.preferredMove || biome?.preferredMove, random);
     let weapon = WEAPON_MODULES[0];
     if (budget >= 2) {
       const weaponPool = stageIndex === 0 ? WEAPON_MODULES.slice(0, 2) : WEAPON_MODULES;
-      weapon = pick(weaponPool, random);
+      weapon = biasedPick(weaponPool, branch?.preferredWeapon, random);
     }
     let core = CORE_MODULES[0];
     if (elite) core = pick(CORE_MODULES.slice(1, 3), random);
-    else if (budget >= 3) core = pick(CORE_MODULES, random);
+    else if (budget >= 3) core = biasedPick(CORE_MODULES, branch?.preferredCore, random);
     return build(movement.id, weapon.id, core.id, stageIndex);
   }
 
@@ -120,7 +156,10 @@
     MOVEMENT_MODULES,
     WEAPON_MODULES,
     CORE_MODULES,
+    PATH_PROTOCOLS,
     generateRoute,
+    generateBranchSets,
+    evaluateGateChoice,
     chooseEnemyHull,
     assembleEnemy,
     build,

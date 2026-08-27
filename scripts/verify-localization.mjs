@@ -18,13 +18,16 @@ const keys = new Set([
   "draft.rarity.common",
   "draft.rarity.rare",
   "draft.rarity.legendary",
+  "path.group.support",
+  "path.group.offense",
+  "path.group.hazard",
 ]);
 
 for (const match of html.matchAll(/data-i18n(?:-aria-label)?="([^"]+)"/g)) keys.add(match[1]);
 for (const match of game.matchAll(/\bt\("([^"]+)"/g)) keys.add(match[1]);
 for (const match of game.matchAll(/(?:nameKey|descriptionKey|statsKey|unlockKey|codeKey|subtitleKey|bossKey):\s*"([^"]+)"/g)) keys.add(match[1]);
 for (const match of roguelike.matchAll(/(?:nameKey|descriptionKey):\s*"([^"]+)"/g)) keys.add(match[1]);
-for (const match of expedition.matchAll(/(?:nameKey|descriptionKey):\s*"([^"]+)"/g)) keys.add(match[1]);
+for (const match of expedition.matchAll(/(?:nameKey|descriptionKey|riskKey|rewardKey):\s*"([^"]+)"/g)) keys.add(match[1]);
 for (const match of game.matchAll(/"(bossPhase\.\d\.\d)"/g)) keys.add(match[1]);
 
 const document = {

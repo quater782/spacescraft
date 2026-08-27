@@ -568,6 +568,25 @@
       }
     }
 
+    drawRouteGates(choice) {
+      const laneCenters = [this.width * .19, this.width * .5, this.width * .81];
+      choice.options.forEach((path, index) => {
+        const position = this.toWorld(laneCenters[index], this.height - 63, .22);
+        const selected = index === choice.selectedIndex;
+        const charge = selected ? .5 + Math.sin(this.time * 8) * .08 + clamp(choice.hold / .68, 0, 1) * .18 : .38;
+        const base = compose(position, [Math.PI / 2, this.time * (index % 2 ? -.55 : .55), 0], [1, 1, 1]);
+        this.drawMesh(this.meshes.torus, multiply(base, scaling(.82 + charge * .12, .22, .82 + charge * .12)), hexColor(path.color, selected ? .92 : .48), selected ? 1 : .45);
+        this.drawMesh(this.meshes.torus, multiply(base, scaling(.54, .12, .54)), hexColor("#ffffff", selected ? .42 : .12), .8);
+        for (let point = 0; point < 6; point += 1) {
+          const angle = point / 6 * TAU + this.time * (index % 2 ? -.7 : .7);
+          this.part(base, this.meshes.octa, [Math.sin(angle) * .88, 0, Math.cos(angle) * .88], [.12, .12, .12], path.color, [angle, angle, 0], selected ? .9 : .4);
+        }
+        if (selected) {
+          this.drawMesh(this.meshes.sphere, compose(position, [0, 0, 0], [1.25, .28, 1.25]), hexColor(path.color, .1 + charge * .08), 1);
+        }
+      });
+    }
+
     drawBiomeFeatures(biome) {
       if (!biome) return;
       const accent = biome.accent || "#7fffe2";
@@ -743,6 +762,7 @@
         return true;
       }
 
+      if (world.routeChoice) this.drawRouteGates(world.routeChoice);
       for (const pickup of world.pickups) this.drawPickup(pickup);
       for (const enemy of world.enemies) this.drawEnemy(enemy);
       for (const bullet of world.bullets) this.drawProjectile(bullet, false);
