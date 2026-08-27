@@ -457,7 +457,7 @@
 
     drawEnemy(enemy) {
       const position = this.toWorld(enemy.x, enemy.y, .32);
-      const enemyScale = enemy.elite ? 1.32 : 1;
+      const enemyScale = (enemy.elite ? 1.32 : 1) * (enemy.moduleScale || 1);
       const base = compose(position, [0, enemy.type === "spinner" ? enemy.age * 2 : 0, Math.sin(enemy.age * 2 + enemy.seed) * .05], [enemyScale, enemyScale, enemyScale]);
       if (enemy.boss) {
         this.drawBoss(enemy, base);
@@ -489,6 +489,45 @@
           const angle = i / 4 * TAU;
           this.part(base, this.meshes.box, [Math.sin(angle) * .62, .04, Math.cos(angle) * .62], [.09, .09, .42], "#972642", [0, angle, 0]);
         }
+      }
+
+      const moduleColor = enemy.moduleColor || "#7fffe2";
+      if (enemy.movementModule === "weave") {
+        const weave = Math.sin(this.time * 8 + enemy.seed) * .12;
+        this.part(base, this.meshes.wedge, [-.72, -.02, .3 + weave], [.48, .1, .42], moduleColor, [0, -.42, 0], .45);
+        this.part(base, this.meshes.wedge, [.72, -.02, .3 - weave], [.48, .1, .42], moduleColor, [0, .42, 0], .45);
+      } else if (enemy.movementModule === "rush") {
+        const flame = .42 + Math.sin(this.time * 18 + enemy.seed) * .1;
+        this.part(base, this.meshes.box, [-.3, -.05, .62], [.14, .13, .3], "#251733");
+        this.part(base, this.meshes.box, [.3, -.05, .62], [.14, .13, .3], "#251733");
+        this.part(base, this.meshes.octa, [-.3, -.05, .94], [.1, .1, flame], moduleColor, [Math.PI / 2, 0, 0], 1);
+        this.part(base, this.meshes.octa, [.3, -.05, .94], [.1, .1, flame], moduleColor, [Math.PI / 2, 0, 0], 1);
+      } else if (enemy.movementModule === "drift") {
+        this.part(base, this.meshes.torus, [0, -.02, .18], [.86, .18, .86], hexColor(moduleColor, .72), [0, this.time * 1.8 + enemy.seed, 0], .7);
+      }
+
+      if (enemy.weaponModule === "twin") {
+        this.part(base, this.meshes.box, [-.38, .16, -.58], [.1, .11, .55], moduleColor, [0, 0, 0], .55);
+        this.part(base, this.meshes.box, [.38, .16, -.58], [.1, .11, .55], moduleColor, [0, 0, 0], .55);
+      } else if (enemy.weaponModule === "sniper") {
+        this.part(base, this.meshes.box, [0, .18, -.76], [.1, .1, .9], "#302346");
+        this.part(base, this.meshes.octa, [0, .18, -1.18], [.11, .11, .2], moduleColor, [Math.PI / 2, 0, 0], 1);
+      } else if (enemy.weaponModule === "orbit") {
+        this.part(base, this.meshes.torus, [0, .35, 0], [.72, .16, .72], hexColor(moduleColor, .8), [.22, this.time * 2.6 + enemy.seed, 0], 1);
+      }
+
+      if (enemy.coreModule === "plated") {
+        this.part(base, this.meshes.box, [-.62, .23, .02], [.24, .28, .66], "#39304d");
+        this.part(base, this.meshes.box, [.62, .23, .02], [.24, .28, .66], "#39304d");
+        this.part(base, this.meshes.box, [0, .46, .04], [.56, .18, .52], moduleColor, [0, 0, 0], .28);
+      } else if (enemy.coreModule === "barrier" && enemy.moduleBarrier > 0) {
+        const barrierPulse = 1 + Math.sin(this.time * 11 + enemy.seed) * .04;
+        this.part(base, this.meshes.sphere, [0, .12, 0], [1.15 * barrierPulse, .62, 1.15 * barrierPulse], hexColor(moduleColor, .13), [0, this.time, 0], 1);
+        this.part(base, this.meshes.torus, [0, .15, 0], [1.04, .2, 1.04], hexColor(moduleColor, .72), [0, -this.time * 1.5, 0], .8);
+      } else if (enemy.coreModule === "volatile") {
+        const corePulse = .2 + Math.sin(this.time * 10 + enemy.seed) * .035;
+        this.part(base, this.meshes.octa, [0, .38, .02], [corePulse, corePulse, corePulse], moduleColor, [this.time, -this.time * 1.4, 0], 1);
+        this.part(base, this.meshes.sphere, [0, .38, .02], [.38, .2, .38], hexColor(moduleColor, .12), [0, 0, 0], 1);
       }
       if (enemy.elite) {
         this.part(base, this.meshes.torus, [0, .2, 0], [1.2, .34, 1.2], hexColor("#fff1a0", .68), [0, this.time * 1.6, 0], .8);
@@ -529,7 +568,51 @@
       }
     }
 
-    drawLandmark(stageIndex) {
+    drawBiomeFeatures(biome) {
+      if (!biome) return;
+      const accent = biome.accent || "#7fffe2";
+      const secondary = biome.secondary || accent;
+      const landmark = biome.landmark;
+      if (landmark === "bloom" || landmark === "garden") {
+        for (let i = 0; i < 7; i += 1) {
+          const x = -9 + i * 3;
+          const z = -15 - (i % 3) * 2.8;
+          const stem = compose([x, -.15, z], [0, i * .7, 0], [1, 1, 1]);
+          this.part(stem, this.meshes.box, [0, .45, 0], [.08, .9, .08], secondary, [0, 0, 0], .35);
+          this.part(stem, this.meshes.octa, [0, 1.18, 0], [.38, .38, .38], i % 2 ? accent : secondary, [0, this.time * .22 + i, 0], .65);
+        }
+      } else if (landmark === "crystals" || landmark === "prisms") {
+        for (let i = 0; i < 8; i += 1) {
+          const height = 1.2 + (i % 3) * .65;
+          this.drawMesh(this.meshes.octa, compose([-10 + i * 2.8, height * .25 - .45, -17 - (i % 2) * 3], [0, i * .4, .12], [.42, height, .42]), hexColor(i % 2 ? accent : secondary, .75), .55);
+        }
+      } else if (landmark === "comets") {
+        for (let i = 0; i < 6; i += 1) {
+          const x = -10 + i * 4.1;
+          const z = -17 - (i % 3) * 2.5;
+          this.drawMesh(this.meshes.sphere, compose([x, 2.6 + (i % 2), z], [0, 0, 0], [.28, .28, .28]), hexColor(secondary), .5);
+          this.drawMesh(this.meshes.box, compose([x + 1.2, 2.6 + (i % 2), z + .5], [0, -.35, 0], [.08, .08, 2.6]), hexColor(accent, .36), .8);
+        }
+      } else if (landmark === "aurora") {
+        for (let i = 0; i < 4; i += 1) {
+          this.drawMesh(this.meshes.torus, compose([-7 + i * 4.7, 5.2 + (i % 2), -20 - i], [.28, this.time * .04 + i * .4, .15], [2.2, .34, 2.2]), hexColor(i % 2 ? accent : secondary, .28), .7);
+        }
+      } else if (landmark === "gears") {
+        for (let i = 0; i < 3; i += 1) {
+          this.drawMesh(this.meshes.torus, compose([-7 + i * 6.5, 1.4 + i, -18 - i * 2], [Math.PI / 2, this.time * (.08 + i * .025), 0], [1.5 + i * .3, .28, 1.5 + i * .3]), hexColor(i % 2 ? accent : secondary, .68), .5);
+        }
+      } else if (landmark === "reef") {
+        for (let i = 0; i < 10; i += 1) {
+          const size = .5 + (i % 4) * .22;
+          this.drawMesh(this.meshes.sphere, compose([-10 + i * 2.3, -.15 + size, -17 - (i % 3) * 2.2], [0, 0, 0], [size, size * .72, size]), hexColor(i % 2 ? accent : secondary, .5), .3);
+        }
+      } else if (landmark === "eclipse") {
+        this.drawMesh(this.meshes.sphere, compose([-7.7, 5.7, -21], [0, 0, 0], [3.2, 3.2, 3.2]), hexColor("#060510"), .15);
+        this.drawMesh(this.meshes.torus, compose([-7.7, 5.7, -21], [.15, this.time * .025, 0], [3.75, .42, 3.75]), hexColor(accent, .88), 1);
+      }
+    }
+
+    drawLandmark(stageIndex, biome) {
       if (stageIndex === 0) {
         const planet = compose([8.4, 5.1, -20], [0, this.time * .035, 0], [3.1, 3.1, 3.1]);
         this.drawMesh(this.meshes.sphere, planet, hexColor("#c94788"));
@@ -557,6 +640,7 @@
           }
         }
       }
+      this.drawBiomeFeatures(biome);
     }
 
     drawGrid(accent) {
@@ -648,7 +732,7 @@
       this.viewProjection = multiply(projection, lookAt(eye, target, [0, 1, 0]));
 
       this.drawStars(stage.star);
-      this.drawLandmark(this.stageIndex);
+      this.drawLandmark(this.stageIndex, stage.biome);
       this.drawGrid(stage.grid);
 
       if (world.mode === "menu") {

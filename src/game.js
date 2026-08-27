@@ -473,6 +473,7 @@ const PLAYER_CONFIG = [
 const localizedName = (item) => t(item.nameKey);
 const localizedDescription = (item) => t(item.descriptionKey);
 const stageText = (stage, field) => t(stage[`${field}Key`]);
+const biomeText = (biome, field) => t(biome[`${field}Key`]);
 const eventText = (event, field) => t(event[`${field}Key`]);
 const bossPhaseText = (stageIndex, phase) => t(BOSS_PHASE_KEYS[stageIndex][phase - 1]);
 
@@ -700,7 +701,7 @@ class AudioEngine {
     if (!this.context || this.context.state !== "running") return;
     while (this.nextStep < this.context.currentTime + 0.1) {
       this.scheduleStep(this.step, this.nextStep);
-      const bpm = STAGES[this.stage]?.bpm || 132;
+      const bpm = world.routeStages?.[this.stage]?.bpm || STAGES[this.stage]?.bpm || 132;
       this.nextStep += 60 / bpm / 4;
       this.step += 1;
     }
@@ -708,7 +709,7 @@ class AudioEngine {
 
   scheduleStep(step, when) {
     const roots = [45, 42, 40];
-    const root = roots[this.stage];
+    const root = roots[this.stage] + (world.routeStages?.[this.stage]?.musicShift || 0);
     const leads = [
       [12, 15, 19, 22, 19, 15, 17, 15, 12, 15, 20, 22, 20, 19, 15, 10],
       [12, 14, 17, 21, 24, 21, 17, 14, 12, 17, 19, 24, 22, 19, 17, 14],
@@ -789,9 +790,30 @@ class AudioEngine {
       if (now - this.lastEnemyShot < .11) return;
       this.lastEnemyShot = now;
       this.tone(61 + this.stage * 2, .08, "sawtooth", .025, now, this.sfxBus, -9);
+    } else if (name === "enemyTwin") {
+      if (now - this.lastEnemyShot < .11) return;
+      this.lastEnemyShot = now;
+      this.tone(58 + this.stage * 2, .07, "square", .022, now, this.sfxBus, -5);
+      this.tone(65 + this.stage * 2, .055, "sawtooth", .018, now + .018, this.sfxBus, -10);
+    } else if (name === "enemySniper") {
+      if (now - this.lastEnemyShot < .13) return;
+      this.lastEnemyShot = now;
+      this.tone(76 + this.stage, .12, "square", .032, now, this.sfxBus, -22);
+      this.noise(.045, .02, now + .015, 3200);
+    } else if (name === "enemyOrbit") {
+      if (now - this.lastEnemyShot < .13) return;
+      this.lastEnemyShot = now;
+      [55, 62, 67].forEach((note, index) => this.tone(note + this.stage, .1, "triangle", .017, now + index * .018, this.sfxBus, -4));
     } else if (name === "shield") {
       this.tone(79, .16, "sine", .055, now, this.sfxBus, -12);
       this.tone(91, .1, "square", .025, now + .02, this.sfxBus, -19);
+    } else if (name === "barrierBreak") {
+      [84, 79, 72].forEach((note, index) => this.tone(note, .11, index === 1 ? "triangle" : "square", .035, now + index * .028, this.sfxBus, -8));
+      this.noise(.12, .035, now + .025, 2800);
+    } else if (name === "volatile") {
+      this.tone(48, .2, "sawtooth", .07, now, this.sfxBus, -19);
+      this.tone(60, .1, "square", .04, now + .015, this.sfxBus, -12);
+      this.noise(.2, .09, now, 520);
     } else if (name === "stageClear") {
       [60, 64, 67, 72, 76, 79].forEach((note, i) => this.tone(note, .22, i % 2 ? "square" : "triangle", .06, now + i * .075, this.sfxBus));
     } else if (name === "unlock") {
@@ -862,7 +884,16 @@ const world = {
   draftInputCooldown: 0,
   enemySerial: 0,
   chainResolving: false,
+  biomes: [],
+  routeStages: [],
+  routeSignature: "",
+  discoveredVariants: new Set(),
+  variantNotice: null,
+  variantNoticeCooldown: 0,
+  volatileResolving: false,
 };
+
+const activeStage = (index = world.stageIndex) => world.routeStages[index] || STAGES[index] || STAGES[0];
 
 let settingsReturnContext = "menu";
 let resetSaveArmed = false;
@@ -998,11 +1029,13 @@ function renderBuildTray() {
 function renderResultBuild() {
   const uniqueIds = [...new Set(world.upgradeHistory)];
   const seedChip = `<span>${t("result.runSeed", { seed: String(world.runSeed).padStart(8, "0") })}</span>`;
+  const route = world.biomes.map((biome) => biomeText(biome, "name")).join(t("result.routeSeparator"));
+  const routeChip = route ? `<span>${t("result.ecosystems", { route })}</span>` : "";
   const upgradeChips = uniqueIds.map((id) => {
     const upgrade = UPGRADE_DEFS.find((entry) => entry.id === id);
     return upgrade ? `<span>${upgradeIcon(id)}${localizedName(upgrade)} <b>Lv.${upgradeLevel(id)}</b></span>` : "";
   }).join("");
-  resultBuild.innerHTML = seedChip + (upgradeChips || `<span>${t("result.buildEmpty")}</span>`);
+  resultBuild.innerHTML = seedChip + routeChip + (upgradeChips || `<span>${t("result.buildEmpty")}</span>`);
 }
 
 function renderUpgradeDraft(focusSelected = false) {
@@ -1348,6 +1381,23 @@ function createPlayer(index) {
 function resetWorld() {
   world.runSeed = createRunSeed();
   setRunRandomSeed(world.runSeed);
+  world.biomes = [...SpaceExpedition.generateRoute(world.runSeed)];
+  world.routeStages = STAGES.map((stage, index) => {
+    const biome = world.biomes[index];
+    return {
+      ...stage,
+      sky: biome.sky,
+      haze: biome.haze,
+      grid: biome.grid,
+      star: biome.star,
+      accent: biome.accent,
+      secondary: biome.secondary,
+      bpm: stage.bpm + biome.bpmOffset,
+      musicShift: biome.musicShift,
+      biome,
+    };
+  });
+  world.routeSignature = world.biomes.map((biome) => biome.id).join(">");
   world.gameMode = profile.selectedMode;
   world.loadoutFrame = profile.selectedFrame;
   world.loadoutModule = profile.selectedModule;
@@ -1360,6 +1410,8 @@ function resetWorld() {
   world.clearTimer = 0;
   world.eventIndex = 0;
   world.stageEvent = null;
+  world.variantNotice = null;
+  world.variantNoticeCooldown = 0;
   world.cinematic = null;
   world.spawnTimer = 1.8;
   world.boss = null;
@@ -1387,6 +1439,10 @@ function resetWorld() {
   world.draftInputCooldown = 0;
   world.enemySerial = 0;
   world.chainResolving = false;
+  world.discoveredVariants = new Set();
+  world.variantNotice = null;
+  world.variantNoticeCooldown = 0;
+  world.volatileResolving = false;
   world.players = [createPlayer(0), createPlayer(1)];
   world.bullets = [];
   world.enemyBullets = [];
@@ -1458,18 +1514,28 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     mine: { hp: 4, r: 8, score: 180 },
   }[type];
   const elite = Boolean(options.elite);
-  const contractHealth = world.contract?.enemyHp || 1;
-  return {
+  const stage = activeStage();
+  const progress = clamp(world.stageTime / stage.duration, 0, 1);
+  const build = options.build || SpaceExpedition.assembleEnemy({
+    stageIndex: world.stageIndex,
+    progress,
+    biome: stage.biome,
+    elite,
+    random,
+  });
+  const contractHealth = (world.contract?.enemyHp || 1) * (stage.biome?.enemyHp || 1);
+  const maxHp = stats.hp * (elite ? 3.1 : 1) * contractHealth * build.hp;
+  const enemy = {
     id: ++world.enemySerial,
     type,
     x,
     y,
     vx: 0,
     vy: 0,
-    hp: stats.hp * (elite ? 3.1 : 1) * contractHealth,
-    maxHp: stats.hp * (elite ? 3.1 : 1) * contractHealth,
-    r: stats.r * (elite ? 1.28 : 1),
-    score: Math.round(stats.score * (elite ? 4 : 1)),
+    hp: maxHp,
+    maxHp,
+    r: stats.r * (elite ? 1.28 : 1) * build.scale,
+    score: Math.round(stats.score * (elite ? 4 : 1) * build.score),
     age: 0,
     shootTimer: rand(1.6, 3),
     eliteTimer: elite ? 1.6 : 0,
@@ -1478,7 +1544,35 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     boss: false,
     elite,
     hitFlash: 0,
+    movementModule: build.movementId,
+    movementNameKey: build.movementNameKey,
+    weaponModule: build.weaponId,
+    weaponNameKey: build.weaponNameKey,
+    coreModule: build.coreId,
+    coreNameKey: build.coreNameKey,
+    buildSignature: build.signature,
+    moduleScale: build.scale,
+    moveSpeed: build.speed,
+    moveSway: build.sway,
+    moveDrift: build.drift,
+    weaponBulletSpeed: build.bulletSpeed,
+    weaponExtraShots: build.extraShots,
+    weaponRingBonus: build.ringBonus,
+    weaponCooldown: build.cooldown,
+    weaponSpread: build.spread,
+    moduleBarrier: build.barrier,
+    moduleBarrierMax: build.barrier,
+    volatileRadius: build.volatileRadius,
+    moduleColor: stage.biome?.secondary || stage.accent,
   };
+  if (build.signature !== "standard.pulse.light" && !world.discoveredVariants.has(build.signature)) {
+    world.discoveredVariants.add(build.signature);
+    if (world.variantNoticeCooldown <= 0) {
+      world.variantNotice = { enemy, timer: 2.8, total: 2.8 };
+      world.variantNoticeCooldown = 3.5;
+    }
+  }
+  return enemy;
 }
 
 function addFormationEnemy(type, x, y, options = {}) {
@@ -1524,28 +1618,13 @@ function spawnStageEvent(event) {
   world.spawnTimer = Math.max(world.spawnTimer, 1.8);
   world.flash = Math.max(world.flash, .18);
   world.shake = Math.max(world.shake, .14);
-  showToast(t("toast.event", { route: stageText(STAGES[stage], "code"), event: eventText(event, "name") }));
+  showToast(t("toast.event", { route: stageText(activeStage(stage), "code"), event: eventText(event, "name") }));
 }
 
 function spawnEnemy() {
-  const progress = world.stageTime / STAGES[world.stageIndex].duration;
-  const roll = random();
-  let type = "scout";
-
-  if (world.stageIndex === 0) {
-    if (progress > 0.7 && roll < 0.14) type = "tank";
-    else if (progress > 0.34 && roll < 0.38) type = "dart";
-    else if (progress > 0.56 && roll > 0.9) type = "spinner";
-  } else if (world.stageIndex === 1) {
-    if (roll < 0.25) type = "dart";
-    else if (roll < 0.5) type = "spinner";
-    else if (roll > 0.82) type = "tank";
-  } else {
-    if (roll < 0.2) type = "mine";
-    else if (roll < 0.45) type = "spinner";
-    else if (roll > 0.76) type = "tank";
-    else type = "dart";
-  }
+  const stage = activeStage();
+  const progress = world.stageTime / stage.duration;
+  const type = SpaceExpedition.chooseEnemyHull({ stageIndex: world.stageIndex, progress, biome: stage.biome, random });
 
   if (progress > 0.35 && random() < 0.08 + world.stageIndex * 0.035) {
     const side = random() < 0.5 ? -12 : W + 12;
@@ -1559,9 +1638,10 @@ function spawnEnemy() {
 
 function spawnBoss() {
   const baseHealth = [340, 500, 700][world.stageIndex];
-  const health = (QA_FAST_MODE ? baseHealth * .14 : baseHealth) * (world.contract?.enemyHp || 1);
+  const stage = activeStage();
+  const health = (QA_FAST_MODE ? baseHealth * .14 : baseHealth) * (world.contract?.enemyHp || 1) * (stage.biome?.enemyHp || 1);
   for (const enemy of world.enemies) {
-    if (!enemy.dead) burst(enemy.x, enemy.y, STAGES[world.stageIndex].accent, enemy.elite ? 18 : 6, 55);
+    if (!enemy.dead) burst(enemy.x, enemy.y, stage.accent, enemy.elite ? 18 : 6, 55);
   }
   world.enemies = [];
   world.boss = {
@@ -1594,7 +1674,7 @@ function spawnBoss() {
   world.shake = 0.5;
   audio.setStage(world.stageIndex, true);
   audio.sfx("boss");
-  showToast(t("toast.warning", { boss: stageText(STAGES[world.stageIndex], "boss") }));
+  showToast(t("toast.warning", { boss: stageText(stage, "boss") }));
 }
 
 function enterBossPhase(boss, nextPhase) {
@@ -1605,7 +1685,7 @@ function enterBossPhase(boss, nextPhase) {
   world.flash = Math.max(world.flash, .62);
   world.shake = Math.max(world.shake, .52);
   world.cinematic = { type: "phase", timer: 1.1, total: 1.1 };
-  burst(boss.x, boss.y, STAGES[world.stageIndex].accent, 42, 120);
+  burst(boss.x, boss.y, activeStage().accent, 42, 120);
   audio.sfx("bossPhase");
   showToast(`${t("hud.phaseTitle", { phase: nextPhase })} // ${bossPhaseText(world.stageIndex, nextPhase)}`);
 }
@@ -1616,21 +1696,29 @@ function enemyBullet(x, y, vx, vy, color = "#ff7d8b", size = 3) {
 }
 
 function fireAimed(enemy, speed = 62, count = 1, spread = 0.12, color) {
-  for (let i = 0; i < count; i += 1) {
-    const offset = (i - (count - 1) / 2) * spread;
-    const velocity = aimedVelocity(enemy, speed);
+  const biomeSpeed = activeStage().biome?.bulletSpeed || 1;
+  const finalSpeed = speed * (enemy.weaponBulletSpeed || 1) * biomeSpeed;
+  const finalCount = count + (enemy.weaponExtraShots || 0);
+  const finalSpread = spread * (enemy.weaponSpread || 1);
+  for (let i = 0; i < finalCount; i += 1) {
+    const offset = (i - (finalCount - 1) / 2) * finalSpread;
+    const velocity = aimedVelocity(enemy, finalSpeed);
     const angle = Math.atan2(velocity.vy, velocity.vx) + offset;
-    enemyBullet(enemy.x, enemy.y + enemy.r * 0.5, Math.cos(angle) * speed, Math.sin(angle) * speed, color);
+    enemyBullet(enemy.x, enemy.y + enemy.r * 0.5, Math.cos(angle) * finalSpeed, Math.sin(angle) * finalSpeed, color);
   }
-  audio.sfx("enemyShoot");
+  const sound = enemy.weaponModule === "twin" ? "enemyTwin" : enemy.weaponModule === "sniper" ? "enemySniper" : "enemyShoot";
+  audio.sfx(sound);
 }
 
 function fireRing(enemy, count, speed, phase = 0, color = "#ff6b8c") {
-  for (let i = 0; i < count; i += 1) {
-    const angle = phase + (i / count) * TAU;
-    enemyBullet(enemy.x, enemy.y, Math.cos(angle) * speed, Math.sin(angle) * speed, color, 2.5);
+  const biomeSpeed = activeStage().biome?.bulletSpeed || 1;
+  const finalSpeed = speed * (enemy.weaponBulletSpeed || 1) * biomeSpeed;
+  const finalCount = count + (enemy.weaponRingBonus || 0);
+  for (let i = 0; i < finalCount; i += 1) {
+    const angle = phase + (i / finalCount) * TAU;
+    enemyBullet(enemy.x, enemy.y, Math.cos(angle) * finalSpeed, Math.sin(angle) * finalSpeed, color, 2.5);
   }
-  audio.sfx("enemyShoot");
+  audio.sfx(enemy.weaponModule === "orbit" ? "enemyOrbit" : "enemyShoot");
 }
 
 function updateEnemy(enemy, dt) {
@@ -1646,55 +1734,56 @@ function updateEnemy(enemy, dt) {
 
   if (enemy.elite) {
     enemy.eliteTimer -= dt;
-    if (enemy.y < 58) enemy.y += 22 * dt;
+    if (enemy.y < 58) enemy.y += 22 * (enemy.moveSpeed || 1) * dt;
     else {
       enemy.y = lerp(enemy.y, 58, 1 - Math.exp(-dt * 3));
-      enemy.x += Math.sin(enemy.age * 1.15 + enemy.seed) * 20 * dt;
+      enemy.x += Math.sin(enemy.age * 1.15 + enemy.seed) * 20 * (enemy.moveSway || 1) * dt;
     }
     if (canFire && enemy.eliteTimer <= 0 && enemy.y > 28) {
-      fireRing(enemy, 6 + world.stageIndex * 2, 27 + world.stageIndex * 3, enemy.age * .32, STAGES[world.stageIndex].accent);
+      fireRing(enemy, 6 + world.stageIndex * 2, 27 + world.stageIndex * 3, enemy.age * .32, activeStage().accent);
       fireAimed(enemy, 38 + world.stageIndex * 3, 2, .2, "#fff0a0");
-      enemy.eliteTimer = Math.max(1.65, 2.6 - world.stageIndex * .22);
+      enemy.eliteTimer = Math.max(1.65, 2.6 - world.stageIndex * .22) * (enemy.weaponCooldown || 1);
     }
     return;
   }
 
   enemy.x += enemy.vx * dt;
+  enemy.x += Math.sin(enemy.age * .85 + enemy.seed) * (enemy.moveDrift || 0) * dt;
 
   if (enemy.type === "scout") {
-    enemy.y += (29 + world.stageIndex * 5) * dt;
-    enemy.x += Math.sin(enemy.age * 3 + enemy.seed) * 18 * dt;
+    enemy.y += (29 + world.stageIndex * 5) * (enemy.moveSpeed || 1) * dt;
+    enemy.x += Math.sin(enemy.age * 3 + enemy.seed) * 18 * (enemy.moveSway || 1) * dt;
     if (canFire && enemy.shootTimer <= 0 && enemy.y > 20) {
       fireAimed(enemy, 34 + world.stageIndex * 5, 1, 0, "#ff8aa3");
-      enemy.shootTimer = rand(2.5, 3.6);
+      enemy.shootTimer = rand(2.5, 3.6) * (enemy.weaponCooldown || 1);
     }
   } else if (enemy.type === "dart") {
-    enemy.y += (48 + world.stageIndex * 6) * dt;
-    enemy.x += Math.sin(enemy.age * 6 + enemy.seed) * 55 * dt;
+    enemy.y += (48 + world.stageIndex * 6) * (enemy.moveSpeed || 1) * dt;
+    enemy.x += Math.sin(enemy.age * 6 + enemy.seed) * 55 * (enemy.moveSway || 1) * dt;
     if (canFire && enemy.shootTimer <= 0 && enemy.y > 30) {
       fireAimed(enemy, 43, world.stageIndex === 0 ? 1 : 2, 0.13, "#f8ca62");
-      enemy.shootTimer = rand(2.7, 3.8);
+      enemy.shootTimer = rand(2.7, 3.8) * (enemy.weaponCooldown || 1);
     }
   } else if (enemy.type === "tank") {
-    if (enemy.y < 52) enemy.y += 22 * dt;
-    else enemy.x += Math.sin(enemy.age * 1.1 + enemy.seed) * 15 * dt;
+    if (enemy.y < 52) enemy.y += 22 * (enemy.moveSpeed || 1) * dt;
+    else enemy.x += Math.sin(enemy.age * 1.1 + enemy.seed) * 15 * (enemy.moveSway || 1) * dt;
     if (canFire && enemy.shootTimer <= 0 && enemy.y > 20) {
       fireAimed(enemy, 38, 2 + world.stageIndex, 0.17, "#ff6f63");
-      enemy.shootTimer = rand(2.5, 3.2);
+      enemy.shootTimer = rand(2.5, 3.2) * (enemy.weaponCooldown || 1);
     }
   } else if (enemy.type === "spinner") {
-    enemy.y += 25 * dt;
-    enemy.x += Math.cos(enemy.age * 2.7 + enemy.seed) * 30 * dt;
+    enemy.y += 25 * (enemy.moveSpeed || 1) * dt;
+    enemy.x += Math.cos(enemy.age * 2.7 + enemy.seed) * 30 * (enemy.moveSway || 1) * dt;
     if (canFire && enemy.shootTimer <= 0 && enemy.y > 25) {
       fireRing(enemy, 5 + world.stageIndex * 2, 29 + world.stageIndex * 4, enemy.age, "#a88bff");
-      enemy.shootTimer = 3.2;
+      enemy.shootTimer = 3.2 * (enemy.weaponCooldown || 1);
     }
   } else if (enemy.type === "mine") {
-    enemy.y += 17 * dt;
-    enemy.x += Math.sin(enemy.age + enemy.seed) * 9 * dt;
+    enemy.y += 17 * (enemy.moveSpeed || 1) * dt;
+    enemy.x += Math.sin(enemy.age + enemy.seed) * 9 * (enemy.moveSway || 1) * dt;
     if (canFire && enemy.shootTimer <= 0 && enemy.y > 30) {
       fireRing(enemy, 7, 27, enemy.age * 0.4, "#ff5470");
-      enemy.shootTimer = 3;
+      enemy.shootTimer = 3 * (enemy.weaponCooldown || 1);
     }
   }
 
@@ -1787,6 +1876,27 @@ function playerShoot(player) {
   audio.sfx("shoot", player.index);
 }
 
+function damageEnemy(enemy, amount) {
+  if (amount <= 0 || enemy.dead || (enemy.boss && enemy.phaseShield > 0)) return { hull: 0, barrier: 0, broken: false };
+  let remaining = amount;
+  let barrierDamage = 0;
+  let broken = false;
+  if ((enemy.moduleBarrier || 0) > 0) {
+    barrierDamage = Math.min(enemy.moduleBarrier, remaining);
+    enemy.moduleBarrier -= barrierDamage;
+    remaining -= barrierDamage;
+    broken = enemy.moduleBarrier <= 0;
+    enemy.hitFlash = .11;
+    burst(enemy.x, enemy.y, enemy.moduleColor || "#9be9ff", broken ? 12 : 4, broken ? 58 : 28);
+    if (broken) audio.sfx("barrierBreak");
+  }
+  if (remaining > 0) {
+    enemy.hp -= remaining;
+    enemy.hitFlash = .075;
+  }
+  return { hull: remaining, barrier: barrierDamage, broken };
+}
+
 function useNova(player) {
   player.energy = 0;
   world.enemyBullets.forEach((bullet) => {
@@ -1794,12 +1904,8 @@ function useNova(player) {
     burst(bullet.x, bullet.y, PLAYER_CONFIG[player.index].color, 2, 16);
   });
   world.enemies.forEach((enemy) => {
-    if (enemy.boss && enemy.phaseShield > 0) {
-      enemy.hitFlash = .1;
-      return;
-    }
-    enemy.hp -= (enemy.boss ? 42 : 55) * player.novaDamage;
-    enemy.hitFlash = .1;
+    const damage = damageEnemy(enemy, (enemy.boss ? 42 : 55) * player.novaDamage);
+    if (damage.hull <= 0 && damage.barrier <= 0) enemy.hitFlash = .1;
     if (enemy.hp <= 0) killEnemy(enemy, player.index);
   });
   for (let i = 0; i < 64; i += 1) {
@@ -1932,8 +2038,7 @@ function updatePlayers(dt) {
       world.beamTimer = 0.12;
       for (const enemy of world.enemies) {
         if (!enemy.dead && pointToSegmentDistance(enemy.x, enemy.y, p1.x, p1.y, p2.x, p2.y) < enemy.r + 3) {
-          if (!(enemy.boss && enemy.phaseShield > 0)) enemy.hp -= 1.2 * ((p1.beamDamage + p2.beamDamage) * .5);
-          enemy.hitFlash = .08;
+          damageEnemy(enemy, 1.2 * ((p1.beamDamage + p2.beamDamage) * .5));
           p1.energy = clamp(p1.energy + 0.45 * p1.energyGain, 0, 100);
           p2.energy = clamp(p2.energy + 0.45 * p2.energyGain, 0, 100);
           if (enemy.hp <= 0) killEnemy(enemy, 0);
@@ -1955,7 +2060,7 @@ function killEnemy(enemy, owner = 0) {
   world.score += Math.round(enemy.score * multiplier * (world.contract?.score || 1));
   const player = world.players[owner];
   if (player) player.energy = clamp(player.energy + (enemy.boss ? 35 : 4.5) * player.energyGain, 0, 100);
-  burst(enemy.x, enemy.y, enemy.boss ? "#fff2a6" : STAGES[world.stageIndex].accent, enemy.boss ? 80 : 12, enemy.boss ? 150 : 65);
+  burst(enemy.x, enemy.y, enemy.boss ? "#fff2a6" : activeStage().accent, enemy.boss ? 80 : 12, enemy.boss ? 150 : 65);
 
   if (!enemy.boss && player?.chainDamage > 0 && !world.chainResolving) {
     const chainLevel = upgradeLevel("chain");
@@ -1967,14 +2072,29 @@ function killEnemy(enemy, owner = 0) {
     world.chainResolving = true;
     try {
       for (const target of targets) {
-        if (target.boss && target.phaseShield > 0) continue;
-        target.hp -= player.chainDamage;
-        target.hitFlash = .12;
+        damageEnemy(target, player.chainDamage);
         burst(target.x, target.y, "#b6f7ff", 5, 42);
         if (target.hp <= 0) killEnemy(target, owner);
       }
     } finally {
       world.chainResolving = false;
+    }
+  }
+
+  if (!enemy.boss && enemy.volatileRadius > 0 && !world.volatileResolving) {
+    world.volatileResolving = true;
+    try {
+      burst(enemy.x, enemy.y, enemy.moduleColor || activeStage().accent, 24, 105);
+      audio.sfx("volatile");
+      world.shake = Math.max(world.shake, .24);
+      const blastDamage = 7 + world.stageIndex * 2;
+      for (const target of world.enemies) {
+        if (target.dead || target === enemy || distance(enemy, target) > enemy.volatileRadius) continue;
+        damageEnemy(target, blastDamage);
+        if (target.hp <= 0) killEnemy(target, owner);
+      }
+    } finally {
+      world.volatileResolving = false;
     }
   }
 
@@ -2022,7 +2142,7 @@ function handleBossDefeat() {
   world.shake = 0.8;
   audio.setStage(world.stageIndex, false);
   audio.sfx("stageClear");
-  showToast(t("toast.stageClear", { stage: stageText(STAGES[world.stageIndex], "name") }));
+  showToast(t("toast.stageClear", { stage: stageText(activeStage(), "name") }));
 }
 
 function advanceStage() {
@@ -2052,6 +2172,7 @@ function advanceStage() {
 }
 
 function updateStage(dt) {
+  const stage = activeStage();
   if (world.clearTimer > 0) {
     world.clearTimer -= dt;
     if (world.clearTimer <= 0) {
@@ -2074,7 +2195,7 @@ function updateStage(dt) {
     world.eventIndex += 1;
   }
   if (world.spawnTimer <= 0) {
-    const progress = world.stageTime / STAGES[world.stageIndex].duration;
+    const progress = world.stageTime / stage.duration;
     const enemyCap = 6 + world.stageIndex * 2 + Math.floor(progress * 2);
     const activeEnemies = world.enemies.filter((enemy) => !enemy.boss).length;
     if (activeEnemies < enemyCap) {
@@ -2083,9 +2204,10 @@ function updateStage(dt) {
         world.enemies.push(makeEnemy(choose(["scout", "dart"])));
       }
     }
-    world.spawnTimer = Math.max(0.62, (1.72 - world.stageIndex * 0.13 - progress * 0.55) / (world.contract?.spawnRate || 1));
+    const ecologyRate = stage.biome?.spawnRate || 1;
+    world.spawnTimer = Math.max(0.62, (1.72 - world.stageIndex * 0.13 - progress * 0.55) / ((world.contract?.spawnRate || 1) * ecologyRate));
   }
-  if (world.stageTime >= STAGES[world.stageIndex].duration) spawnBoss();
+  if (world.stageTime >= stage.duration) spawnBoss();
 }
 
 function updateObjects(dt) {
@@ -2146,11 +2268,11 @@ function handleCollisions() {
           burst(bullet.x, bullet.y, "#ffffff", 2, 18);
           break;
         }
+        const damage = damageEnemy(enemy, bullet.damage);
         bullet.hitIds?.push(enemy.id);
-        if (bullet.pierceLeft > 0) bullet.pierceLeft -= 1;
+        if (damage.barrier > 0) bullet.dead = true;
+        else if (bullet.pierceLeft > 0) bullet.pierceLeft -= 1;
         else bullet.dead = true;
-        enemy.hp -= bullet.damage;
-        enemy.hitFlash = .075;
         if (enemy.boss) world.shake = Math.max(world.shake, .035);
         const owner = world.players[bullet.owner];
         owner.energy = clamp(owner.energy + 0.28 * owner.energyGain, 0, 100);
@@ -2182,7 +2304,7 @@ function handleCollisions() {
       if ((enemy.x - player.x) ** 2 + (enemy.y - player.y) ** 2 < hitRadius ** 2) {
         damagePlayer(player);
         if (!enemy.boss) {
-          enemy.hp -= 8;
+          damageEnemy(enemy, 8);
           if (enemy.hp <= 0) killEnemy(enemy, player.index);
         }
       }
@@ -2236,6 +2358,11 @@ function update(dt) {
   }
 
   world.time += dt;
+  world.variantNoticeCooldown = Math.max(0, world.variantNoticeCooldown - dt);
+  if (world.variantNotice) {
+    world.variantNotice.timer -= dt;
+    if (world.variantNotice.timer <= 0) world.variantNotice = null;
+  }
   world.comboTimer -= dt;
   if (world.comboTimer <= 0) world.combo = 0;
   world.shake = Math.max(0, world.shake - dt * 2.2);
@@ -2327,7 +2454,7 @@ function endGame(victory) {
 }
 
 function drawBackground() {
-  const stage = STAGES[world.stageIndex] || STAGES[0];
+  const stage = activeStage();
   const gradient = ctx.createLinearGradient(0, 0, 0, H);
   gradient.addColorStop(0, stage.sky);
   gradient.addColorStop(0.62, stage.haze);
@@ -2646,7 +2773,7 @@ function drawBoss(boss) {
   const ratio = clamp(boss.hp / boss.maxHp, 0, 1);
   ctx.fillStyle = "#090915";
   ctx.fillRect(-28, boss.r + 5, 56, 4);
-  ctx.fillStyle = ratio < 0.3 ? "#ff4e67" : STAGES[stage].accent;
+  ctx.fillStyle = ratio < 0.3 ? "#ff4e67" : activeStage(stage).accent;
   ctx.fillRect(-27, boss.r + 6, Math.round(54 * ratio), 2);
 }
 
@@ -2736,7 +2863,7 @@ function drawBar(x, y, width, value, color, reverse = false) {
 }
 
 function drawHud() {
-  const stage = STAGES[world.stageIndex];
+  const stage = activeStage();
   ctx.fillStyle = "rgba(5, 6, 18, .88)";
   ctx.fillRect(0, 0, W, 26);
   ctx.fillStyle = "#292b50";
@@ -2756,7 +2883,7 @@ function drawHud() {
   drawBar(W - 126, 14, 48, p2.energy / 100, "#c691ff", true);
   pixelText(`W${p2.weapon}`, W - 130, 18, "#8585a4", "right", 6);
 
-  pixelText(`${stageText(stage, "code")} // ${stageText(stage, "name")}`, W / 2, 10, "#d6d4e4", "center", 6);
+  pixelText(`${stageText(stage, "code")} // ${biomeText(stage.biome, "name")}`, W / 2, 10, "#d6d4e4", "center", 6);
   const progress = world.bossSpawned ? 1 : world.stageTime / stage.duration;
   drawBar(W / 2 - 46, 15, 92, progress, stage.accent);
   pixelText(`${localizedName(world.contract)} ×${world.contract.score}`, W / 2, 24, "#85849e", "center", 5);
@@ -2794,12 +2921,33 @@ function drawStageEvent() {
   const y = 57;
   ctx.fillStyle = "rgba(5, 6, 18, .86)";
   ctx.fillRect(x, y, width, 34);
-  ctx.fillStyle = STAGES[world.stageIndex].accent;
+  const stage = activeStage();
+  ctx.fillStyle = stage.accent;
   ctx.fillRect(x, y, 4, 34);
   ctx.fillRect(x + width - 4, y, 4, 34);
-  pixelText(t("hud.routeEvent", { event: world.eventIndex }), W / 2, y + 10, STAGES[world.stageIndex].accent, "center", 6);
+  pixelText(t("hud.routeEvent", { event: world.eventIndex }), W / 2, y + 10, stage.accent, "center", 6);
   pixelText(eventText(event, "name"), W / 2, y + 22, "#ffffff", "center", 10);
   pixelText(eventText(event, "subtitle"), W / 2, y + 31, "#9d9bb4", "center", 5.5);
+  ctx.restore();
+}
+
+function drawVariantNotice() {
+  const notice = world.variantNotice;
+  if (!notice || world.introTimer > 0 || world.clearTimer > 0 || world.stageEvent) return;
+  const reveal = clamp((notice.total - notice.timer) * 5, 0, 1) * clamp(notice.timer * 2.6, 0, 1);
+  const enemy = notice.enemy;
+  const moduleNames = [enemy.movementNameKey, enemy.weaponNameKey, enemy.coreNameKey].map((key) => t(key)).join(" // ");
+  const width = 218;
+  const x = W / 2 - width / 2;
+  const y = 57;
+  ctx.save();
+  ctx.globalAlpha = reveal;
+  ctx.fillStyle = "rgba(5, 6, 18, .88)";
+  ctx.fillRect(x, y, width, 30);
+  ctx.fillStyle = enemy.moduleColor || activeStage().accent;
+  ctx.fillRect(x, y, 3, 30);
+  pixelText(t("hud.enemyScan"), W / 2, y + 10, enemy.moduleColor || activeStage().accent, "center", 5.5);
+  pixelText(moduleNames, W / 2, y + 22, "#ffffff", "center", 7);
   ctx.restore();
 }
 
@@ -2816,10 +2964,10 @@ function drawCinematic() {
   if (cinematic.type === "boss" && world.boss) {
     ctx.globalAlpha = Math.min(1, amount * 1.5);
     pixelText(t("hud.threat"), W / 2, 102, "#ff6b77", "center", 7);
-    pixelText(stageText(STAGES[world.stageIndex], "boss"), W / 2, 124, "#ffffff", "center", 15);
+    pixelText(stageText(activeStage(), "boss"), W / 2, 124, "#ffffff", "center", 15);
   } else if (cinematic.type === "phase" && world.boss) {
     ctx.globalAlpha = Math.min(.9, amount * 1.4);
-    pixelText(t("hud.phaseTitle", { phase: world.boss.phaseLevel }), W / 2, 112, STAGES[world.stageIndex].accent, "center", 13);
+    pixelText(t("hud.phaseTitle", { phase: world.boss.phaseLevel }), W / 2, 112, activeStage().accent, "center", 13);
     pixelText(bossPhaseText(world.stageIndex, world.boss.phaseLevel), W / 2, 130, "#ffffff", "center", 7);
   }
   ctx.restore();
@@ -2827,7 +2975,7 @@ function drawCinematic() {
 
 function drawStageCard() {
   if (world.introTimer <= 0 && world.clearTimer <= 0) return;
-  const stage = STAGES[world.stageIndex];
+  const stage = activeStage();
   if (world.clearTimer > 0) {
     const repairAmount = 2 + (world.players[0]?.stageRepair || 0);
     ctx.fillStyle = "rgba(5, 6, 15, .7)";
@@ -2839,16 +2987,17 @@ function drawStageCard() {
   const opacity = clamp((3.2 - world.introTimer) * 2, 0, 1) * clamp(world.introTimer, 0, 1);
   ctx.globalAlpha = Math.max(0.35, opacity);
   ctx.fillStyle = "rgba(5, 6, 15, .72)";
-  ctx.fillRect(112, 80, 256, 88);
+  ctx.fillRect(98, 72, 284, 104);
   ctx.fillStyle = stage.accent;
-  ctx.fillRect(112, 80, 4, 88);
-  pixelText(`${stageText(stage, "code")} // ${localizedName(world.contract)}`, W / 2, 98, stage.accent, "center", 7);
-  pixelText(stageText(stage, "name"), W / 2, 122, "#ffffff", "center", 17);
-  pixelText(stageText(stage, "subtitle"), W / 2, 139, "#aaa8be", "center", 7);
+  ctx.fillRect(98, 72, 4, 104);
+  pixelText(`${stageText(stage, "code")} // ${localizedName(world.contract)}`, W / 2, 89, stage.accent, "center", 7);
+  pixelText(stageText(stage, "name"), W / 2, 109, "#ffffff", "center", 15);
+  pixelText(biomeText(stage.biome, "name"), W / 2, 126, stage.secondary, "center", 9);
+  pixelText(biomeText(stage.biome, "description"), W / 2, 139, "#aaa8be", "center", 5.5);
   const frame = SHIP_FRAMES.find((entry) => entry.id === world.loadoutFrame) || SHIP_FRAMES[0];
   const module = CORE_MODULES.find((entry) => entry.id === world.loadoutModule) || CORE_MODULES[0];
-  pixelText(`${localizedName(frame)} // ${localizedName(module)}`, W / 2, 153, "#68f4df", "center", 6);
-  pixelText(t("hud.rewardLine", { score: world.contract.score, dust: world.contract.stardust }), W / 2, 164, "#ffe56d", "center", 5);
+  pixelText(`${localizedName(frame)} // ${localizedName(module)}`, W / 2, 155, "#68f4df", "center", 6);
+  pixelText(t("hud.rewardLine", { score: world.contract.score, dust: world.contract.stardust }), W / 2, 168, "#ffe56d", "center", 5);
   ctx.globalAlpha = 1;
 }
 
@@ -2873,7 +3022,7 @@ function drawMenuScene() {
 }
 
 function draw() {
-  renderer3D.render(world, STAGES, PLAYER_CONFIG, profile.settings);
+  renderer3D.render(world, world.routeStages.length ? world.routeStages : STAGES, PLAYER_CONFIG, profile.settings);
   resizeHudCanvas();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -2883,6 +3032,7 @@ function draw() {
     drawHud();
     drawStageCard();
     drawStageEvent();
+    drawVariantNotice();
     drawCinematic();
     const downedPlayers = world.players.filter((player) => player.downed);
     downedPlayers.forEach((player, index) => {
@@ -2926,6 +3076,10 @@ function draw() {
   canvas.dataset.upgradeCount = String(world.upgradeHistory.length);
   canvas.dataset.upgrades = [...new Set(world.upgradeHistory)].map((id) => `${id}:${upgradeLevel(id)}`).join(",");
   canvas.dataset.draftOptions = world.draftOptions.map((upgrade) => upgrade.id).join(",");
+  canvas.dataset.routeSignature = world.routeSignature;
+  canvas.dataset.biome = activeStage().biome?.id || "";
+  canvas.dataset.enemyVariants = String(world.discoveredVariants.size);
+  canvas.dataset.activeBuilds = [...new Set(world.enemies.filter((enemy) => !enemy.boss).map((enemy) => enemy.buildSignature))].filter(Boolean).join(",");
   canvas.dataset.hudResolution = `${canvas.width}x${canvas.height}`;
   canvas.dataset.hudScale = `${hudScaleX.toFixed(3)}x${hudScaleY.toFixed(3)}`;
 }

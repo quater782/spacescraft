@@ -32,16 +32,16 @@ npm run make:win
 当前已验证产物：
 
 - `out/SPACECRAFT 星航双子-win32-x64/SPACECRAFT.exe`
-- `dist/SPACECRAFT-0.8.0-windows-x64.zip`
+- `dist/SPACECRAFT-0.9.0-windows-x64.zip`
 
-0.8.0 Windows x64 校验值：
+0.9.0 Windows x64 校验值：
 
 ```text
-ZIP  SHA-256  555715774897fffa47f2a5fda76d47a49eba3bccdf8eff0c2ba4c4cd3e300cc4
-EXE  SHA-256  596ed76b01ec11159109ddaf82cbd8405d26656959a07d8d544cc021e3a2cf0d
+ZIP  SHA-256  f50b1469fe36918c53f20951b86389bcec811a35ed7910a160c62619162e88a4
+EXE  SHA-256  1cb185d95ea024f4d09e300e63c1e22b32a2e94c19ff9dcbdd273b320767b367
 ```
 
-ZIP 为 157,645,435 字节，EXE 为 244,440,576 字节，解压后目录约 366 MiB，共 76 个归档条目。归档使用跨平台 ZIP 元数据，不包含 `__MACOSX` 或 `.DS_Store`；`unzip -tq` 完整性检查通过。`app.asar` 已核对为 0.8.0，并包含 `src/i18n.js`、`src/roguelike.js`、15 项局内升级、双语目录、v4 语言存档、航线合约、星航勋章、游戏逻辑、3D 渲染器和桌面图标。
+ZIP 为 157,653,150 字节，EXE 为 244,440,576 字节，解压后内容为 384,103,848 字节，共 76 个归档条目。归档使用跨平台 ZIP 元数据，不包含 `__MACOSX` 或 `.DS_Store`；`unzip -tq` 完整性检查通过。`app.asar` 已核对为 0.9.0，并包含 `src/i18n.js`、`src/roguelike.js`、`src/expedition.js`、15 项局内升级、9 种生态、64 种敌军构筑、双语目录、游戏逻辑与 3D 渲染器。
 
 Windows EXE 使用 `assets/icon.ico`，其中包含从 `favicon.svg` 直接渲染的 16、24、32、48、64、128 和 256px 图像。macOS 上可运行 `npm run icons` 重新生成 ICO、PNG 与 ICNS。
 

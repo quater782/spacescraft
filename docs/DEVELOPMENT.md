@@ -20,7 +20,7 @@ http://127.0.0.1:4173/?qa-fast
 
 此模式仅在 `localhost` 或 `127.0.0.1` 生效，会加速章节时间并降低 Boss 测试耐久，用于快速检查九个事件、三场精英战、Boss 阶段和完整通关路径。测试结果不会写入出航、通关、最高分等生涯统计，也不会在正式域名或 Electron 文件协议下启用。
 
-自动化或人工检查可以读取 `#game` 上的 `data-mode`、`data-language`、`data-stage`、`data-stage-time`、`data-events`、`data-enemies`、`data-boss-phase`、`data-player-hp`、`data-fps` 与 `data-qa` 诊断属性。机库、合约和构筑还提供 `data-frame`、`data-module`、`data-contract`、`data-score-multiplier`、`data-player-shield`、`data-player-speed`、`data-player-fire-rate`、`data-player-damage`、`data-player-energy-gain`、`data-achievement-count`、`data-stardust-reward`、`data-run-seed`、`data-upgrade-count`、`data-upgrades` 与 `data-draft-options`。
+自动化或人工检查可以读取 `#game` 上的 `data-mode`、`data-language`、`data-stage`、`data-stage-time`、`data-events`、`data-enemies`、`data-boss-phase`、`data-player-hp`、`data-fps` 与 `data-qa` 诊断属性。机库、合约、构筑与远征还提供 `data-frame`、`data-module`、`data-contract`、`data-score-multiplier`、`data-player-shield`、`data-player-speed`、`data-player-fire-rate`、`data-player-damage`、`data-player-energy-gain`、`data-achievement-count`、`data-stardust-reward`、`data-run-seed`、`data-upgrade-count`、`data-upgrades`、`data-draft-options`、`data-route-signature`、`data-biome`、`data-enemy-variants` 与 `data-active-builds`。
 
 ### 本地机库经济测试
 
@@ -40,7 +40,7 @@ http://127.0.0.1:4173/?qa-fast&qa-wallet&qa-contracts
 http://127.0.0.1:4173/?qa-fast&qa-draft&seed=20260826
 ```
 
-构筑页同样遵循“只控制方向”的产品约束：左右选择，上下确认；P1 可使用 WASD，P2 可使用方向键。`npm run verify` 会额外检查 15 项升级效果、同种子复现、类别覆盖、满级过滤、早期稀有度权重、叠层和玩法/视觉随机源隔离。
+构筑页同样遵循“只控制方向”的产品约束：左右选择，上下确认；P1 可使用 WASD，P2 可使用方向键。`npm run verify` 会额外检查 15 项升级效果、同种子复现、类别覆盖、满级过滤、早期稀有度权重、叠层和玩法/视觉随机源隔离，并验证 9 种生态、64 种敌军构筑、第一章安全包络与后期模块多样性。
 
 ## 桌面版本
 
@@ -71,19 +71,22 @@ npm start
 11. 检查浏览器或 Electron 开发者控制台无错误。
 12. 使用固定 `seed` 检查局内三选一、升级叠层、章节恢复和结算构筑摘要。
 13. 检查 `data-hud-resolution` 不低于 HUD 的 CSS 显示尺寸，确认正常窗口与全屏下战斗文字清晰。
-14. 更新 `CHANGELOG.md`、[当前项目状态](./PROJECT-STATE.md)、发行说明和相关设计文档。
+14. 使用固定 `seed` 检查三段生态航线一致，观察至少三种移动/武器/核心外挂、屏障破碎、爆裂连锁和模块扫描 HUD。
+15. 更新 `CHANGELOG.md`、[当前项目状态](./PROJECT-STATE.md)、发行说明和相关设计文档。
 
 ## 架构
 
 - `src/renderer3d.js`：原生 WebGL 渲染、矩阵、着色器和 3D 模型。
 - `src/game.js`：固定时间步、关卡、碰撞、AI、音频和 HUD。
 - `src/roguelike.js`：局内升级池、确定性 RNG、候选生成和升级效果。
+- `src/expedition.js`：生态航线、敌型权重与模块化敌军组装规则。
 - `src/i18n.js`：简体中文/英文文案目录、插值、DOM 与元数据同步。
 - `electron/main.cjs`：安全桌面窗口与生命周期。
 - `forge.config.cjs`：桌面发行产物配置。
 - `scripts/build-icons.mjs`：从 SVG 母版生成多分辨率桌面图标。
 - `scripts/verify-localization.mjs`：收集 HTML 与游戏逻辑引用键，验证两种语言完整覆盖。
 - `scripts/verify-roguelike.mjs`：验证构筑池、随机复现、权重、满级过滤与全部升级效果。
+- `scripts/verify-expedition.mjs`：验证生态、敌军组合、早期安全、后期多样性与 3D 集成。
 - `scripts/verify-docs.mjs`：检查必需文档、Codex 指令大小和仓库内 Markdown 链接。
 
 完整模块边界与数据流见[系统架构](./ARCHITECTURE.md)。
