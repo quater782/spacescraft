@@ -46,7 +46,7 @@ http://127.0.0.1:4173/?qa-fast&qa-wallet&qa-contracts
 http://127.0.0.1:4173/?qa-fast&qa-draft&seed=20260826
 ```
 
-构筑页同样遵循“只控制方向”的产品约束：左右选择，上下确认；P1 可使用 WASD，P2 可使用方向键。`npm run verify` 会额外检查 15 项升级效果、同种子复现、类别覆盖、满级过滤、早期稀有度权重、叠层和玩法/视觉随机源隔离，并验证 9 种生态、1,024 种五槽敌军构筑、第一章安全包络与后期模块多样性。
+构筑页同样遵循“只控制方向”的产品约束：左右选择，上下确认；P1 可使用 WASD，P2 可使用方向键。`npm run verify` 会额外检查 15 项升级效果、同种子复现、类别覆盖、满级过滤、早期稀有度权重、叠层和玩法/视觉随机源隔离，并验证 9 种生态、7 个有机船体、7,168 种六维敌军构筑、第一章安全包络与后期模块多样性。
 
 ### 遗物协议测试
 
@@ -58,17 +58,17 @@ http://127.0.0.1:4173/?qa-fast&qa-protocol=cometDrive&qa-path=1&qa-encounter=rel
 
 可选稳定 ID：`cometDrive`、`phaseLance`、`prismChoir`、`stormCircuit`、`aegisNova`、`salvageReactor`、`resonantGyro`。检查 `data-protocols`、`data-protocol-count` 和 `data-protocol-procs`，并确认构筑托盘 SVG、HUD、3D 轨道遗物与自动触发音效。测试期间只发送方向输入，不得出现协议触发键。
 
-### Three.js 体素机体、五槽敌军与状态测试
+### Three.js 航空战机、异形六维敌军与状态测试
 
-使用专用正常速度建模面，不触发动态遭遇或 Boss，并强制一个推进/武器/核心/AI/载荷五槽敌型：
+使用专用正常速度建模面，不触发动态遭遇或 Boss，并强制船体以及推进/武器/核心/AI/载荷六维敌型：
 
 ```text
-http://127.0.0.1:4173/?qa-voxel&qa-buffs&qa-status=chill&qa-path=1&qa-enemy=drift.orbit.barrier.oracle.cryo&seed=2
+http://127.0.0.1:4173/?qa-voxel&qa-buffs&qa-status=chill&qa-path=1&qa-hull=carrier&qa-enemy=drift.orbit.barrier.oracle.cryo&seed=2
 ```
 
-`qa-enemy` 必须是五段稳定 ID；当前每槽四种模块，完整目录为 1,024。`qa-buffs` 自动给双机上线军械超频、纳米花簇、神盾矩阵和磁通核心；`qa-status=chill|jam|fracture` 只给 P1 施加对应异常。全部开关仅在 localhost 生效，不增加战斗键。
+`qa-hull=scout|dart|tank|spinner|mine|lancer|carrier` 强制基础机体，`qa-enemy` 必须是五段功能模块稳定 ID；七个船体与每槽四种模块形成 7,168 个完整构筑。`qa-buffs` 自动给双机上线军械超频、纳米花簇、神盾矩阵和磁通核心；`qa-status=chill|jam|fracture` 只给 P1 施加对应异常。全部开关仅在 localhost 生效，不增加战斗键。
 
-视觉验收必须同时检查：玩家白色尖鼻朝屏幕上方、敌军绕 Y 轴 180° 朝屏幕下方；纵向座舱、连续后掠翼、尾翼与推进焰构成清晰战机剪影；Buff/Debuff 贴合机体而非形成虫形附肢；彩色体素弹幕、体素星球/生态、3D 网格和远近雾有纵深；静止截图和连续运行中均无共面闪烁。`npm run verify` 会拒绝原生 shader/buffer/draw call、手写面片以及 Plane/Sphere/Torus/Octahedron/Cone 几何回退。
+视觉验收必须同时检查：玩家尖鼻朝屏幕上方、敌军绕 Y 轴 180° 朝屏幕下方；玩家具有细长机身、纵向座舱、连续阶梯薄翼、倾斜尾翼与独立推进焰，不得呈现甲虫/装甲车式粗短截面；敌军不得调用玩家的机鼻/机翼/尾翼构造器，必须以弯月骨翼、分叉颚、甲壳、触须和非对称眼阵形成异形剪影；Buff/Debuff 贴合主体结构；彩色体素弹幕、体素星球/生态、3D 网格和远近雾有纵深；静止截图和连续运行中均无共面闪烁。`npm run verify` 会拒绝敌方复用人类战机构造器、原生 shader/buffer/draw call、手写面片以及 Plane/Sphere/Torus/Octahedron/Cone 几何回退。
 
 ### 星门分支测试
 
@@ -143,7 +143,7 @@ npm start
 17. 使用测试钱包按三条依赖链点亮九项天赋，检查精确扣款、刷新持久化、双机属性、前置拒绝、v4 迁移和清档恢复。
 18. 在自然充能和 `qa-rush` 两条路径检查自动触发、火力倍率、拾取牵引、光链消弹、击破延时、3D 能量环、动态音乐、结算与七项诊断。
 19. 逐项覆盖七种遗物协议，检查第二次构筑配套注入、方向确认、自动触发、SVG/HUD/3D、协议音乐、结果摘要与 CSP 控制台。
-20. 用有/无状态两种 `qa-voxel` 画面检查玩家/敌军相反朝向、尖鼻/后掠翼/尾焰、五槽外挂、体素弹幕/背景、稳定发光层和 60 FPS；确认没有面片闪烁。
+20. 用有/无状态两种 `qa-voxel` 画面检查玩家/敌军相反朝向、尖鼻/连续承力翼/尾焰、六维模块对主体轮廓的改变、体素弹幕/背景、稳定发光层和 60 FPS；确认没有悬浮微方块、面片堆砌或共面闪烁。
 21. 更新 `CHANGELOG.md`、[当前项目状态](./PROJECT-STATE.md)、发行说明和相关设计文档。
 
 ## 架构

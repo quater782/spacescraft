@@ -15,6 +15,16 @@
     { id: "voidGarden", stageIndex: 2, nameKey: "biome.voidGarden.name", descriptionKey: "biome.voidGarden.description", landmark: "garden", sky: "#07151b", haze: "#183d3b", grid: "#2f655a", star: "#b7ffe0", accent: "#63e6a8", secondary: "#ff6c94", enemyHp: .98, spawnRate: 1.06, bulletSpeed: .96, bpmOffset: -2, musicShift: -3, typeBias: "mine", preferredMove: "drift" },
   ]);
 
+  const HULL_MODULES = freezeAll([
+    { id: "scout", nameKey: "enemyHull.scout", role: "interceptor", hp: 3, radius: 8, score: 120, minStage: 0 },
+    { id: "dart", nameKey: "enemyHull.dart", role: "striker", hp: 2, radius: 7, score: 150, minStage: 0 },
+    { id: "tank", nameKey: "enemyHull.tank", role: "bulwark", hp: 11, radius: 12, score: 350, minStage: 0 },
+    { id: "spinner", nameKey: "enemyHull.spinner", role: "artillery", hp: 6, radius: 9, score: 240, minStage: 0 },
+    { id: "mine", nameKey: "enemyHull.mine", role: "denial", hp: 4, radius: 8, score: 180, minStage: 1 },
+    { id: "lancer", nameKey: "enemyHull.lancer", role: "flanker", hp: 4, radius: 8.5, score: 225, minStage: 1 },
+    { id: "carrier", nameKey: "enemyHull.carrier", role: "command", hp: 9, radius: 11, score: 330, minStage: 2 },
+  ]);
+
   const MOVEMENT_MODULES = freezeAll([
     { id: "standard", nameKey: "enemyModule.standard", speed: 1, sway: 1, drift: 0 },
     { id: "weave", nameKey: "enemyModule.weave", speed: 1, sway: 1.45, drift: 0 },
@@ -164,14 +174,14 @@
     const tables = stageIndex === 0
       ? [["scout", 48], ["dart", 32], ["spinner", progress > .56 ? 10 : 3], ["tank", progress > .7 ? 10 : 0]]
       : stageIndex === 1
-        ? [["scout", 20], ["dart", 26], ["spinner", 29], ["tank", 17], ["mine", 8]]
-        : [["scout", 8], ["dart", 29], ["spinner", 25], ["tank", 18], ["mine", 20]];
+        ? [["scout", 16], ["dart", 22], ["spinner", 24], ["tank", 15], ["mine", 8], ["lancer", 15]]
+        : [["scout", 6], ["dart", 18], ["spinner", 18], ["tank", 15], ["mine", 14], ["lancer", 18], ["carrier", 11]];
     return weightedHull(tables.filter((entry) => entry[1] > 0), biome?.typeBias, random);
   }
 
-  function assembleEnemy({ stageIndex, progress, biome, branch, elite = false, random }) {
+  function assembleEnemy({ stageIndex, progress, biome, branch, hullId = "scout", elite = false, random }) {
     const earlySafety = stageIndex === 0 && progress < .4 && !elite;
-    if (earlySafety) return build("standard", "pulse", "light", "sentry", "clean", stageIndex);
+    if (earlySafety) return build("standard", "pulse", "light", "sentry", "clean", stageIndex, hullId);
 
     const budget = Math.min(5, stageIndex + (progress >= .42 ? 1 : 0) + (progress >= .76 ? 1 : 0) + (stageIndex >= 2 ? 1 : 0) + (elite ? 1 : 0));
     const movementPool = budget >= 1 ? MOVEMENT_MODULES : MOVEMENT_MODULES.slice(0, 1);
@@ -186,16 +196,20 @@
     else if (budget >= 3) core = biasedPick(CORE_MODULES, branch?.preferredCore, random);
     const ai = budget >= 4 ? pick(AI_MODULES, random) : AI_MODULES[0];
     const payload = budget >= 5 ? pick(PAYLOAD_MODULES, random) : PAYLOAD_MODULES[0];
-    return build(movement.id, weapon.id, core.id, ai.id, payload.id, stageIndex);
+    return build(movement.id, weapon.id, core.id, ai.id, payload.id, stageIndex, hullId);
   }
 
-  function build(movementId, weaponId, coreId, aiId = "sentry", payloadId = "clean", stageIndex = 0) {
+  function build(movementId, weaponId, coreId, aiId = "sentry", payloadId = "clean", stageIndex = 0, hullId = "scout") {
+    const hull = byId(HULL_MODULES, hullId);
     const movement = byId(MOVEMENT_MODULES, movementId);
     const weapon = byId(WEAPON_MODULES, weaponId);
     const core = byId(CORE_MODULES, coreId);
     const ai = byId(AI_MODULES, aiId);
     const payload = byId(PAYLOAD_MODULES, payloadId);
     return Object.freeze({
+      hullId: hull.id,
+      hullNameKey: hull.nameKey,
+      hullRole: hull.role,
       movementId: movement.id,
       movementNameKey: movement.nameKey,
       weaponId: weapon.id,
@@ -229,12 +243,14 @@
       debuffDuration: payload.duration,
       debuffIntensity: payload.intensity,
       payloadColor: payload.color,
-      signature: `${movement.id}.${weapon.id}.${core.id}.${ai.id}.${payload.id}`,
+      moduleSignature: `${movement.id}.${weapon.id}.${core.id}.${ai.id}.${payload.id}`,
+      signature: `${hull.id}.${movement.id}.${weapon.id}.${core.id}.${ai.id}.${payload.id}`,
     });
   }
 
   window.SpaceExpedition = Object.freeze({
     BIOMES,
+    HULL_MODULES,
     MOVEMENT_MODULES,
     WEAPON_MODULES,
     CORE_MODULES,

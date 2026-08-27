@@ -13,7 +13,7 @@ vm.runInNewContext(expeditionSource, sandbox, { filename: "src/expedition.js" })
 
 const expedition = sandbox.window.SpaceExpedition;
 const { createRng } = sandbox.window.SpaceRoguelike;
-const { BIOMES, MOVEMENT_MODULES, WEAPON_MODULES, CORE_MODULES, AI_MODULES, PAYLOAD_MODULES, PATH_PROTOCOLS, ENCOUNTER_PROTOCOLS } = expedition;
+const { BIOMES, HULL_MODULES, MOVEMENT_MODULES, WEAPON_MODULES, CORE_MODULES, AI_MODULES, PAYLOAD_MODULES, PATH_PROTOCOLS, ENCOUNTER_PROTOCOLS } = expedition;
 
 assert.equal(BIOMES.length, 9, "v0.9 must ship nine ecosystems");
 assert.equal(new Set(BIOMES.map((biome) => biome.id)).size, 9, "ecosystem IDs must be unique");
@@ -102,29 +102,34 @@ assert.equal(WEAPON_MODULES.length, 4);
 assert.equal(CORE_MODULES.length, 4);
 assert.equal(AI_MODULES.length, 4);
 assert.equal(PAYLOAD_MODULES.length, 4);
-for (const module of [...MOVEMENT_MODULES, ...WEAPON_MODULES, ...CORE_MODULES, ...AI_MODULES, ...PAYLOAD_MODULES]) {
+assert.equal(HULL_MODULES.length, 7, "the integrated foundry must ship seven functional chassis families");
+assert.equal(new Set(HULL_MODULES.map((hull) => hull.role)).size, 7, "every chassis family needs a distinct combat role");
+for (const module of [...HULL_MODULES, ...MOVEMENT_MODULES, ...WEAPON_MODULES, ...CORE_MODULES, ...AI_MODULES, ...PAYLOAD_MODULES]) {
   assert.equal(i18nSource.split(`"${module.nameKey}"`).length - 1, 2, `${module.id} must be named in both locales`);
 }
 const builds = [];
-for (const movement of MOVEMENT_MODULES) {
-  for (const weapon of WEAPON_MODULES) {
-    for (const core of CORE_MODULES) {
-      for (const ai of AI_MODULES) {
-        for (const payload of PAYLOAD_MODULES) {
-          const build = expedition.build(movement.id, weapon.id, core.id, ai.id, payload.id, 2);
-          builds.push(build);
-          assert.ok(build.speed > 0 && build.hp > 0 && build.scale > 0 && build.score > 0);
-          assert.ok(build.bulletSpeed > 0 && build.cooldown > 0 && build.spread > 0);
-          assert.ok(["nearest", "weakest", "isolated", "leading"].includes(build.targeting));
-          assert.equal(build.debuff, payload.debuff);
-          for (const value of Object.values(build)) if (typeof value === "number") assert.ok(Number.isFinite(value), `${build.signature} contains a non-finite value`);
+for (const hull of HULL_MODULES) {
+  for (const movement of MOVEMENT_MODULES) {
+    for (const weapon of WEAPON_MODULES) {
+      for (const core of CORE_MODULES) {
+        for (const ai of AI_MODULES) {
+          for (const payload of PAYLOAD_MODULES) {
+            const build = expedition.build(movement.id, weapon.id, core.id, ai.id, payload.id, 2, hull.id);
+            builds.push(build);
+            assert.equal(build.hullId, hull.id);
+            assert.ok(build.speed > 0 && build.hp > 0 && build.scale > 0 && build.score > 0);
+            assert.ok(build.bulletSpeed > 0 && build.cooldown > 0 && build.spread > 0);
+            assert.ok(["nearest", "weakest", "isolated", "leading"].includes(build.targeting));
+            assert.equal(build.debuff, payload.debuff);
+            for (const value of Object.values(build)) if (typeof value === "number") assert.ok(Number.isFinite(value), `${build.signature} contains a non-finite value`);
+          }
         }
       }
     }
   }
 }
-assert.equal(builds.length, 1024, "five four-way slots must produce 1024 complete builds");
-assert.equal(new Set(builds.map((build) => build.signature)).size, 1024, "all modular build signatures must be unique");
+assert.equal(builds.length, 7168, "seven hulls plus five four-way slots must produce 7168 complete builds");
+assert.equal(new Set(builds.map((build) => build.signature)).size, 7168, "all integrated modular build signatures must be unique");
 
 for (const biome of BIOMES.filter((entry) => entry.stageIndex === 0)) {
   assert.ok(biome.enemyHp <= 1.02, `${biome.id} violates early HP safety`);
@@ -133,7 +138,7 @@ for (const biome of BIOMES.filter((entry) => entry.stageIndex === 0)) {
   for (let i = 0; i < 100; i += 1) {
     const random = createRng(i + 1);
     assert.equal(expedition.chooseEnemyHull({ stageIndex: 0, progress: .25, biome, random }), "scout");
-    assert.equal(expedition.assembleEnemy({ stageIndex: 0, progress: .25, biome, branch: PATH_PROTOCOLS[i % PATH_PROTOCOLS.length], random }).signature, "standard.pulse.light.sentry.clean");
+    assert.equal(expedition.assembleEnemy({ stageIndex: 0, progress: .25, biome, branch: PATH_PROTOCOLS[i % PATH_PROTOCOLS.length], hullId: "scout", random }).signature, "scout.standard.pulse.light.sentry.clean");
   }
 }
 
@@ -142,13 +147,14 @@ const laterHulls = new Set();
 const laterBiome = BIOMES.find((biome) => biome.stageIndex === 2);
 const laterRandom = createRng(9001);
 for (let i = 0; i < 400; i += 1) {
-  laterSignatures.add(expedition.assembleEnemy({ stageIndex: 2, progress: .85, biome: laterBiome, random: laterRandom }).signature);
-  laterHulls.add(expedition.chooseEnemyHull({ stageIndex: 2, progress: .85, biome: laterBiome, random: laterRandom }));
+  const hullId = expedition.chooseEnemyHull({ stageIndex: 2, progress: .85, biome: laterBiome, random: laterRandom });
+  laterHulls.add(hullId);
+  laterSignatures.add(expedition.assembleEnemy({ stageIndex: 2, progress: .85, biome: laterBiome, hullId, random: laterRandom }).signature);
 }
 assert.ok(laterSignatures.size >= 80, "late game must expose broad five-slot modular variety");
-assert.ok(laterHulls.size >= 4, "late game must expose broad hull variety");
+assert.ok(laterHulls.size >= 6, "late game must expose broad hull variety");
 for (let i = 0; i < 100; i += 1) {
-  const elite = expedition.assembleEnemy({ stageIndex: 2, progress: .8, biome: laterBiome, elite: true, random: createRng(i + 300) });
+  const elite = expedition.assembleEnemy({ stageIndex: 2, progress: .8, biome: laterBiome, hullId: "carrier", elite: true, random: createRng(i + 300) });
   assert.ok(["plated", "barrier"].includes(elite.coreId), "elite cores must remain readable defensive variants");
 }
 
@@ -156,7 +162,7 @@ const rushPath = PATH_PROTOCOLS.find((path) => path.id === "overdrive");
 const rushRandom = createRng(7331);
 let rushBuilds = 0;
 for (let i = 0; i < 400; i += 1) {
-  const build = expedition.assembleEnemy({ stageIndex: 2, progress: .85, biome: laterBiome, branch: rushPath, random: rushRandom });
+  const build = expedition.assembleEnemy({ stageIndex: 2, progress: .85, biome: laterBiome, branch: rushPath, hullId: "lancer", random: rushRandom });
   if (build.movementId === "rush") rushBuilds += 1;
 }
 assert.ok(rushBuilds > 190, "selected branches must materially bias modular assembly");
@@ -184,6 +190,8 @@ assert.match(rendererSource, /enemy\.weaponModule/);
 assert.match(rendererSource, /enemy\.coreModule/);
 assert.match(rendererSource, /enemy\.aiModule/);
 assert.match(rendererSource, /enemy\.payloadModule/);
+assert.match(rendererSource, /drawEnemyChassis\(enemy, base, palette\)/);
+assert.match(rendererSource, /drawIntegratedEnemyModules\(enemy, base, palette, moduleColor\)/);
 assert.match(gameSource, /function updateEnemyIntelligence\(enemy, dt\)/);
 assert.match(gameSource, /function applyEnemyDebuff\(player, bullet\)/);
 assert.match(rendererSource, /drawBiomeFeatures\(biome\)/);
@@ -191,4 +199,4 @@ assert.match(rendererSource, /drawRouteGates\(choice\)/);
 assert.match(rendererSource, /drawEncounter\(encounter\)/);
 assert.match(rendererSource, /drawEncounterObject\(object\)/);
 
-console.log(`Expedition verified: ${BIOMES.length} ecosystems, ${PATH_PROTOCOLS.length} branch protocols, ${ENCOUNTER_PROTOCOLS.length} dynamic encounter types across six seeded objectives, three gate choices per stage, ${builds.length} modular builds, early safety, branch bias, late-game diversity, and 3D integration.`);
+console.log(`Expedition verified: ${BIOMES.length} ecosystems, ${PATH_PROTOCOLS.length} branch protocols, ${ENCOUNTER_PROTOCOLS.length} dynamic encounter types across six seeded objectives, three gate choices per stage, ${HULL_MODULES.length} organic chassis families and ${builds.length} integrated modular builds, early safety, branch bias, late-game diversity, and 3D integration.`);

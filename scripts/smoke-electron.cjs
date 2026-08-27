@@ -76,7 +76,7 @@ async function run() {
   }
   if (state?.activeEncounter !== "relay") throw new Error(`relay encounter did not become active: ${JSON.stringify(state)}`);
   if (state.rushActive !== "true" || state.rushCount !== "1" || Number(state.rushTimer) <= 0) throw new Error(`automatic rush did not activate: ${JSON.stringify(state)}`);
-  if (state.enemyModuleSlots !== "5" || state.enemyBuildCatalog !== "1024" || state.qaEnemyBuild !== "drift.orbit.barrier.oracle.cryo") throw new Error(`five-slot enemy forge diagnostics missing: ${JSON.stringify(state)}`);
+  if (state.enemyModuleSlots !== "6" || state.enemyBuildCatalog !== "7168" || state.qaEnemyBuild !== "scout.drift.orbit.barrier.oracle.cryo") throw new Error(`six-slot organic enemy forge diagnostics missing: ${JSON.stringify(state)}`);
   if (!state.playerBuffs.split(",").every((buffs) => ["arsenal", "nanobloom", "aegis", "flux"].every((id) => buffs.includes(id)))) throw new Error(`automatic buff modules missing: ${state.playerBuffs}`);
 
   window.webContents.sendInputEvent({ type: "keyDown", keyCode: "D" });
@@ -126,7 +126,7 @@ async function run() {
     if (settledRush.rushActive === "false" && Number(settledRush.rushLastBonus) > 0) break;
   }
   if (settledRush.rushActive !== "false" || Number(settledRush.rushLastBonus) <= 0) throw new Error(`rush did not settle with a score bonus: ${JSON.stringify(settledRush)}`);
-  await window.loadURL(`http://127.0.0.1:${port}/?qa-voxel&qa-buffs&qa-status=chill&qa-path=1&qa-enemy=drift.orbit.barrier.oracle.cryo&seed=2`);
+  await window.loadURL(`http://127.0.0.1:${port}/?qa-voxel&qa-buffs&qa-status=chill&qa-path=1&qa-hull=carrier&qa-enemy=drift.orbit.barrier.oracle.cryo&seed=2`);
   await window.webContents.executeJavaScript(`
     document.querySelector('#startButton').click();
     if (!document.querySelector('#tutorial').hidden) document.querySelector('#tutorialContinueButton').click();
@@ -137,13 +137,13 @@ async function run() {
     const game = document.querySelector('#game');
     return Object.fromEntries(['mode', 'qa', 'stageTime', 'fps', 'activeBuilds', 'enemyModuleSlots', 'enemyBuildCatalog', 'qaEnemyBuild', 'playerBuffs', 'playerDebuffs'].map((key) => [key, game.dataset[key]]));
   })()`);
-  if (!voxelState.activeBuilds.includes("drift.orbit.barrier.oracle.cryo") || voxelState.enemyBuildCatalog !== "1024") throw new Error(`voxel showcase did not render the forced five-slot build: ${JSON.stringify(voxelState)}`);
+  if (!voxelState.activeBuilds.includes("carrier.drift.orbit.barrier.oracle.cryo") || voxelState.enemyModuleSlots !== "6" || voxelState.enemyBuildCatalog !== "7168") throw new Error(`voxel showcase did not render the forced six-slot organic build: ${JSON.stringify(voxelState)}`);
   if (!voxelState.playerBuffs.includes("arsenal|nanobloom|aegis|flux")) throw new Error(`voxel showcase buffs missing: ${JSON.stringify(voxelState)}`);
   if (!voxelState.playerDebuffs.startsWith("chill,")) throw new Error(`voxel showcase debuff missing: ${JSON.stringify(voxelState)}`);
   const voxelImage = await window.webContents.capturePage();
   fs.writeFileSync(voxelShowcaseScreenshotPath, voxelImage.toPNG());
   if (errors.length) throw new Error(`renderer console errors after voxel showcase: ${errors.join(" | ")}`);
-  await window.loadURL(`http://127.0.0.1:${port}/?qa-voxel&qa-path=1&qa-enemy=drift.orbit.barrier.oracle.cryo&seed=2`);
+  await window.loadURL(`http://127.0.0.1:${port}/?qa-voxel&qa-path=1&qa-hull=lancer&qa-enemy=rush.sniper.volatile.hunter.fracture&seed=2`);
   await window.webContents.executeJavaScript(`
     document.querySelector('#startButton').click();
     if (!document.querySelector('#tutorial').hidden) document.querySelector('#tutorialContinueButton').click();
@@ -154,7 +154,7 @@ async function run() {
     const game = document.querySelector('#game');
     return Object.fromEntries(['fps', 'activeBuilds', 'enemyBuildCatalog', 'playerBuffs', 'playerDebuffs'].map((key) => [key, game.dataset[key]]));
   })()`);
-  if (!cleanVoxelState.activeBuilds.includes("drift.orbit.barrier.oracle.cryo") || cleanVoxelState.playerBuffs !== "none,none") throw new Error(`clean airframe showcase invalid: ${JSON.stringify(cleanVoxelState)}`);
+  if (!cleanVoxelState.activeBuilds.includes("lancer.rush.sniper.volatile.hunter.fracture") || cleanVoxelState.enemyBuildCatalog !== "7168" || cleanVoxelState.playerBuffs !== "none,none") throw new Error(`clean airframe showcase invalid: ${JSON.stringify(cleanVoxelState)}`);
   const airframeImage = await window.webContents.capturePage();
   fs.writeFileSync(airframeShowcaseScreenshotPath, airframeImage.toPNG());
   if (errors.length) throw new Error(`renderer console errors after clean airframe showcase: ${errors.join(" | ")}`);

@@ -95,15 +95,19 @@ const QA_ENCOUNTER_ID = SpaceExpedition.ENCOUNTER_PROTOCOLS.some((encounter) => 
   ? REQUESTED_QA_ENCOUNTER
   : null;
 const REQUESTED_QA_ENEMY = LOCAL_QA_HOST ? URL_PARAMS.get("qa-enemy") : null;
+const REQUESTED_QA_HULL = LOCAL_QA_HOST ? URL_PARAMS.get("qa-hull") : null;
+const QA_HULL_ID = SpaceExpedition.HULL_MODULES.some((hull) => hull.id === REQUESTED_QA_HULL) ? REQUESTED_QA_HULL : null;
+let QA_ENEMY_MODULE_IDS = null;
 const QA_ENEMY_BUILD = (() => {
   if (!REQUESTED_QA_ENEMY) return null;
   const parts = REQUESTED_QA_ENEMY.split(".");
   const pools = [SpaceExpedition.MOVEMENT_MODULES, SpaceExpedition.WEAPON_MODULES, SpaceExpedition.CORE_MODULES, SpaceExpedition.AI_MODULES, SpaceExpedition.PAYLOAD_MODULES];
   if (parts.length !== pools.length || parts.some((id, index) => !pools[index].some((module) => module.id === id))) return null;
-  return SpaceExpedition.build(...parts, 2);
+  QA_ENEMY_MODULE_IDS = parts;
+  return SpaceExpedition.build(...parts, 2, QA_HULL_ID || "scout");
 })();
 const REQUESTED_RUN_SEED = Number.parseInt(URL_PARAMS.get("seed") || "", 10);
-const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_RUSH_MODE && "rush", QA_BUFFS_MODE && "buffs", QA_VOXEL_MODE && "voxel", QA_STATUS_ID && `status-${QA_STATUS_ID}`, QA_PROTOCOL_ID && `protocol-${QA_PROTOCOL_ID}`, QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`, QA_ENEMY_BUILD && `enemy-${QA_ENEMY_BUILD.signature}`].filter(Boolean).join("+") || "off";
+const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_RUSH_MODE && "rush", QA_BUFFS_MODE && "buffs", QA_VOXEL_MODE && "voxel", QA_STATUS_ID && `status-${QA_STATUS_ID}`, QA_PROTOCOL_ID && `protocol-${QA_PROTOCOL_ID}`, QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`, QA_HULL_ID && `hull-${QA_HULL_ID}`, QA_ENEMY_BUILD && `enemy-${QA_ENEMY_BUILD.moduleSignature}`].filter(Boolean).join("+") || "off";
 const t = (key, variables) => SpaceI18n.t(key, variables);
 const UPGRADE_DEFS = SpaceRoguelike.UPGRADE_DEFS;
 const TALENT_NODES = SpaceConstellation.TALENT_NODES;
@@ -2093,24 +2097,22 @@ function aimedVelocity(source, speed, spread = 0) {
 }
 
 function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
-  const stats = {
-    scout: { hp: 3, r: 8, score: 120 },
-    dart: { hp: 2, r: 7, score: 150 },
-    tank: { hp: 11, r: 12, score: 350 },
-    spinner: { hp: 6, r: 9, score: 240 },
-    mine: { hp: 4, r: 8, score: 180 },
-  }[type];
+  const hull = SpaceExpedition.HULL_MODULES.find((entry) => entry.id === type) || SpaceExpedition.HULL_MODULES[0];
+  const stats = { hp: hull.hp, r: hull.radius, score: hull.score };
   const elite = Boolean(options.elite);
   const stage = activeStage();
   const progress = clamp(world.stageTime / stage.duration, 0, 1);
-  const build = options.build || QA_ENEMY_BUILD || SpaceExpedition.assembleEnemy({
-    stageIndex: world.stageIndex,
-    progress,
-    biome: stage.biome,
-    branch: world.activeBranch,
-    elite,
-    random,
-  });
+  const build = options.build || (QA_ENEMY_MODULE_IDS
+    ? SpaceExpedition.build(...QA_ENEMY_MODULE_IDS, 2, hull.id)
+    : SpaceExpedition.assembleEnemy({
+      stageIndex: world.stageIndex,
+      progress,
+      biome: stage.biome,
+      branch: world.activeBranch,
+      hullId: hull.id,
+      elite,
+      random,
+    }));
   const branchHealth = world.stageIndex === 0 && progress < .4
     ? Math.min(1, world.activeBranch?.enemyHp || 1)
     : world.activeBranch?.enemyHp || 1;
@@ -2119,6 +2121,8 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
   const enemy = {
     id: ++world.enemySerial,
     type,
+    hullRole: build.hullRole,
+    hullNameKey: build.hullNameKey,
     x,
     y,
     vx: 0,
@@ -2228,7 +2232,7 @@ function spawnStageEvent(event) {
 function spawnEnemy() {
   const stage = activeStage();
   const progress = world.stageTime / stage.duration;
-  const type = SpaceExpedition.chooseEnemyHull({ stageIndex: world.stageIndex, progress, biome: stage.biome, random });
+  const type = QA_HULL_ID || SpaceExpedition.chooseEnemyHull({ stageIndex: world.stageIndex, progress, biome: stage.biome, random });
 
   if (progress > 0.35 && random() < 0.08 + world.stageIndex * 0.035) {
     const side = random() < 0.5 ? -12 : W + 12;
@@ -2424,6 +2428,21 @@ function updateEnemy(enemy, dt) {
     if (canFire && enemy.shootTimer <= 0 && enemy.y > 30) {
       fireRing(enemy, 7, 27, enemy.age * 0.4, "#ff5470");
       enemy.shootTimer = 3 * (enemy.weaponCooldown || 1);
+    }
+  } else if (enemy.type === "lancer") {
+    enemy.y += (34 + world.stageIndex * 4) * (enemy.moveSpeed || 1) * dt;
+    enemy.x += Math.sin(enemy.age * 2.2 + enemy.seed) * 38 * (enemy.moveSway || 1) * dt;
+    if (canFire && enemy.shootTimer <= 0 && enemy.y > 28) {
+      fireAimed(enemy, 48, 2, .08, "#70eaff");
+      enemy.shootTimer = rand(2.45, 3.15) * (enemy.weaponCooldown || 1);
+    }
+  } else if (enemy.type === "carrier") {
+    if (enemy.y < 58) enemy.y += 19 * (enemy.moveSpeed || 1) * dt;
+    else enemy.x += Math.sin(enemy.age * .76 + enemy.seed) * 12 * (enemy.moveSway || 1) * dt;
+    if (canFire && enemy.shootTimer <= 0 && enemy.y > 24) {
+      fireRing(enemy, 6 + world.stageIndex, 27 + world.stageIndex * 2, -enemy.age * .22, "#ff87d7");
+      fireAimed(enemy, 38, 1, 0, "#ffe16c");
+      enemy.shootTimer = rand(3.1, 3.8) * (enemy.weaponCooldown || 1);
     }
   }
 
@@ -3639,7 +3658,7 @@ function drawEnemy(enemy) {
     ctx.fillRect(-2, -8, 4, 16);
     ctx.fillStyle = "#d9c7ff";
     ctx.fillRect(-2, -2, 4, 4);
-  } else {
+  } else if (enemy.type === "mine") {
     ctx.rotate(enemy.age * 0.8);
     ctx.fillStyle = "#1b0e22";
     ctx.fillRect(-7, -7, 14, 14);
@@ -3651,6 +3670,27 @@ function drawEnemy(enemy) {
       ctx.rotate(Math.PI / 2);
       ctx.fillRect(-1, -11, 2, 5);
     }
+  } else if (enemy.type === "lancer") {
+    ctx.fillStyle = "#102b3d";
+    ctx.fillRect(-5, -7, 10, 16);
+    ctx.fillRect(-11, -2, 22, 7);
+    ctx.fillStyle = "#43cbe8";
+    ctx.fillRect(-8, -5, 4, 12);
+    ctx.fillRect(4, -5, 4, 12);
+    ctx.fillRect(-2, -10, 4, 14);
+    ctx.fillStyle = "#d9fbff";
+    ctx.fillRect(-1, -9, 2, 4);
+  } else {
+    ctx.fillStyle = "#261c32";
+    ctx.fillRect(-13, -7, 9, 17);
+    ctx.fillRect(4, -7, 9, 17);
+    ctx.fillRect(-6, -4, 12, 13);
+    ctx.fillStyle = "#d5679c";
+    ctx.fillRect(-11, -5, 6, 12);
+    ctx.fillRect(5, -5, 6, 12);
+    ctx.fillRect(-8, -2, 16, 5);
+    ctx.fillStyle = "#ffe278";
+    ctx.fillRect(-2, -7, 4, 5);
   }
   ctx.restore();
 }
@@ -4160,8 +4200,8 @@ function draw() {
   canvas.dataset.biome = activeStage().biome?.id || "";
   canvas.dataset.enemyVariants = String(world.discoveredVariants.size);
   canvas.dataset.activeBuilds = [...new Set(world.enemies.filter((enemy) => !enemy.boss).map((enemy) => enemy.buildSignature))].filter(Boolean).join(",");
-  canvas.dataset.enemyModuleSlots = "5";
-  canvas.dataset.enemyBuildCatalog = String(SpaceExpedition.MOVEMENT_MODULES.length * SpaceExpedition.WEAPON_MODULES.length * SpaceExpedition.CORE_MODULES.length * SpaceExpedition.AI_MODULES.length * SpaceExpedition.PAYLOAD_MODULES.length);
+  canvas.dataset.enemyModuleSlots = "6";
+  canvas.dataset.enemyBuildCatalog = String(SpaceExpedition.HULL_MODULES.length * SpaceExpedition.MOVEMENT_MODULES.length * SpaceExpedition.WEAPON_MODULES.length * SpaceExpedition.CORE_MODULES.length * SpaceExpedition.AI_MODULES.length * SpaceExpedition.PAYLOAD_MODULES.length);
   canvas.dataset.qaEnemyBuild = QA_ENEMY_BUILD?.signature || "";
   canvas.dataset.playerBuffs = world.players.map((player) => SpaceStatus.activeBuffs(player.buffs).map((buff) => buff.id).join("|") || "none").join(",");
   canvas.dataset.playerDebuffs = world.players.map((player) => SpaceStatus.activeDebuffs(player.debuffs).map((debuff) => debuff.id).join("|") || "none").join(",");

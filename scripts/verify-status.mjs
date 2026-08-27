@@ -40,7 +40,7 @@ assert.match(gameSource, /applyEnemyDebuff\(player, bullet\)/);
 assert.match(gameSource, /statusBonuses\(player\)\.pickupMagnet/);
 assert.match(gameSource, /canvas\.dataset\.playerBuffs/);
 assert.match(gameSource, /canvas\.dataset\.playerDebuffs/);
-assert.match(rendererSource, /drawPlayerModules\(player, base\)/);
+assert.match(rendererSource, /drawPlayerModules\(player, base, palette, profile\)/);
 assert.match(rendererSource, /voxelCage\(base, radius, color/);
 assert.match(rendererSource, /player\.buffs\?\.arsenal/);
 assert.match(rendererSource, /player\.buffs\?\.nanobloom/);
@@ -49,4 +49,4 @@ assert.match(rendererSource, /player\.buffs\?\.flux/);
 assert.match(rendererSource, /bullet\.payloadModule/);
 assert.doesNotMatch(statusSource, /keydown|keyup|gamepad|button/i, "status modules must remain automatic");
 
-console.log("Status modules verified: 4 automatic buffs, 3 readable debuffs, opposing combat multipliers, voxel attachments, audio/HUD diagnostics, and direction-only input.");
+console.log("Status modules verified: 4 automatic buffs, 3 readable debuffs, opposing combat multipliers, integrated airframe structures, audio/HUD diagnostics, and direction-only input.");
