@@ -43,7 +43,7 @@
           <div class="menu-card">
             <div class="eyebrow">CO-OP PIXEL ODYSSEY</div>
             <h1><span class="title-primary" data-i18n="menu.title1">星航</span><br /><span data-i18n="menu.title2">双子</span></h1>
-            <p class="lede" data-i18n="menu.lede">两艘战机，持续分岔的航线。穿越动态遭遇与活体星域，共振击穿终焉母舰。</p>
+            <p class="lede" data-i18n="menu.lede">点亮恒星天赋，驾驶两艘战机穿越持续分岔的动态星域，共振击穿终焉母舰。</p>
 
             <div class="feature-row" aria-label="游戏特色" data-i18n-aria-label="menu.featuresLabel">
               <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 2v6m8-6v6M7 12h4m2 0h4m-10 4h3"/></svg><i data-i18n="menu.feature3d">3D 战役</i></span>
@@ -107,6 +107,11 @@
             <section class="hangar-section" aria-labelledby="contractHeading">
               <div class="hangar-section-heading"><h3 id="contractHeading" data-i18n="hangar.contracts">航线合约</h3><span data-i18n="hangar.contractsHint">改变战斗规则与结算倍率</span></div>
               <div id="contractOptions" class="loadout-grid contract-grid"></div>
+            </section>
+            <section class="hangar-section" aria-labelledby="talentHeading">
+              <div class="hangar-section-heading"><h3 id="talentHeading" data-i18n="hangar.talents">恒星天赋网格</h3><span id="talentProgress">0 / 9</span></div>
+              <p class="talent-intro" data-i18n="hangar.talentsHint">使用星尘永久点亮机动、武装与共振星链；必须依次解锁。</p>
+              <div id="talentOptions" class="talent-grid"></div>
             </section>
             <section class="hangar-section" aria-labelledby="achievementHeading">
               <div class="hangar-section-heading"><h3 id="achievementHeading" data-i18n="hangar.achievements">星航勋章</h3><span id="achievementCount">0 / 8</span></div>
@@ -197,13 +202,14 @@
 
       <footer class="statusbar">
         <span><i class="status-light"></i> <i data-i18n="footer.ready">本地双人系统就绪</i></span>
-        <span>BUILD 3D.11 // <b>ENCOUNTER ALPHA 0.11.0</b></span>
+        <span>BUILD 3D.12 // <b>CONSTELLATION ALPHA 0.12.0</b></span>
       </footer>
     </main>
-    <script src="./src/i18n.js?v=4"></script>
+    <script src="./src/i18n.js?v=5"></script>
     <script src="./src/roguelike.js?v=1"></script>
+    <script src="./src/constellation.js?v=1"></script>
     <script src="./src/expedition.js?v=3"></script>
     <script src="./src/renderer3d.js?v=9"></script>
-    <script src="./src/game.js?v=17"></script>
+    <script src="./src/game.js?v=18"></script>
   </body>
 </html>

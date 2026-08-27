@@ -45,6 +45,8 @@ const hangarStardust = document.querySelector("#hangarStardust");
 const shipOptions = document.querySelector("#shipOptions");
 const moduleOptions = document.querySelector("#moduleOptions");
 const contractOptions = document.querySelector("#contractOptions");
+const talentOptions = document.querySelector("#talentOptions");
+const talentProgress = document.querySelector("#talentProgress");
 const achievementOptions = document.querySelector("#achievementOptions");
 const achievementCount = document.querySelector("#achievementCount");
 const modeButtons = [...document.querySelectorAll(".mode-button")];
@@ -87,6 +89,7 @@ const REQUESTED_RUN_SEED = Number.parseInt(URL_PARAMS.get("seed") || "", 10);
 const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`].filter(Boolean).join("+") || "off";
 const t = (key, variables) => SpaceI18n.t(key, variables);
 const UPGRADE_DEFS = SpaceRoguelike.UPGRADE_DEFS;
+const TALENT_NODES = SpaceConstellation.TALENT_NODES;
 
 ctx.imageSmoothingEnabled = false;
 
@@ -289,7 +292,7 @@ function grantEligibleAchievements(state) {
 }
 
 const DEFAULT_PROFILE = {
-  version: 4,
+  version: 5,
   highScore: 0,
   totalKills: 0,
   bestCombo: 0,
@@ -306,6 +309,7 @@ const DEFAULT_PROFILE = {
   selectedContract: "patrol",
   unlockedFrames: ["comet"],
   unlockedModules: ["flux"],
+  talents: [],
   achievements: [],
   contractClears: { patrol: 0, storm: 0, overdrive: 0 },
   settings: {
@@ -324,6 +328,7 @@ function freshProfile() {
     ...DEFAULT_PROFILE,
     unlockedFrames: [...DEFAULT_PROFILE.unlockedFrames],
     unlockedModules: [...DEFAULT_PROFILE.unlockedModules],
+    talents: [...DEFAULT_PROFILE.talents],
     achievements: [...DEFAULT_PROFILE.achievements],
     contractClears: { ...DEFAULT_PROFILE.contractClears },
     settings: { ...DEFAULT_PROFILE.settings },
@@ -347,13 +352,14 @@ function loadProfile() {
     loaded.settings.flashes = clamp(Number(loaded.settings.flashes) || 0, 0, 0.7);
     loaded.settings.bulletContrast = loaded.settings.bulletContrast === "high" ? "high" : "standard";
     loaded.settings.language = loaded.settings.language === "en" ? "en" : "zh";
-    loaded.version = 4;
+    loaded.version = 5;
     loaded.stardust = Math.max(0, Math.floor(Number(loaded.stardust) || 0));
     loaded.lifetimeStardust = Math.max(loaded.stardust, Math.floor(Number(loaded.lifetimeStardust) || 0));
     const validFrames = new Set(SHIP_FRAMES.map((frame) => frame.id));
     const validModules = new Set(CORE_MODULES.map((module) => module.id));
     loaded.unlockedFrames = [...new Set(["comet", ...(Array.isArray(loaded.unlockedFrames) ? loaded.unlockedFrames : [])])].filter((id) => validFrames.has(id));
     loaded.unlockedModules = [...new Set(["flux", ...(Array.isArray(loaded.unlockedModules) ? loaded.unlockedModules : [])])].filter((id) => validModules.has(id));
+    loaded.talents = SpaceConstellation.sanitizeUnlocks(parsed.talents);
     loaded.selectedFrame = loaded.unlockedFrames.includes(loaded.selectedFrame) ? loaded.selectedFrame : "comet";
     loaded.selectedModule = loaded.unlockedModules.includes(loaded.selectedModule) ? loaded.selectedModule : "flux";
     loaded.contractClears = { ...DEFAULT_PROFILE.contractClears, ...(parsed.contractClears || {}) };
@@ -860,6 +866,10 @@ class AudioEngine {
     } else if (name === "unlock") {
       [55, 62, 67, 74, 79].forEach((note, i) => this.tone(note, .13, i % 2 ? "triangle" : "square", .05, now + i * .055, this.sfxBus, 2));
       this.noise(.09, .025, now + .08, 3200);
+    } else if (name === "talent") {
+      [48, 55, 60, 67, 72, 79].forEach((note, i) => this.tone(note, .24, i % 2 ? "triangle" : "square", .052, now + i * .052, this.sfxBus, 7));
+      this.tone(36, .42, "sine", .065, now, this.sfxBus, 12);
+      this.noise(.2, .035, now + .08, 2600);
     } else if (name === "equip") {
       [67, 74].forEach((note, i) => this.tone(note, .1, "square", .042, now + i * .045, this.sfxBus));
     } else if (name === "draftOpen") {
@@ -1071,6 +1081,15 @@ function medalIcon() {
   return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 2 5 7 5-7h4l-6 9a6 6 0 1 1-6 0L3 2h4Zm5 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg>';
 }
 
+function talentIcon(branch, tier = 1) {
+  const paths = {
+    mobility: '<path d="M4 12h11m-5-6 6 6-6 6M4 7h3M4 17h3"/><circle cx="18" cy="12" r="3"/>',
+    armament: '<path d="M4 12h11m-4-4 7 4-7 4v-3H4z"/><path d="M5 7h4M5 17h4"/>',
+    resonance: '<circle cx="7" cy="12" r="3"/><circle cx="17" cy="12" r="3"/><path d="M10 12h4M12 4v4m0 8v4"/>',
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[branch]}<path d="M${3 + tier * 4} 22h${tier * 3}"/></svg>`;
+}
+
 function upgradeIcon(upgradeId) {
   const paths = {
     overclock: '<path d="M13 2 5 13h6l-1 9 9-12h-6V2Z"/>',
@@ -1126,11 +1145,12 @@ function renderResultBuild() {
     .map((record) => `${encounterText(record.encounter, "name")} ${t(record.success ? "encounter.status.success" : "encounter.status.failed")}`)
     .join(t("result.routeSeparator"));
   const encounterChip = encounters ? `<span>${t("result.encounters", { encounters })}</span>` : "";
+  const talentChip = `<span>${t("result.talents", { current: profile.talents.length, total: TALENT_NODES.length })}</span>`;
   const upgradeChips = uniqueIds.map((id) => {
     const upgrade = UPGRADE_DEFS.find((entry) => entry.id === id);
     return upgrade ? `<span>${upgradeIcon(id)}${localizedName(upgrade)} <b>Lv.${upgradeLevel(id)}</b></span>` : "";
   }).join("");
-  resultBuild.innerHTML = seedChip + routeChip + pathChip + encounterChip + (upgradeChips || `<span>${t("result.buildEmpty")}</span>`);
+  resultBuild.innerHTML = seedChip + talentChip + routeChip + pathChip + encounterChip + (upgradeChips || `<span>${t("result.buildEmpty")}</span>`);
 }
 
 function renderUpgradeDraft(focusSelected = false) {
@@ -1239,6 +1259,18 @@ function renderHangar() {
     const action = selected ? t("action.signed") : unlocked ? t("action.sign") : t(contract.unlockKey);
     return `<button class="${classes}" type="button" data-contract-id="${contract.id}" aria-pressed="${selected}" ${unlocked ? "" : 'aria-disabled="true"'}>${contractIcon(contract.id)}<span class="loadout-tag">${contract.tag}</span><strong>${localizedName(contract)}</strong><p>${localizedDescription(contract)}</p><span class="loadout-action">${action}</span></button>`;
   }).join("");
+  talentOptions.innerHTML = ["mobility", "armament", "resonance"].map((branch) => {
+    const nodes = TALENT_NODES.filter((node) => node.branch === branch);
+    const cards = nodes.map((node) => {
+      const state = SpaceConstellation.canUnlock(node.id, profile.talents, profile.stardust);
+      const owned = profile.talents.includes(node.id);
+      const statusKey = owned ? "talent.status.owned" : state.ok ? "talent.status.available" : state.reason === "prerequisite" ? "talent.status.prerequisite" : "talent.status.cost";
+      const classes = ["talent-node", owned ? "owned" : state.ok ? "available" : "blocked"].join(" ");
+      return `<button class="${classes}" type="button" data-talent-id="${node.id}" aria-pressed="${owned}" ${state.ok ? "" : 'aria-disabled="true"'}>${talentIcon(branch, node.tier)}<span><strong>${t(node.nameKey)}</strong><small>${t(node.descriptionKey)}</small></span><b>${t(statusKey, { cost: node.cost })}</b></button>`;
+    }).join("");
+    return `<article class="talent-branch" data-branch="${branch}"><h4>${talentIcon(branch)}${t(`talent.branch.${branch}`)}</h4>${cards}</article>`;
+  }).join("");
+  talentProgress.textContent = `${profile.talents.length} / ${TALENT_NODES.length}`;
   achievementOptions.innerHTML = ACHIEVEMENTS.map((achievement) => {
     const unlocked = profile.achievements.includes(achievement.id);
     const status = t(unlocked ? "achievement.unlocked" : "achievement.locked");
@@ -1249,6 +1281,28 @@ function renderHangar() {
   world.loadoutModule = profile.selectedModule;
   world.contractId = profile.selectedContract;
   world.contract = FLIGHT_CONTRACTS.find((contract) => contract.id === profile.selectedContract) || FLIGHT_CONTRACTS[0];
+}
+
+function unlockTalent(id) {
+  const state = SpaceConstellation.canUnlock(id, profile.talents, profile.stardust);
+  if (!state.node || profile.talents.includes(id)) return;
+  if (!state.ok) {
+    if (state.reason === "prerequisite") {
+      const prerequisite = TALENT_NODES.find((node) => node.id === state.node.requires);
+      showToast(t("toast.talentPrerequisite", { name: prerequisite ? t(prerequisite.nameKey) : "—" }));
+    } else if (state.reason === "stardust") {
+      showToast(t("toast.needDust", { amount: state.node.cost - profile.stardust }));
+    }
+    return;
+  }
+  profile.stardust -= state.node.cost;
+  profile.talents = SpaceConstellation.sanitizeUnlocks([...profile.talents, id]);
+  saveProfile();
+  renderHangar();
+  updateCareerSummary();
+  audio.start().then(() => audio.sfx("talent"));
+  showToast(t("toast.talentUnlocked", { name: t(state.node.nameKey) }));
+  document.querySelector(`[data-talent-id="${id}"]`)?.focus();
 }
 
 function openHangar() {
@@ -1311,12 +1365,12 @@ function chooseContract(id) {
 
 function updateCareerSummary() {
   if (!profile.runs) {
-    careerSummary.textContent = t("career.empty", { dust: profile.stardust, earned: profile.achievements.length, total: ACHIEVEMENTS.length });
+    careerSummary.textContent = t("career.empty", { dust: profile.stardust, talents: profile.talents.length, talentTotal: TALENT_NODES.length, earned: profile.achievements.length, total: ACHIEVEMENTS.length });
     renderHangar();
     return;
   }
   const minutes = Math.floor(profile.totalPlaySeconds / 60);
-  careerSummary.textContent = t("career.summary", { runs: profile.runs, clears: profile.clears, score: profile.highScore, dust: profile.stardust, earned: profile.achievements.length, total: ACHIEVEMENTS.length, minutes });
+  careerSummary.textContent = t("career.summary", { runs: profile.runs, clears: profile.clears, score: profile.highScore, dust: profile.stardust, talents: profile.talents.length, talentTotal: TALENT_NODES.length, earned: profile.achievements.length, total: ACHIEVEMENTS.length, minutes });
   renderHangar();
 }
 
@@ -1430,7 +1484,7 @@ function createPlayer(index) {
   const module = CORE_MODULES.find((entry) => entry.id === profile.selectedModule) || CORE_MODULES[0];
   const contract = FLIGHT_CONTRACTS.find((entry) => entry.id === profile.selectedContract) || FLIGHT_CONTRACTS[0];
   const contractHp = Math.max(4, frame.hp + contract.playerHpDelta);
-  return {
+  const player = {
     index,
     frameId: frame.id,
     moduleId: module.id,
@@ -1449,6 +1503,7 @@ function createPlayer(index) {
     maxShield: module.maxShield || 3,
     stageRepair: module.stageRepair || 0,
     reviveHp: module.reviveHp || 3,
+    reviveSpeed: 1,
     linkRange: module.linkRange || 105,
     beamDamage: module.beamDamage || 1,
     energy: 0,
@@ -1471,6 +1526,7 @@ function createPlayer(index) {
     revive: 0,
     shots: 0,
   };
+  return SpaceConstellation.applyToPlayer(player, profile.talents);
 }
 
 function prepareRouteChoice(stageIndex) {
@@ -1673,7 +1729,7 @@ function startGame() {
     audio.sfx("routeScan");
   });
   const frame = SHIP_FRAMES.find((entry) => entry.id === profile.selectedFrame) || SHIP_FRAMES[0];
-  showToast(t(world.gameMode === "solo" ? "toast.soloStart" : "toast.coopStart", { contract: localizedName(world.contract), frame: localizedName(frame) }));
+  showToast(t(world.gameMode === "solo" ? "toast.soloStart" : "toast.coopStart", { contract: localizedName(world.contract), frame: localizedName(frame), talents: profile.talents.length, total: TALENT_NODES.length }));
 }
 
 function showToast(message) {
@@ -2234,7 +2290,7 @@ function updatePlayers(dt) {
       return;
     }
     if (distance(downed, rescuer) < 34) {
-      downed.revive += dt;
+      downed.revive += dt * Math.max(downed.reviveSpeed, rescuer.reviveSpeed);
       if (downed.revive >= 1.65) revivePlayer(downed);
     } else {
       downed.revive = Math.max(0, downed.revive - dt * 0.75);
@@ -3605,6 +3661,8 @@ function draw() {
   canvas.dataset.contract = world.contractId;
   canvas.dataset.scoreMultiplier = String(world.contract.score);
   canvas.dataset.achievementCount = String(profile.achievements.length);
+  canvas.dataset.talents = profile.talents.join(",");
+  canvas.dataset.talentCount = String(profile.talents.length);
   canvas.dataset.stardustReward = String(world.stardustReward);
   canvas.dataset.runSeed = String(world.runSeed);
   canvas.dataset.upgradeCount = String(world.upgradeHistory.length);
@@ -3679,6 +3737,11 @@ moduleOptions.addEventListener("click", (event) => {
 contractOptions.addEventListener("click", (event) => {
   const button = event.target.closest("[data-contract-id]");
   if (button) chooseContract(button.dataset.contractId);
+});
+
+talentOptions.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-talent-id]");
+  if (button) unlockTalent(button.dataset.talentId);
 });
 
 upgradeOptions.addEventListener("click", (event) => {

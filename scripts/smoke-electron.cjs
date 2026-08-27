@@ -6,6 +6,7 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 const screenshotPath = path.join(os.tmpdir(), "spacescraft-electron-smoke.png");
+const talentScreenshotPath = path.join(os.tmpdir(), "spacescraft-talent-grid-smoke.png");
 const mime = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -43,8 +44,20 @@ async function run() {
   window.webContents.on("console-message", (_event, level, message) => {
     if (level >= 2) errors.push(message);
   });
-  await window.loadURL(`http://127.0.0.1:${port}/?qa-fast&qa-path=1&qa-encounter=relay&seed=2`);
+  await window.loadURL(`http://127.0.0.1:${port}/?qa-fast&qa-wallet&qa-path=1&qa-encounter=relay&seed=2`);
+  const talentState = await window.webContents.executeJavaScript(`(() => {
+    document.querySelector('#hangarButton').click();
+    document.querySelector('[data-talent-id="vectorThrusters"]').click();
+    const button = document.querySelector('[data-talent-id="vectorThrusters"]');
+    button.scrollIntoView({ block: 'center' });
+    return { owned: button.classList.contains('owned'), progress: document.querySelector('#talentProgress').textContent, balance: document.querySelector('#hangarStardust').textContent };
+  })()`);
+  if (!talentState.owned || talentState.progress !== "1 / 9" || talentState.balance !== "✦ 2920") throw new Error(`talent purchase failed: ${JSON.stringify(talentState)}`);
+  await delay(140);
+  const talentImage = await window.webContents.capturePage();
+  fs.writeFileSync(talentScreenshotPath, talentImage.toPNG());
   await window.webContents.executeJavaScript(`
+    document.querySelector('#closeHangarButton').click();
     document.querySelector('#startButton').click();
     if (!document.querySelector('#tutorial').hidden) document.querySelector('#tutorialContinueButton').click();
     true;
@@ -55,7 +68,7 @@ async function run() {
     await delay(100);
     state = await window.webContents.executeJavaScript(`(() => {
       const game = document.querySelector('#game');
-      return Object.fromEntries(['mode', 'qa', 'stage', 'fps', 'activeEncounter', 'encounterProgress', 'encounterObjects', 'encounterPlan', 'hudResolution'].map((key) => [key, game.dataset[key]]));
+      return Object.fromEntries(['mode', 'qa', 'stage', 'fps', 'activeEncounter', 'encounterProgress', 'encounterObjects', 'encounterPlan', 'hudResolution', 'talents', 'talentCount', 'playerSpeed'].map((key) => [key, game.dataset[key]]));
     })()`);
     if (state.activeEncounter === "relay") break;
   }
@@ -73,12 +86,14 @@ async function run() {
     if (encounterHistory) break;
   }
   if (encounterHistory !== "relay:success") throw new Error(`direction-only encounter did not complete: ${encounterHistory}`);
+  if (state.talents !== "vectorThrusters" || state.talentCount !== "1") throw new Error(`talent diagnostics missing: ${JSON.stringify(state)}`);
+  if (!state.playerSpeed.split(",").every((speed) => Number(speed) > 96)) throw new Error(`talent combat effect missing: ${state.playerSpeed}`);
   if (errors.length) throw new Error(`renderer console errors: ${errors.join(" | ")}`);
   const webgl = await window.webContents.executeJavaScript("Boolean(document.querySelector('#scene').getContext('webgl'))");
   if (!webgl) throw new Error("WebGL context unavailable");
   const image = await window.webContents.capturePage();
   fs.writeFileSync(screenshotPath, image.toPNG());
-  process.stdout.write(`${JSON.stringify({ ...state, encounterHistory, webgl, consoleErrors: errors.length, screenshot: screenshotPath })}\n`);
+  process.stdout.write(`${JSON.stringify({ ...state, talentPurchase: talentState, encounterHistory, webgl, consoleErrors: errors.length, screenshot: screenshotPath, talentScreenshot: talentScreenshotPath })}\n`);
   window.destroy();
   server.close();
   app.quit();
