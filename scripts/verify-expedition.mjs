@@ -12,7 +12,7 @@ vm.runInNewContext(expeditionSource, sandbox, { filename: "src/expedition.js" })
 
 const expedition = sandbox.window.SpaceExpedition;
 const { createRng } = sandbox.window.SpaceRoguelike;
-const { BIOMES, MOVEMENT_MODULES, WEAPON_MODULES, CORE_MODULES, PATH_PROTOCOLS } = expedition;
+const { BIOMES, MOVEMENT_MODULES, WEAPON_MODULES, CORE_MODULES, PATH_PROTOCOLS, ENCOUNTER_PROTOCOLS } = expedition;
 
 assert.equal(BIOMES.length, 9, "v0.9 must ship nine ecosystems");
 assert.equal(new Set(BIOMES.map((biome) => biome.id)).size, 9, "ecosystem IDs must be unique");
@@ -55,6 +55,46 @@ assert.deepEqual({ ...expedition.evaluateGateChoice([225, 252]) }, { selectedInd
 assert.deepEqual({ ...expedition.evaluateGateChoice([185, 295]) }, { selectedIndex: 1, converged: false });
 assert.deepEqual({ ...expedition.evaluateGateChoice([88, 392]) }, { selectedIndex: 1, converged: false });
 assert.deepEqual({ ...expedition.evaluateGateChoice([]) }, { selectedIndex: 1, converged: false });
+
+assert.equal(ENCOUNTER_PROTOCOLS.length, 5, "v0.11 must ship five dynamic encounter types");
+assert.equal(new Set(ENCOUNTER_PROTOCOLS.map((encounter) => encounter.id)).size, 5, "encounter IDs must be unique");
+assert.equal(new Set(ENCOUNTER_PROTOCOLS.map((encounter) => encounter.kind)).size, 5, "every encounter must have distinct play rules");
+for (const encounter of ENCOUNTER_PROTOCOLS) {
+  assert.match(encounter.color, /^#[0-9a-f]{6}$/i);
+  assert.match(encounter.nameKey, /^encounter\.[^.]+\.name$/);
+  assert.match(encounter.descriptionKey, /^encounter\.[^.]+\.description$/);
+  assert.match(encounter.objectiveKey, /^encounter\.[^.]+\.objective$/);
+  assert.match(encounter.rewardKey, /^encounter\.[^.]+\.reward$/);
+  assert.ok(encounter.duration > 0 && encounter.goal > 0 && encounter.spawnRate > 0);
+  assert.ok(Number.isInteger(encounter.minStage) && encounter.minStage >= 0 && encounter.minStage <= 2);
+  assert.ok(Object.keys(encounter.reward).length > 0, `${encounter.id} must grant a tangible reward`);
+}
+const encounterSignatures = (seed) => [...expedition.generateEncounterPlans(seed)].map((plan) => plan.map((encounter) => encounter.signature));
+assert.deepEqual(encounterSignatures(20260827), encounterSignatures(20260827), "same seed must reproduce dynamic encounters");
+assert.notDeepEqual(encounterSignatures(20260826), encounterSignatures(20260827), "different seeds should alter encounter plans");
+for (const [stageIndex, plan] of [...expedition.generateEncounterPlans(20260827)].entries()) {
+  assert.equal(plan.length, 2, "every stage must contain two dynamic encounters");
+  assert.equal(new Set(plan.map((encounter) => encounter.id)).size, 2, "a stage cannot repeat an encounter type");
+  assert.equal(new Set(plan.map((encounter) => encounter.lane)).size, 2, "consecutive encounters must move the objective lane");
+  plan.forEach((encounter, slot) => {
+    assert.equal(encounter.stageIndex, stageIndex);
+    assert.equal(encounter.slot, slot);
+    assert.equal(encounter.at, [.3, .64][slot]);
+    assert.ok(encounter.minStage <= stageIndex);
+  });
+}
+for (const encounter of expedition.generateEncounterPlans(20260827)[0]) {
+  assert.ok(!["survive", "siege"].includes(encounter.kind), "chapter one must only use non-damaging learning encounters");
+  assert.ok(encounter.spawnRate <= 1, "chapter one encounters cannot increase enemy density");
+}
+const relayEncounter = ENCOUNTER_PROTOCOLS.find((encounter) => encounter.id === "relay");
+const meteorEncounter = ENCOUNTER_PROTOCOLS.find((encounter) => encounter.id === "meteor");
+assert.equal(expedition.evaluateEncounter(relayEncounter, { progress: 2, timeRemaining: 2 }), "pending");
+assert.equal(expedition.evaluateEncounter(relayEncounter, { progress: relayEncounter.goal, timeRemaining: 2 }), "success");
+assert.equal(expedition.evaluateEncounter(relayEncounter, { progress: 2, timeRemaining: 0 }), "failed");
+assert.equal(expedition.evaluateEncounter(meteorEncounter, { hits: 8, timeRemaining: 1 }), "pending");
+assert.equal(expedition.evaluateEncounter(meteorEncounter, { hits: 1, timeRemaining: 0 }), "success");
+assert.equal(expedition.evaluateEncounter(meteorEncounter, { hits: 2, timeRemaining: 0 }), "failed");
 
 assert.equal(MOVEMENT_MODULES.length, 4);
 assert.equal(WEAPON_MODULES.length, 4);
@@ -111,6 +151,8 @@ assert.ok(rushBuilds > 190, "selected branches must materially bias modular asse
 
 assert.match(gameSource, /SpaceExpedition\.generateRoute/);
 assert.match(gameSource, /SpaceExpedition\.generateBranchSets/);
+assert.match(gameSource, /SpaceExpedition\.generateEncounterPlans/);
+assert.match(gameSource, /SpaceExpedition\.evaluateEncounter/);
 assert.match(gameSource, /SpaceExpedition\.chooseEnemyHull/);
 assert.match(gameSource, /SpaceExpedition\.assembleEnemy/);
 assert.match(gameSource, /stage\.biome\?\.spawnRate/);
@@ -118,10 +160,19 @@ assert.match(gameSource, /function updateRouteChoice\(dt\)/);
 assert.match(gameSource, /world\.gameMode === "solo" && player\.index === 1/);
 assert.match(gameSource, /Math\.min\(1, world\.activeBranch\?\.bulletSpeed/);
 assert.match(gameSource, /Math\.min\(1, world\.activeBranch\?\.spawnRate/);
+assert.match(gameSource, /Math\.min\(1, world\.activeEncounter\?\.spawnRate/);
+assert.match(gameSource, /function startEncounter\(plan\)/);
+assert.match(gameSource, /function updateEncounter\(dt\)/);
+assert.match(gameSource, /function finishEncounter\(success\)/);
+assert.match(gameSource, /const REQUESTED_QA_ENCOUNTER = LOCAL_QA_HOST/);
+assert.match(gameSource, /object\.type === "meteor"/);
+assert.match(gameSource, /encounter\?\.kind === "siege"/);
 assert.match(rendererSource, /enemy\.movementModule/);
 assert.match(rendererSource, /enemy\.weaponModule/);
 assert.match(rendererSource, /enemy\.coreModule/);
 assert.match(rendererSource, /drawBiomeFeatures\(biome\)/);
 assert.match(rendererSource, /drawRouteGates\(choice\)/);
+assert.match(rendererSource, /drawEncounter\(encounter\)/);
+assert.match(rendererSource, /drawEncounterObject\(object\)/);
 
-console.log(`Expedition verified: ${BIOMES.length} ecosystems, ${PATH_PROTOCOLS.length} branch protocols, three deterministic gate choices per stage, ${builds.length} modular builds, early safety envelope, branch bias, late-game diversity, and 3D integration.`);
+console.log(`Expedition verified: ${BIOMES.length} ecosystems, ${PATH_PROTOCOLS.length} branch protocols, ${ENCOUNTER_PROTOCOLS.length} dynamic encounter types across six seeded objectives, three gate choices per stage, ${builds.length} modular builds, early safety, branch bias, late-game diversity, and 3D integration.`);

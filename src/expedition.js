@@ -46,6 +46,14 @@
     { id: "anomaly", group: "hazard", nameKey: "path.anomaly.name", descriptionKey: "path.anomaly.description", riskKey: "path.anomaly.risk", rewardKey: "path.anomaly.reward", color: "#63e6a8", enemyHp: .92, spawnRate: 1.08, bulletSpeed: .97, score: 1.2, bpmOffset: 2, musicShift: -3, preferredCore: "volatile", reward: { energy: 22, shield: 1 } },
   ].map((protocol) => ({ ...protocol, reward: Object.freeze(protocol.reward) })));
 
+  const ENCOUNTER_PROTOCOLS = freezeAll([
+    { id: "relay", kind: "hold", nameKey: "encounter.relay.name", descriptionKey: "encounter.relay.description", objectiveKey: "encounter.relay.objective", rewardKey: "encounter.relay.reward", color: "#68f4df", duration: 8.5, goal: 4.6, minStage: 0, spawnRate: .86, bpmOffset: 4, musicShift: 0, reward: { energy: 22, score: 650 } },
+    { id: "salvage", kind: "collect", nameKey: "encounter.salvage.name", descriptionKey: "encounter.salvage.description", objectiveKey: "encounter.salvage.objective", rewardKey: "encounter.salvage.reward", color: "#ffe16c", duration: 10, goal: 5, itemCount: 7, minStage: 0, spawnRate: .78, bpmOffset: -3, musicShift: 2, reward: { weapon: 1, score: 720 } },
+    { id: "courier", kind: "escort", nameKey: "encounter.courier.name", descriptionKey: "encounter.courier.description", objectiveKey: "encounter.courier.objective", rewardKey: "encounter.courier.reward", color: "#76dbff", duration: 9.5, goal: 5.2, minStage: 0, spawnRate: .9, bpmOffset: 2, musicShift: -2, reward: { repair: 1, shield: 1, score: 780 } },
+    { id: "meteor", kind: "survive", nameKey: "encounter.meteor.name", descriptionKey: "encounter.meteor.description", objectiveKey: "encounter.meteor.objective", rewardKey: "encounter.meteor.reward", color: "#ff936b", duration: 8.5, goal: 1, minStage: 1, spawnRate: .55, bpmOffset: 9, musicShift: 1, reward: { shield: 1, energy: 18, score: 900 } },
+    { id: "rift", kind: "siege", nameKey: "encounter.rift.name", descriptionKey: "encounter.rift.description", objectiveKey: "encounter.rift.objective", rewardKey: "encounter.rift.reward", color: "#bd8cff", duration: 9.5, goal: 34, minStage: 1, spawnRate: 1.06, bpmOffset: 7, musicShift: 3, reward: { energy: 28, score: 1050 } },
+  ].map((protocol) => ({ ...protocol, reward: Object.freeze(protocol.reward) })));
+
   const byId = (items, id) => items.find((item) => item.id === id) || items[0];
   const pick = (items, random) => items[Math.floor(random() * items.length)];
   const biasedPick = (items, preferredId, random) => {
@@ -83,6 +91,48 @@
       && lanes.every((lane) => lane === lanes[0])
       && valid.every((x) => Math.abs(x - centers[lanes[0]]) < tolerance);
     return Object.freeze({ selectedIndex: converged ? lanes[0] : selectedIndex, converged });
+  }
+
+  function generateEncounterPlans(seed) {
+    const random = window.SpaceRoguelike.createRng((Number(seed) ^ 0xc41f2d87) >>> 0);
+    const triggerPoints = [.3, .64];
+    return Object.freeze([0, 1, 2].map((stageIndex) => {
+      const pool = ENCOUNTER_PROTOCOLS.filter((encounter) => encounter.minStage <= stageIndex);
+      const chosen = [];
+      while (chosen.length < 2) {
+        const candidate = pick(pool, random);
+        if (!chosen.some((encounter) => encounter.id === candidate.id)) chosen.push(candidate);
+      }
+      let previousLane = -1;
+      return Object.freeze(chosen.map((encounter, slot) => {
+        let lane = Math.floor(random() * 3);
+        if (lane === previousLane) lane = (lane + 1 + Math.floor(random() * 2)) % 3;
+        previousLane = lane;
+        const variant = Math.floor(random() * 4);
+        return Object.freeze({
+          ...encounter,
+          stageIndex,
+          slot,
+          at: triggerPoints[slot],
+          lane,
+          variant,
+          intensity: 1 + stageIndex * .14 + slot * .04,
+          signature: `${encounter.id}:${lane}:${variant}`,
+        });
+      }));
+    }));
+  }
+
+  function evaluateEncounter(encounter, state = {}) {
+    const timeRemaining = Number.isFinite(state.timeRemaining) ? state.timeRemaining : encounter.duration;
+    const progress = Number.isFinite(state.progress) ? state.progress : 0;
+    const hits = Number.isFinite(state.hits) ? state.hits : 0;
+    if (encounter.kind === "survive") {
+      if (timeRemaining > 0) return "pending";
+      return hits <= encounter.goal ? "success" : "failed";
+    }
+    if (progress >= encounter.goal) return "success";
+    return timeRemaining <= 0 ? "failed" : "pending";
   }
 
   function weightedHull(items, bias, random) {
@@ -157,9 +207,12 @@
     WEAPON_MODULES,
     CORE_MODULES,
     PATH_PROTOCOLS,
+    ENCOUNTER_PROTOCOLS,
     generateRoute,
     generateBranchSets,
+    generateEncounterPlans,
     evaluateGateChoice,
+    evaluateEncounter,
     chooseEnemyHull,
     assembleEnemy,
     build,

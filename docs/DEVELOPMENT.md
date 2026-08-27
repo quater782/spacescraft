@@ -20,7 +20,7 @@ http://127.0.0.1:4173/?qa-fast
 
 此模式仅在 `localhost` 或 `127.0.0.1` 生效，会加速章节时间并降低 Boss 测试耐久，用于快速检查九个事件、三场精英战、Boss 阶段和完整通关路径。测试结果不会写入出航、通关、最高分等生涯统计，也不会在正式域名或 Electron 文件协议下启用。
 
-自动化或人工检查可以读取 `#game` 上的 `data-mode`、`data-language`、`data-stage`、`data-stage-time`、`data-events`、`data-enemies`、`data-boss-phase`、`data-player-hp`、`data-fps` 与 `data-qa` 诊断属性。机库、合约、构筑与远征还提供 `data-frame`、`data-module`、`data-contract`、`data-score-multiplier`、`data-player-shield`、`data-player-speed`、`data-player-fire-rate`、`data-player-damage`、`data-player-energy-gain`、`data-achievement-count`、`data-stardust-reward`、`data-run-seed`、`data-upgrade-count`、`data-upgrades`、`data-draft-options`、`data-route-signature`、`data-biome`、`data-enemy-variants`、`data-active-builds`、`data-path-plan`、`data-active-path`、`data-path-options`、`data-path-selection` 与 `data-path-history`。
+自动化或人工检查可以读取 `#game` 上的 `data-mode`、`data-language`、`data-stage`、`data-stage-time`、`data-events`、`data-enemies`、`data-boss-phase`、`data-player-hp`、`data-fps` 与 `data-qa` 诊断属性。机库、合约、构筑与远征还提供 `data-frame`、`data-module`、`data-contract`、`data-score-multiplier`、`data-player-shield`、`data-player-speed`、`data-player-fire-rate`、`data-player-damage`、`data-player-energy-gain`、`data-achievement-count`、`data-stardust-reward`、`data-run-seed`、`data-upgrade-count`、`data-upgrades`、`data-draft-options`、`data-route-signature`、`data-biome`、`data-enemy-variants`、`data-active-builds`、`data-path-plan`、`data-active-path`、`data-path-options`、`data-path-selection`、`data-path-history`、`data-encounter-plan`、`data-active-encounter`、`data-encounter-progress`、`data-encounter-objects` 与 `data-encounter-history`。
 
 ### 本地机库经济测试
 
@@ -51,6 +51,24 @@ http://127.0.0.1:4173/?qa-fast&qa-path=2&seed=20260827
 ```
 
 `qa-path` 只接受 `0`、`1`、`2`，只在 localhost 生效。检查 `data-path-plan` 的三组计划、选择期间的 `data-path-options`/`data-path-selection`、锁定后的 `data-active-path` 和跨章累积的 `data-path-history`。`npm run verify` 会验证每组恰有支援/火力/高风险各一条、同种子复现、不同种子分化、航道汇合判定、单人 AI 接线、协议模块偏好和第一章危险倍率钳制。
+
+### 动态遭遇测试
+
+默认每章在 30% 与 64% 进度各生成一次目标。用 `qa-encounter` 强制覆盖某一类遭遇；可选值为 `relay`、`salvage`、`courier`、`meteor`、`rift`。陨星与裂隙遵守正式章节门槛，只会从第二章开始替换首个目标：
+
+```text
+http://127.0.0.1:4173/?qa-fast&qa-path=1&qa-encounter=salvage&seed=2
+```
+
+`qa-fast` 会同比缩短非生存目标量和遭遇时长，奖励规则不变。检查 `data-encounter-plan`、`data-active-encounter`、`data-encounter-progress`、`data-encounter-objects` 和 `data-encounter-history`。第一章必须只出现信标、回收或护航，且同期增援倍率不得高于 1。
+
+项目提供真实 Electron 隐藏窗口冒烟，使用隔离临时存档、本地服务器、WebGL 场景和实际方向键事件完成信标，并把 PNG 写入命令输出指示的系统临时路径：
+
+```bash
+npm run smoke:electron
+```
+
+成功输出必须同时包含 `encounterHistory: "relay:success"`、`webgl: true`、`consoleErrors: 0`、接近 60 的 `fps` 和不低于 CSS 显示尺寸的 `hudResolution`。这项测试不能替代可见窗口下对其余四类目标、音频、双人和手柄的人工回归。
 
 ## 桌面版本
 
@@ -83,21 +101,23 @@ npm start
 13. 检查 `data-hud-resolution` 不低于 HUD 的 CSS 显示尺寸，确认正常窗口与全屏下战斗文字清晰。
 14. 使用固定 `seed` 检查三段生态航线一致，观察至少三种移动/武器/核心外挂、屏障破碎、爆裂连锁和模块扫描 HUD。
 15. 分别让两机汇合到左、中、右 3D 星门，检查单人 AI 跟随、双人分歧、超时回退、七种协议效果、分支音乐和结算历史。
-16. 更新 `CHANGELOG.md`、[当前项目状态](./PROJECT-STATE.md)、发行说明和相关设计文档。
+16. 覆盖信标、回收、护航、陨星和裂隙，检查单人 AI、双人目标、成功/错失、奖励、3D 实体、遭遇音乐和结果历史；运行 `npm run smoke:electron`。
+17. 更新 `CHANGELOG.md`、[当前项目状态](./PROJECT-STATE.md)、发行说明和相关设计文档。
 
 ## 架构
 
 - `src/renderer3d.js`：原生 WebGL 渲染、矩阵、着色器和 3D 模型。
 - `src/game.js`：固定时间步、关卡、碰撞、AI、音频和 HUD。
 - `src/roguelike.js`：局内升级池、确定性 RNG、候选生成和升级效果。
-- `src/expedition.js`：生态航线、星门协议/航道判定、敌型权重与模块化敌军组装规则。
+- `src/expedition.js`：生态航线、星门协议/航道判定、动态遭遇计划/结果判定、敌型权重与模块化敌军组装规则。
 - `src/i18n.js`：简体中文/英文文案目录、插值、DOM 与元数据同步。
 - `electron/main.cjs`：安全桌面窗口与生命周期。
 - `forge.config.cjs`：桌面发行产物配置。
 - `scripts/build-icons.mjs`：从 SVG 母版生成多分辨率桌面图标。
 - `scripts/verify-localization.mjs`：收集 HTML 与游戏逻辑引用键，验证两种语言完整覆盖。
 - `scripts/verify-roguelike.mjs`：验证构筑池、随机复现、权重、满级过滤与全部升级效果。
-- `scripts/verify-expedition.mjs`：验证生态、星门协议、航道判定、敌军组合、早期安全、后期多样性与 3D 集成。
+- `scripts/verify-expedition.mjs`：验证生态、星门、动态遭遇、敌军组合、早期安全、后期多样性与 3D 集成。
+- `scripts/smoke-electron.cjs`：启动隔离的真实 Electron/WebGL 会话，验证方向交互并生成截图。
 - `scripts/verify-docs.mjs`：检查必需文档、Codex 指令大小和仓库内 Markdown 链接。
 
 完整模块边界与数据流见[系统架构](./ARCHITECTURE.md)。

@@ -587,6 +587,59 @@
       });
     }
 
+    drawEncounter(encounter) {
+      if (!encounter) return;
+      const position = this.toWorld(encounter.x, encounter.y, encounter.kind === "siege" ? .72 : .2);
+      const pulse = .5 + Math.sin(this.time * 7 + encounter.variant) * .08;
+      const ratio = encounter.kind === "survive"
+        ? 1 - clamp(encounter.timer / encounter.total, 0, 1)
+        : clamp(encounter.progress / encounter.goal, 0, 1);
+      if (encounter.kind === "hold") {
+        const base = compose(position, [0, this.time * .7, 0], [1, 1, 1]);
+        this.drawMesh(this.meshes.torus, multiply(base, scaling(1.22, .18, 1.22)), hexColor(encounter.color, .62 + ratio * .25), .9);
+        this.drawMesh(this.meshes.sphere, multiply(base, scaling(.48 + ratio * .24, .2, .48 + ratio * .24)), hexColor(encounter.color, .12 + ratio * .14), 1);
+        for (let index = 0; index < 4; index += 1) {
+          const angle = index / 4 * TAU + this.time * .35;
+          this.part(base, this.meshes.box, [Math.sin(angle) * 1.05, .42, Math.cos(angle) * 1.05], [.1, .75 + ratio * .55, .1], encounter.color, [0, angle, 0], .75);
+        }
+      } else if (encounter.kind === "escort") {
+        const base = compose(position, [0, this.time * .8, Math.sin(this.time * 2) * .06], [1, 1, 1]);
+        this.part(base, this.meshes.box, [0, .12, 0], [.76, .24, .62], "#253a56");
+        this.part(base, this.meshes.wedge, [0, .22, -.32], [.48, .34, .72], encounter.color, [0, 0, 0], .7);
+        this.part(base, this.meshes.octa, [0, .42, 0], [.18 + pulse * .04, .18, .18], "#ffffff", [this.time, -this.time, 0], 1);
+        this.drawMesh(this.meshes.torus, multiply(base, compose([0, .1, 0], [0, -this.time * 1.4, 0], [.95, .16, .95])), hexColor(encounter.color, .42 + ratio * .3), .9);
+      } else if (encounter.kind === "siege") {
+        const base = compose(position, [Math.PI / 2, this.time * .5, 0], [1, 1, 1]);
+        const health = clamp(encounter.hp / encounter.maxHp, 0, 1);
+        this.drawMesh(this.meshes.torus, multiply(base, scaling(1.18 + pulse * .08, .24, 1.18 + pulse * .08)), hexColor(encounter.color, .78), 1);
+        this.drawMesh(this.meshes.torus, multiply(base, compose([0, 0, 0], [0, -this.time * 1.7, 0], [.72, .14, .72])), hexColor("#ffffff", .32 + health * .28), .9);
+        this.part(base, this.meshes.octa, [0, 0, 0], [.52 * health + .18, .52 * health + .18, .52 * health + .18], encounter.color, [this.time * 1.4, -this.time, 0], 1);
+        for (let index = 0; index < 6; index += 1) {
+          const angle = index / 6 * TAU - this.time * .9;
+          this.part(base, this.meshes.octa, [Math.sin(angle) * 1.2, 0, Math.cos(angle) * 1.2], [.1, .1, .1], "#ffffff", [angle, angle, 0], .7);
+        }
+      } else if (encounter.kind === "collect") {
+        const base = compose(position, [0, this.time * .3, 0], [1, 1, 1]);
+        this.drawMesh(this.meshes.torus, multiply(base, scaling(.72 + pulse * .05, .12, .72 + pulse * .05)), hexColor(encounter.color, .28), .7);
+      }
+    }
+
+    drawEncounterObject(object) {
+      const position = this.toWorld(object.x, object.y, object.type === "meteor" ? .38 : .58 + Math.sin(object.age * 4) * .08);
+      if (object.type === "salvage") {
+        const base = compose(position, [object.age * 1.6, object.age * 2.2, 0], [1, 1, 1]);
+        this.drawMesh(this.meshes.octa, multiply(base, scaling(.32, .32, .32)), hexColor(object.color), 1);
+        this.drawMesh(this.meshes.torus, multiply(base, scaling(.5, .1, .5)), hexColor(object.color, .42), .9);
+      } else if (object.type === "meteor") {
+        const scale = .34 + object.r * .018;
+        const base = compose(position, [object.rotation, object.rotation * .73, object.rotation * .4], [scale, scale, scale]);
+        this.drawMesh(this.meshes.octa, base, hexColor("#6f4052"), .18);
+        this.part(base, this.meshes.box, [.34, .08, -.12], [.34, .28, .3], "#9a5a55", [object.rotation, 0, 0], .12);
+        this.part(base, this.meshes.box, [-.28, -.12, .22], [.28, .24, .32], object.color, [0, object.rotation, 0], .45);
+        this.drawMesh(this.meshes.sphere, compose(position, [0, 0, 0], [scale * 1.35, scale * 1.35, scale * 1.35]), hexColor(object.color, .08), 1);
+      }
+    }
+
     drawBiomeFeatures(biome) {
       if (!biome) return;
       const accent = biome.accent || "#7fffe2";
@@ -746,6 +799,10 @@
         target[0] = lerp(target[0], bossPosition[0], cinematicAmount * .7);
         target[1] = lerp(target[1], .35, cinematicAmount * .45);
         target[2] = lerp(target[2], bossPosition[2], cinematicAmount * .5);
+      } else if (cinematic?.type === "encounter" && world.activeEncounter) {
+        const encounterPosition = this.toWorld(world.activeEncounter.x, world.activeEncounter.y, .3);
+        target[0] = lerp(target[0], encounterPosition[0], cinematicAmount * .42);
+        target[2] = lerp(target[2], encounterPosition[2], cinematicAmount * .3);
       }
       const projection = perspective(Math.PI / 3.25, this.canvas.width / this.canvas.height, .1, 80);
       this.viewProjection = multiply(projection, lookAt(eye, target, [0, 1, 0]));
@@ -763,6 +820,8 @@
       }
 
       if (world.routeChoice) this.drawRouteGates(world.routeChoice);
+      if (world.activeEncounter) this.drawEncounter(world.activeEncounter);
+      for (const object of world.encounterObjects || []) this.drawEncounterObject(object);
       for (const pickup of world.pickups) this.drawPickup(pickup);
       for (const enemy of world.enemies) this.drawEnemy(enemy);
       for (const bullet of world.bullets) this.drawProjectile(bullet, false);

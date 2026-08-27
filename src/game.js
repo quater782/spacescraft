@@ -79,8 +79,12 @@ const QA_CONTRACTS_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-contracts");
 const QA_DRAFT_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-draft");
 const REQUESTED_QA_PATH = LOCAL_QA_HOST ? Number.parseInt(URL_PARAMS.get("qa-path") || "", 10) : Number.NaN;
 const QA_PATH_INDEX = [0, 1, 2].includes(REQUESTED_QA_PATH) ? REQUESTED_QA_PATH : null;
+const REQUESTED_QA_ENCOUNTER = LOCAL_QA_HOST ? URL_PARAMS.get("qa-encounter") : null;
+const QA_ENCOUNTER_ID = SpaceExpedition.ENCOUNTER_PROTOCOLS.some((encounter) => encounter.id === REQUESTED_QA_ENCOUNTER)
+  ? REQUESTED_QA_ENCOUNTER
+  : null;
 const REQUESTED_RUN_SEED = Number.parseInt(URL_PARAMS.get("seed") || "", 10);
-const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`].filter(Boolean).join("+") || "off";
+const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`].filter(Boolean).join("+") || "off";
 const t = (key, variables) => SpaceI18n.t(key, variables);
 const UPGRADE_DEFS = SpaceRoguelike.UPGRADE_DEFS;
 
@@ -477,6 +481,7 @@ const localizedDescription = (item) => t(item.descriptionKey);
 const stageText = (stage, field) => t(stage[`${field}Key`]);
 const biomeText = (biome, field) => t(biome[`${field}Key`]);
 const pathText = (path, field) => t(path[`${field}Key`]);
+const encounterText = (encounter, field) => t(encounter[`${field}Key`]);
 const eventText = (event, field) => t(event[`${field}Key`]);
 const bossPhaseText = (stageIndex, phase) => t(BOSS_PHASE_KEYS[stageIndex][phase - 1]);
 
@@ -704,7 +709,9 @@ class AudioEngine {
     if (!this.context || this.context.state !== "running") return;
     while (this.nextStep < this.context.currentTime + 0.1) {
       this.scheduleStep(this.step, this.nextStep);
-      const bpm = (world.routeStages?.[this.stage]?.bpm || STAGES[this.stage]?.bpm || 132) + (world.activeBranch?.bpmOffset || 0);
+      const bpm = (world.routeStages?.[this.stage]?.bpm || STAGES[this.stage]?.bpm || 132)
+        + (world.activeBranch?.bpmOffset || 0)
+        + (world.activeEncounter?.bpmOffset || 0);
       this.nextStep += 60 / bpm / 4;
       this.step += 1;
     }
@@ -712,7 +719,10 @@ class AudioEngine {
 
   scheduleStep(step, when) {
     const roots = [45, 42, 40];
-    const root = roots[this.stage] + (world.routeStages?.[this.stage]?.musicShift || 0) + (world.activeBranch?.musicShift || 0);
+    const root = roots[this.stage]
+      + (world.routeStages?.[this.stage]?.musicShift || 0)
+      + (world.activeBranch?.musicShift || 0)
+      + (world.activeEncounter?.musicShift || 0);
     const leads = [
       [12, 15, 19, 22, 19, 15, 17, 15, 12, 15, 20, 22, 20, 19, 15, 10],
       [12, 14, 17, 21, 24, 21, 17, 14, 12, 17, 19, 24, 22, 19, 17, 14],
@@ -732,7 +742,8 @@ class AudioEngine {
     const s = step % 16;
     const bar = Math.floor(step / 16) % 4;
     const chordRoot = progressions[this.stage][bar];
-    const intensity = this.boss ? 1.22 : 1;
+    const encounterActive = Boolean(world.activeEncounter);
+    const intensity = this.boss ? 1.22 : encounterActive ? 1.1 : 1;
 
     this.tone(root + chordRoot + arpeggios[this.stage][s % 8] + 12, 0.045, "square", 0.012 * intensity, when);
     if (s % 2 === 0 || (this.boss && s % 4 === 1)) {
@@ -750,6 +761,11 @@ class AudioEngine {
     if (this.boss && s % 4 === 2) {
       this.tone(root + 31, 0.055, "square", 0.025, when);
       this.noise(0.045, 0.025, when, 2400, this.musicBus);
+    }
+    if (encounterActive && !this.boss && s % 4 === 2) {
+      const signal = world.activeEncounter.kind === "survive" ? 29 : world.activeEncounter.kind === "siege" ? 24 : 19;
+      this.tone(root + signal, .06, "square", .021, when, this.musicBus, s === 10 ? 5 : 0);
+      if (s === 6 || s === 14) this.noise(.032, .021, when, 2800, this.musicBus);
     }
   }
 
@@ -824,6 +840,21 @@ class AudioEngine {
       [60, 67, 72, 79].forEach((note, index) => this.tone(note, .2, index % 2 ? "square" : "triangle", .055, now + index * .045, this.sfxBus, 5));
       this.tone(43, .24, "square", .05, now, this.sfxBus, -9);
       this.noise(.18, .045, now + .03, 1500);
+    } else if (name === "encounterStart") {
+      [43, 50, 55, 62].forEach((note, index) => this.tone(note, .22, index % 2 ? "triangle" : "square", .045, now + index * .055, this.sfxBus, 4));
+      this.noise(.14, .035, now + .035, 2100);
+    } else if (name === "encounterTick") {
+      this.tone(76, .075, "square", .04, now, this.sfxBus, 7);
+      this.tone(88, .045, "triangle", .022, now + .025, this.sfxBus, 2);
+    } else if (name === "encounterImpact") {
+      this.tone(42, .16, "sawtooth", .065, now, this.sfxBus, -15);
+      this.noise(.16, .075, now, 310);
+    } else if (name === "encounterComplete") {
+      [55, 62, 67, 74, 79, 86].forEach((note, index) => this.tone(note, .24, index % 2 ? "square" : "triangle", .052, now + index * .045, this.sfxBus, 5));
+      this.noise(.2, .045, now + .08, 2500);
+    } else if (name === "encounterFailed") {
+      [55, 50, 43].forEach((note, index) => this.tone(note, .24, "sawtooth", .045, now + index * .07, this.sfxBus, -7));
+      this.noise(.18, .045, now + .04, 420);
     } else if (name === "stageClear") {
       [60, 64, 67, 72, 76, 79].forEach((note, i) => this.tone(note, .22, i % 2 ? "square" : "triangle", .06, now + i * .075, this.sfxBus));
     } else if (name === "unlock") {
@@ -906,6 +937,13 @@ const world = {
   branchHistory: [],
   routeChoice: null,
   activeBranch: null,
+  encounterPlans: [],
+  encounterPlanSignature: "",
+  encounterIndex: 0,
+  activeEncounter: null,
+  encounterObjects: [],
+  encounterHistory: [],
+  encounterSerial: 0,
 };
 
 const activeStage = (index = world.stageIndex) => world.routeStages[index] || STAGES[index] || STAGES[0];
@@ -940,6 +978,21 @@ function aiPilotControls(player) {
       }, null)?.enemy;
       if (target) targetX = clamp(target.x, 25, W - 25);
     }
+    const encounter = world.activeEncounter;
+    if (encounter?.kind === "hold" || encounter?.kind === "escort") {
+      targetX = encounter.x;
+      targetY = encounter.y;
+    } else if (encounter?.kind === "collect") {
+      const shard = world.encounterObjects
+        .filter((object) => object.type === "salvage" && !object.dead)
+        .sort((a, b) => distance(player, a) - distance(player, b))[0];
+      if (shard) {
+        targetX = shard.x;
+        targetY = shard.y;
+      }
+    } else if (encounter?.kind === "siege") {
+      targetX = encounter.x;
+    }
     if (partner && distance(player, partner) > 88) targetX = lerp(targetX, partner.x + 24, 0.55);
     if (player.hp <= 2 && partner) {
       targetX = lerp(targetX, partner.x, 0.68);
@@ -959,6 +1012,18 @@ function aiPilotControls(player) {
       const urgency = (62 - range) / 62;
       steerX += (dx / Math.max(8, range)) * urgency * 4.2;
       steerY += (dy / Math.max(8, range)) * urgency * 2.2;
+    }
+  }
+  for (const hazard of world.encounterObjects.filter((object) => object.type === "meteor" && !object.dead)) {
+    const futureX = hazard.x + hazard.vx * .42;
+    const futureY = hazard.y + hazard.vy * .42;
+    const dx = player.x - futureX;
+    const dy = player.y - futureY;
+    const range = Math.hypot(dx, dy);
+    if (range < 72) {
+      const urgency = (72 - range) / 72;
+      steerX += (dx / Math.max(9, range)) * urgency * 5.1;
+      steerY += (dy / Math.max(9, range)) * urgency * 2.7;
     }
   }
   if (player.x < 28) steerX += 2.4;
@@ -1057,11 +1122,15 @@ function renderResultBuild() {
   const routeChip = route ? `<span>${t("result.ecosystems", { route })}</span>` : "";
   const paths = world.branchHistory.map((path) => pathText(path, "name")).join(t("result.routeSeparator"));
   const pathChip = paths ? `<span>${t("result.paths", { paths })}</span>` : "";
+  const encounters = world.encounterHistory
+    .map((record) => `${encounterText(record.encounter, "name")} ${t(record.success ? "encounter.status.success" : "encounter.status.failed")}`)
+    .join(t("result.routeSeparator"));
+  const encounterChip = encounters ? `<span>${t("result.encounters", { encounters })}</span>` : "";
   const upgradeChips = uniqueIds.map((id) => {
     const upgrade = UPGRADE_DEFS.find((entry) => entry.id === id);
     return upgrade ? `<span>${upgradeIcon(id)}${localizedName(upgrade)} <b>Lv.${upgradeLevel(id)}</b></span>` : "";
   }).join("");
-  resultBuild.innerHTML = seedChip + routeChip + pathChip + (upgradeChips || `<span>${t("result.buildEmpty")}</span>`);
+  resultBuild.innerHTML = seedChip + routeChip + pathChip + encounterChip + (upgradeChips || `<span>${t("result.buildEmpty")}</span>`);
 }
 
 function renderUpgradeDraft(focusSelected = false) {
@@ -1489,6 +1558,29 @@ function resetWorld() {
   world.branchHistory = [];
   world.routeChoice = null;
   world.activeBranch = null;
+  world.encounterPlans = [...SpaceExpedition.generateEncounterPlans(world.runSeed)].map((plan) => [...plan]);
+  if (QA_ENCOUNTER_ID) {
+    const forced = SpaceExpedition.ENCOUNTER_PROTOCOLS.find((encounter) => encounter.id === QA_ENCOUNTER_ID);
+    for (let stageIndex = forced.minStage; stageIndex < world.encounterPlans.length; stageIndex += 1) {
+      const base = world.encounterPlans[stageIndex][0];
+      world.encounterPlans[stageIndex][0] = Object.freeze({
+        ...forced,
+        stageIndex,
+        slot: 0,
+        at: base.at,
+        lane: base.lane,
+        variant: base.variant,
+        intensity: base.intensity,
+        signature: `${forced.id}:${base.lane}:${base.variant}`,
+      });
+    }
+  }
+  world.encounterPlanSignature = world.encounterPlans.map((plan) => plan.map((encounter) => encounter.signature).join("|")).join(">");
+  world.encounterIndex = 0;
+  world.activeEncounter = null;
+  world.encounterObjects = [];
+  world.encounterHistory = [];
+  world.encounterSerial = 0;
   world.routeStages = STAGES.map((stage, index) => {
     const biome = world.biomes[index];
     return {
@@ -1752,6 +1844,7 @@ function spawnEnemy() {
 }
 
 function spawnBoss() {
+  if (world.activeEncounter) finishEncounter(false);
   const baseHealth = [340, 500, 700][world.stageIndex];
   const stage = activeStage();
   const health = (QA_FAST_MODE ? baseHealth * .14 : baseHealth) * (world.contract?.enemyHp || 1) * (stage.biome?.enemyHp || 1) * (world.activeBranch?.enemyHp || 1);
@@ -2047,7 +2140,7 @@ function useNova(player) {
 }
 
 function damagePlayer(player) {
-  if (player.invulnerability > 0 || player.downed) return;
+  if (player.invulnerability > 0 || player.downed) return false;
   if (player.shield > 0) {
     player.shield -= 1;
     player.invulnerability = 0.45;
@@ -2055,7 +2148,7 @@ function damagePlayer(player) {
     burst(player.x, player.y, "#9be9ff", 8, 45);
     audio.sfx("shield");
     pulseGamepad(player.index, 80, 0.16, 0.34);
-    return;
+    return true;
   }
 
   player.hp -= 1;
@@ -2078,6 +2171,7 @@ function damagePlayer(player) {
     audio.sfx("explode");
     showToast(t("toast.downed", { player: player.index + 1 }));
   }
+  return true;
 }
 
 function revivePlayer(player) {
@@ -2274,6 +2368,9 @@ function advanceStage() {
   world.clearTimer = 0;
   world.eventIndex = 0;
   world.stageEvent = null;
+  world.encounterIndex = 0;
+  world.activeEncounter = null;
+  world.encounterObjects = [];
   world.cinematic = { type: "warp", timer: 1.7, total: 1.7 };
   world.spawnTimer = 1.8;
   world.bossSpawned = false;
@@ -2297,6 +2394,140 @@ function advanceStage() {
   audio.sfx("routeScan");
 }
 
+function startEncounter(plan) {
+  if (!plan || world.activeEncounter || world.bossSpawned) return;
+  const qaDuration = QA_FAST_MODE ? 1.25 : plan.duration;
+  const laneX = [W * .22, W * .5, W * .78][plan.lane] || W / 2;
+  const baseGoal = plan.kind === "siege" ? plan.goal * (1 + world.stageIndex * .18) : plan.goal;
+  const scaledGoal = QA_FAST_MODE && plan.kind !== "survive" ? baseGoal * .14 : baseGoal;
+  world.activeEncounter = {
+    ...plan,
+    x: laneX,
+    y: plan.kind === "siege" ? 68 : H - 68,
+    radius: plan.kind === "escort" ? 52 : 42,
+    timer: qaDuration,
+    total: qaDuration,
+    elapsed: 0,
+    progress: 0,
+    goal: scaledGoal,
+    hits: 0,
+    spawned: 0,
+    spawnTimer: .28,
+    hitSoundTimer: 0,
+    hp: scaledGoal,
+    maxHp: scaledGoal,
+  };
+  world.encounterObjects = [];
+  if (plan.kind === "collect") {
+    const count = plan.itemCount || 7;
+    for (let index = 0; index < count; index += 1) {
+      const offset = ((index * 73 + plan.variant * 31) % 169) - 84;
+      world.encounterObjects.push({
+        id: ++world.encounterSerial,
+        type: "salvage",
+        x: clamp(laneX + offset, 24, W - 24),
+        y: 46 + Math.floor(index / 3) * 44 + (index % 3) * 22,
+        vx: 0,
+        vy: 25 + (index % 3) * 4,
+        r: 7,
+        age: index * .23,
+        loops: 0,
+        dead: false,
+        color: plan.color,
+      });
+    }
+  }
+  world.cinematic = { type: "encounter", timer: .72, total: .72 };
+  world.flash = Math.max(world.flash, .2);
+  world.shake = Math.max(world.shake, .12);
+  audio.sfx("encounterStart");
+  showToast(t("toast.encounterStart", { encounter: encounterText(plan, "name"), description: encounterText(plan, "description") }));
+}
+
+function finishEncounter(success) {
+  const encounter = world.activeEncounter;
+  if (!encounter) return;
+  world.encounterHistory.push({ encounter, success, stageIndex: world.stageIndex });
+  if (success) {
+    const reward = encounter.reward;
+    for (const player of world.players) {
+      player.energy = Math.min(100, player.energy + (reward.energy || 0));
+      player.weapon = Math.min(4, player.weapon + (reward.weapon || 0));
+      player.hp = Math.min(player.maxHp, player.hp + (reward.repair || 0));
+      player.shield = Math.min(player.maxShield, player.shield + (reward.shield || 0));
+    }
+    world.score += Math.round((reward.score || 0) * (world.contract?.score || 1) * (world.activeBranch?.score || 1));
+    burst(encounter.x, encounter.y, encounter.color, 34, 110);
+    world.flash = Math.max(world.flash, .36);
+    world.shake = Math.max(world.shake, .28);
+    audio.sfx("encounterComplete");
+    pulseGamepad(0, 170, .35, .3);
+    pulseGamepad(1, 170, .35, .3);
+    showToast(t("toast.encounterComplete", { encounter: encounterText(encounter, "name"), reward: encounterText(encounter, "reward") }));
+  } else {
+    audio.sfx("encounterFailed");
+    showToast(t("toast.encounterFailed", { encounter: encounterText(encounter, "name") }));
+  }
+  world.activeEncounter = null;
+  world.encounterObjects = [];
+}
+
+function updateEncounter(dt) {
+  const encounter = world.activeEncounter;
+  if (!encounter) return;
+  encounter.elapsed += dt;
+  encounter.timer -= dt;
+  encounter.hitSoundTimer = Math.max(0, encounter.hitSoundTimer - dt);
+  const players = world.players.filter((player) => !player.downed);
+
+  if (encounter.kind === "hold") {
+    const occupants = players.filter((player) => distance(player, encounter) <= encounter.radius).length;
+    const rate = occupants >= 2 ? 1.55 : occupants === 1 ? .82 : -.3;
+    encounter.progress = clamp(encounter.progress + rate * dt, 0, encounter.goal);
+  } else if (encounter.kind === "escort") {
+    const center = [W * .22, W * .5, W * .78][encounter.lane] || W / 2;
+    encounter.x = clamp(center + Math.sin(encounter.elapsed * 1.3 + encounter.variant) * 62, 45, W - 45);
+    encounter.y = H - 76 + Math.sin(encounter.elapsed * .72 + encounter.variant) * 18;
+    const escorts = players.filter((player) => distance(player, encounter) <= encounter.radius).length;
+    const rate = escorts >= 2 ? 1.45 : escorts === 1 ? .78 : -.2;
+    encounter.progress = clamp(encounter.progress + rate * dt, 0, encounter.goal);
+  } else if (encounter.kind === "survive") {
+    encounter.spawnTimer -= dt;
+    if (encounter.spawnTimer <= 0) {
+      const serial = encounter.spawned;
+      const x = 24 + ((serial * 97 + encounter.variant * 61 + encounter.lane * 53) % 433);
+      const stageSpeed = 58 + world.stageIndex * 8;
+      world.encounterObjects.push({
+        id: ++world.encounterSerial,
+        type: "meteor",
+        x,
+        y: -18,
+        vx: ((encounter.lane - 1) * 8) + (((serial + encounter.variant) % 3) - 1) * 5,
+        vy: stageSpeed + (serial % 4) * 4,
+        r: 9 + (serial % 3) * 2,
+        age: 0,
+        rotation: serial * .7,
+        dead: false,
+        color: encounter.color,
+      });
+      encounter.spawned += 1;
+      encounter.spawnTimer = Math.max(.48, .82 - world.stageIndex * .08);
+    }
+  } else if (encounter.kind === "siege") {
+    const center = [W * .22, W * .5, W * .78][encounter.lane] || W / 2;
+    encounter.x = center + Math.sin(encounter.elapsed * 1.7 + encounter.variant) * 25;
+    encounter.y = 68 + Math.sin(encounter.elapsed * 1.1) * 7;
+    encounter.progress = encounter.maxHp - Math.max(0, encounter.hp);
+  }
+
+  const outcome = SpaceExpedition.evaluateEncounter(encounter, {
+    timeRemaining: encounter.timer,
+    progress: encounter.progress,
+    hits: encounter.hits,
+  });
+  if (outcome !== "pending") finishEncounter(outcome === "success");
+}
+
 function updateStage(dt) {
   const stage = activeStage();
   if (world.clearTimer > 0) {
@@ -2315,6 +2546,11 @@ function updateStage(dt) {
 
   world.stageTime += dt * (QA_FAST_MODE ? 6 : 1);
   world.spawnTimer -= dt;
+  const nextEncounter = world.encounterPlans[world.stageIndex]?.[world.encounterIndex];
+  if (!world.activeEncounter && nextEncounter && world.stageTime >= nextEncounter.at * stage.duration) {
+    startEncounter(nextEncounter);
+    world.encounterIndex += 1;
+  }
   const nextEvent = STAGE_EVENTS[world.stageIndex][world.eventIndex];
   if (nextEvent && world.stageTime >= nextEvent.at) {
     spawnStageEvent(nextEvent);
@@ -2334,7 +2570,10 @@ function updateStage(dt) {
     const routeRate = world.stageIndex === 0 && progress < .4
       ? Math.min(1, world.activeBranch?.spawnRate || 1)
       : world.activeBranch?.spawnRate || 1;
-    world.spawnTimer = Math.max(0.62, (1.72 - world.stageIndex * 0.13 - progress * 0.55) / ((world.contract?.spawnRate || 1) * ecologyRate * routeRate));
+    const encounterRate = world.stageIndex === 0 && progress < .4
+      ? Math.min(1, world.activeEncounter?.spawnRate || 1)
+      : world.activeEncounter?.spawnRate || 1;
+    world.spawnTimer = Math.max(0.62, (1.72 - world.stageIndex * 0.13 - progress * 0.55) / ((world.contract?.spawnRate || 1) * ecologyRate * routeRate * encounterRate));
   }
   if (world.stageTime >= stage.duration) spawnBoss();
 }
@@ -2374,6 +2613,22 @@ function updateObjects(dt) {
     }
     if (pickup.y > H + 15) pickup.dead = true;
   }
+  for (const object of world.encounterObjects) {
+    object.age += dt;
+    object.x += object.vx * dt;
+    object.y += object.vy * dt;
+    if (object.type === "salvage") {
+      object.x += Math.sin(object.age * 3.4 + object.id) * 8 * dt;
+      if (object.y > H + 14) {
+        object.loops += 1;
+        object.y = -18;
+        object.x = 24 + ((object.id * 89 + object.loops * 61) % 433);
+      }
+    } else if (object.type === "meteor") {
+      object.rotation += dt * (1.7 + object.id % 3);
+      if (object.y > H + 24 || object.x < -30 || object.x > W + 30) object.dead = true;
+    }
+  }
   for (const particle of world.particles) {
     particle.life -= dt;
     particle.x += particle.vx * dt;
@@ -2386,6 +2641,21 @@ function updateObjects(dt) {
 function handleCollisions() {
   for (const bullet of world.bullets) {
     if (bullet.dead) continue;
+    const encounter = world.activeEncounter;
+    if (encounter?.kind === "siege" && encounter.hp > 0) {
+      const hitRadius = bullet.r + 19;
+      if ((bullet.x - encounter.x) ** 2 + (bullet.y - encounter.y) ** 2 < hitRadius ** 2) {
+        encounter.hp = Math.max(0, encounter.hp - bullet.damage);
+        encounter.progress = encounter.maxHp - encounter.hp;
+        bullet.dead = true;
+        burst(bullet.x, bullet.y, encounter.color, 3, 24);
+        if (encounter.hitSoundTimer <= 0) {
+          encounter.hitSoundTimer = .09;
+          audio.sfx("encounterTick");
+        }
+        continue;
+      }
+    }
     for (const enemy of world.enemies) {
       if (enemy.dead) continue;
       if (bullet.hitIds?.includes(enemy.id)) continue;
@@ -2450,10 +2720,33 @@ function handleCollisions() {
     }
   }
 
+  for (const object of world.encounterObjects) {
+    if (object.dead) continue;
+    for (const player of world.players) {
+      if (player.downed || distance(object, player) >= object.r + player.r + 2) continue;
+      if (object.type === "salvage" && world.activeEncounter?.kind === "collect") {
+        object.dead = true;
+        world.activeEncounter.progress = Math.min(world.activeEncounter.goal, world.activeEncounter.progress + 1);
+        player.energy = Math.min(100, player.energy + 5 * player.energyGain);
+        burst(object.x, object.y, object.color, 12, 58);
+        audio.sfx("encounterTick");
+        pulseGamepad(player.index, 65, .08, .22);
+      } else if (object.type === "meteor") {
+        object.dead = true;
+        if (damagePlayer(player) && world.activeEncounter?.kind === "survive") world.activeEncounter.hits += 1;
+        burst(object.x, object.y, object.color, 20, 88);
+        world.shake = Math.max(world.shake, .3);
+        audio.sfx("encounterImpact");
+      }
+      break;
+    }
+  }
+
   world.bullets = world.bullets.filter((bullet) => !bullet.dead);
   world.enemyBullets = world.enemyBullets.filter((bullet) => !bullet.dead);
   world.enemies = world.enemies.filter((enemy) => !enemy.dead);
   world.pickups = world.pickups.filter((pickup) => !pickup.dead);
+  world.encounterObjects = world.encounterObjects.filter((object) => !object.dead);
   world.particles = world.particles.filter((particle) => particle.life > 0);
 }
 
@@ -2523,6 +2816,7 @@ function update(dt) {
     input.endFrame();
     return;
   }
+  updateEncounter(dt);
   updateObjects(dt);
   handleCollisions();
   input.endFrame();
@@ -2561,6 +2855,8 @@ function endGame(victory) {
   upgradePanel.hidden = true;
   world.enemyBullets = [];
   world.enemies = [];
+  world.activeEncounter = null;
+  world.encounterObjects = [];
   world.boss = null;
   const previousHighScore = profile.highScore;
   const runSeconds = world.runStartedAt ? Math.max(0, Math.round((performance.now() - world.runStartedAt) / 1000)) : 0;
@@ -3118,6 +3414,35 @@ function drawHud() {
   }
 }
 
+function drawEncounterHud() {
+  const encounter = world.activeEncounter;
+  if (!encounter || world.introTimer > 0 || world.clearTimer > 0 || world.routeChoice) return;
+  const ratio = encounter.kind === "survive"
+    ? 1 - clamp(encounter.timer / encounter.total, 0, 1)
+    : clamp(encounter.progress / encounter.goal, 0, 1);
+  const objective = t(encounter.objectiveKey, {
+    current: Math.floor(encounter.progress),
+    goal: Math.ceil(encounter.goal),
+    hits: encounter.hits,
+    allowed: encounter.goal,
+    hp: Math.ceil(encounter.hp),
+    total: Math.ceil(encounter.maxHp),
+  });
+  const x = W / 2 - 118;
+  const y = 30;
+  ctx.save();
+  ctx.fillStyle = "rgba(5, 6, 18, .9)";
+  ctx.fillRect(x, y, 236, 27);
+  ctx.fillStyle = encounter.color;
+  ctx.fillRect(x, y, 3, 27);
+  pixelText(t("hud.encounter", { current: world.encounterIndex, total: 2 }), x + 9, y + 9, encounter.color, "left", 5);
+  pixelText(encounterText(encounter, "name"), W / 2, y + 10, "#ffffff", "center", 7);
+  pixelText(t("hud.encounterTimer", { time: Math.max(0, encounter.timer).toFixed(1) }), x + 227, y + 9, "#9d9bb4", "right", 5);
+  pixelText(objective, W / 2, y + 20, "#c9c7db", "center", 5.5);
+  drawBar(x + 8, y + 22, 220, ratio, encounter.color);
+  ctx.restore();
+}
+
 function drawStageEvent() {
   const event = world.stageEvent;
   if (!event || world.introTimer > 0 || world.clearTimer > 0) return;
@@ -3238,6 +3563,7 @@ function draw() {
   if (world.mode !== "menu") {
     drawHud();
     drawRouteChoice();
+    drawEncounterHud();
     drawStageCard();
     drawStageEvent();
     drawVariantNotice();
@@ -3293,6 +3619,13 @@ function draw() {
   canvas.dataset.pathOptions = world.routeChoice?.options.map((path) => path.id).join(",") || "";
   canvas.dataset.pathSelection = world.routeChoice ? String(world.routeChoice.selectedIndex) : "-1";
   canvas.dataset.pathHistory = world.branchHistory.filter(Boolean).map((path) => path.id).join(",");
+  canvas.dataset.encounterPlan = world.encounterPlanSignature;
+  canvas.dataset.activeEncounter = world.activeEncounter?.id || "";
+  canvas.dataset.encounterProgress = world.activeEncounter
+    ? `${world.activeEncounter.progress.toFixed(2)}/${world.activeEncounter.goal.toFixed(2)}`
+    : "";
+  canvas.dataset.encounterHistory = world.encounterHistory.map((record) => `${record.encounter.id}:${record.success ? "success" : "failed"}`).join(",");
+  canvas.dataset.encounterObjects = String(world.encounterObjects.length);
   canvas.dataset.hudResolution = `${canvas.width}x${canvas.height}`;
   canvas.dataset.hudScale = `${hudScaleX.toFixed(3)}x${hudScaleY.toFixed(3)}`;
 }
