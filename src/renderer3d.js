@@ -765,6 +765,32 @@
       this.drawMesh(this.meshes.box, compose(middle, [0, angle, 0], [.09, .09, length]), hexColor("#ffffff", .09), 1);
     }
 
+    drawRush(world) {
+      const pulse = .92 + Math.sin(this.time * 12) * .09;
+      const colors = ["#66f6e5", "#ff87ba"];
+      const livePlayers = world.players.filter((player) => !player.downed);
+      for (const player of livePlayers) {
+        const position = this.toWorld(player.x, player.y, .28);
+        const color = colors[player.index] || colors[0];
+        this.drawMesh(this.meshes.torus, compose(position, [.08, this.time * 2.8 * (player.index ? -1 : 1), 0], [.75 * pulse, .18, .75 * pulse]), hexColor(color, .88), 1);
+        this.drawMesh(this.meshes.torus, compose([position[0], .48, position[2]], [.42, -this.time * 3.6, .22], [.48, .11, .48]), hexColor("#fff4a8", .66), 1);
+        for (let index = 0; index < 6; index += 1) {
+          const angle = this.time * (2.2 + player.index * .25) + index / 6 * TAU + player.index * .5;
+          const radius = .86 + Math.sin(this.time * 5 + index) * .07;
+          const shard = [position[0] + Math.cos(angle) * radius, .48 + Math.sin(index * 2.1 + this.time * 3) * .14, position[2] + Math.sin(angle) * radius];
+          this.drawMesh(this.meshes.box, compose(shard, [angle, angle * .6, 0], [.1, .1, .1]), hexColor(index % 2 ? color : "#fff4a8", .94), 1);
+        }
+      }
+      if (livePlayers.length === 2) {
+        const a = this.toWorld(livePlayers[0].x, livePlayers[0].y, .38);
+        const b = this.toWorld(livePlayers[1].x, livePlayers[1].y, .38);
+        const midpoint = [(a[0] + b[0]) / 2, .56, (a[2] + b[2]) / 2];
+        const coreScale = .22 + Math.sin(this.time * 16) * .035;
+        this.drawMesh(this.meshes.octa, compose(midpoint, [this.time * 2.8, this.time * 4.2, 0], [coreScale, coreScale, coreScale]), hexColor("#fff4a8", .96), 1);
+        this.drawMesh(this.meshes.sphere, compose(midpoint, [0, 0, 0], [.62 * pulse, .62 * pulse, .62 * pulse]), hexColor("#7ffdeb", .13), 1);
+      }
+    }
+
     render(world, stages, playerConfigs, settings = {}) {
       if (!this.ready) return false;
       this.quality = settings.quality || "high";
@@ -827,6 +853,7 @@
       for (const bullet of world.bullets) this.drawProjectile(bullet, false);
       for (const bullet of world.enemyBullets) this.drawProjectile(bullet, true);
       if (world.linked) this.drawBeam(world.players[0], world.players[1]);
+      if (world.rushTimer > 0) this.drawRush(world);
       for (const player of world.players) {
         if (!player.downed && !(player.invulnerability > 0 && Math.floor(world.time * 14) % 2 === 0)) {
           this.drawShip(player, playerConfigs[player.index]);

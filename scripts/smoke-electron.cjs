@@ -5,7 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
-const screenshotPath = path.join(os.tmpdir(), "spacescraft-electron-smoke.png");
+const screenshotPath = path.join(os.tmpdir(), "spacescraft-rush-electron-smoke.png");
 const talentScreenshotPath = path.join(os.tmpdir(), "spacescraft-talent-grid-smoke.png");
 const mime = {
   ".html": "text/html; charset=utf-8",
@@ -44,7 +44,7 @@ async function run() {
   window.webContents.on("console-message", (_event, level, message) => {
     if (level >= 2) errors.push(message);
   });
-  await window.loadURL(`http://127.0.0.1:${port}/?qa-fast&qa-wallet&qa-path=1&qa-encounter=relay&seed=2`);
+  await window.loadURL(`http://127.0.0.1:${port}/?qa-fast&qa-wallet&qa-rush&qa-path=1&qa-encounter=relay&seed=2`);
   const talentState = await window.webContents.executeJavaScript(`(() => {
     document.querySelector('#hangarButton').click();
     document.querySelector('[data-talent-id="vectorThrusters"]').click();
@@ -68,11 +68,12 @@ async function run() {
     await delay(100);
     state = await window.webContents.executeJavaScript(`(() => {
       const game = document.querySelector('#game');
-      return Object.fromEntries(['mode', 'qa', 'stage', 'fps', 'activeEncounter', 'encounterProgress', 'encounterObjects', 'encounterPlan', 'hudResolution', 'talents', 'talentCount', 'playerSpeed'].map((key) => [key, game.dataset[key]]));
+      return Object.fromEntries(['mode', 'qa', 'stage', 'fps', 'activeEncounter', 'encounterProgress', 'encounterObjects', 'encounterPlan', 'hudResolution', 'talents', 'talentCount', 'playerSpeed', 'rushActive', 'rushCharge', 'rushTimer', 'rushChain', 'rushBestChain', 'rushCount'].map((key) => [key, game.dataset[key]]));
     })()`);
-    if (state.activeEncounter === "relay") break;
+    if (state.activeEncounter === "relay" && state.rushCount === "1") break;
   }
   if (state?.activeEncounter !== "relay") throw new Error(`relay encounter did not become active: ${JSON.stringify(state)}`);
+  if (state.rushActive !== "true" || state.rushCount !== "1" || Number(state.rushTimer) <= 0) throw new Error(`automatic rush did not activate: ${JSON.stringify(state)}`);
 
   window.webContents.sendInputEvent({ type: "keyDown", keyCode: "D" });
   window.webContents.sendInputEvent({ type: "keyDown", keyCode: "W" });
@@ -91,9 +92,23 @@ async function run() {
   if (errors.length) throw new Error(`renderer console errors: ${errors.join(" | ")}`);
   const webgl = await window.webContents.executeJavaScript("Boolean(document.querySelector('#scene').getContext('webgl'))");
   if (!webgl) throw new Error("WebGL context unavailable");
+  const rushState = await window.webContents.executeJavaScript(`(() => {
+    const game = document.querySelector('#game');
+    return Object.fromEntries(['rushActive', 'rushCharge', 'rushTimer', 'rushChain', 'rushBestChain', 'rushCount', 'rushLastBonus'].map((key) => [key, game.dataset[key]]));
+  })()`);
   const image = await window.webContents.capturePage();
   fs.writeFileSync(screenshotPath, image.toPNG());
-  process.stdout.write(`${JSON.stringify({ ...state, talentPurchase: talentState, encounterHistory, webgl, consoleErrors: errors.length, screenshot: screenshotPath, talentScreenshot: talentScreenshotPath })}\n`);
+  let settledRush = rushState;
+  for (let attempt = 0; attempt < 70; attempt += 1) {
+    await delay(100);
+    settledRush = await window.webContents.executeJavaScript(`(() => {
+      const game = document.querySelector('#game');
+      return Object.fromEntries(['rushActive', 'rushCharge', 'rushTimer', 'rushChain', 'rushBestChain', 'rushCount', 'rushLastBonus'].map((key) => [key, game.dataset[key]]));
+    })()`);
+    if (settledRush.rushActive === "false" && Number(settledRush.rushLastBonus) > 0) break;
+  }
+  if (settledRush.rushActive !== "false" || Number(settledRush.rushLastBonus) <= 0) throw new Error(`rush did not settle with a score bonus: ${JSON.stringify(settledRush)}`);
+  process.stdout.write(`${JSON.stringify({ ...state, rushState, settledRush, talentPurchase: talentState, encounterHistory, webgl, consoleErrors: errors.length, screenshot: screenshotPath, talentScreenshot: talentScreenshotPath })}\n`);
   window.destroy();
   server.close();
   app.quit();

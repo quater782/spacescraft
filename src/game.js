@@ -79,6 +79,7 @@ const QA_FAST_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-fast");
 const QA_WALLET_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-wallet");
 const QA_CONTRACTS_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-contracts");
 const QA_DRAFT_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-draft");
+const QA_RUSH_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-rush");
 const REQUESTED_QA_PATH = LOCAL_QA_HOST ? Number.parseInt(URL_PARAMS.get("qa-path") || "", 10) : Number.NaN;
 const QA_PATH_INDEX = [0, 1, 2].includes(REQUESTED_QA_PATH) ? REQUESTED_QA_PATH : null;
 const REQUESTED_QA_ENCOUNTER = LOCAL_QA_HOST ? URL_PARAMS.get("qa-encounter") : null;
@@ -86,10 +87,11 @@ const QA_ENCOUNTER_ID = SpaceExpedition.ENCOUNTER_PROTOCOLS.some((encounter) => 
   ? REQUESTED_QA_ENCOUNTER
   : null;
 const REQUESTED_RUN_SEED = Number.parseInt(URL_PARAMS.get("seed") || "", 10);
-const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`].filter(Boolean).join("+") || "off";
+const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_RUSH_MODE && "rush", QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`].filter(Boolean).join("+") || "off";
 const t = (key, variables) => SpaceI18n.t(key, variables);
 const UPGRADE_DEFS = SpaceRoguelike.UPGRADE_DEFS;
 const TALENT_NODES = SpaceConstellation.TALENT_NODES;
+const RUSH_CONFIG = SpaceRush.RUSH_CONFIG;
 
 ctx.imageSmoothingEnabled = false;
 
@@ -717,7 +719,8 @@ class AudioEngine {
       this.scheduleStep(this.step, this.nextStep);
       const bpm = (world.routeStages?.[this.stage]?.bpm || STAGES[this.stage]?.bpm || 132)
         + (world.activeBranch?.bpmOffset || 0)
-        + (world.activeEncounter?.bpmOffset || 0);
+        + (world.activeEncounter?.bpmOffset || 0)
+        + (rushActive() ? 18 : 0);
       this.nextStep += 60 / bpm / 4;
       this.step += 1;
     }
@@ -749,7 +752,8 @@ class AudioEngine {
     const bar = Math.floor(step / 16) % 4;
     const chordRoot = progressions[this.stage][bar];
     const encounterActive = Boolean(world.activeEncounter);
-    const intensity = this.boss ? 1.22 : encounterActive ? 1.1 : 1;
+    const rush = rushActive();
+    const intensity = rush ? 1.38 : this.boss ? 1.22 : encounterActive ? 1.1 : 1;
 
     this.tone(root + chordRoot + arpeggios[this.stage][s % 8] + 12, 0.045, "square", 0.012 * intensity, when);
     if (s % 2 === 0 || (this.boss && s % 4 === 1)) {
@@ -772,6 +776,11 @@ class AudioEngine {
       const signal = world.activeEncounter.kind === "survive" ? 29 : world.activeEncounter.kind === "siege" ? 24 : 19;
       this.tone(root + signal, .06, "square", .021, when, this.musicBus, s === 10 ? 5 : 0);
       if (s === 6 || s === 14) this.noise(.032, .021, when, 2800, this.musicBus);
+    }
+    if (rush) {
+      this.tone(root + 24 + arpeggios[this.stage][(s + bar) % 8], .055, s % 2 ? "square" : "triangle", .027, when, this.musicBus, s % 4 === 3 ? 7 : 0);
+      if (s % 2 === 0) this.kick(when + .025);
+      if (s % 4 === 3) this.noise(.028, .028, when, 5200, this.musicBus);
     }
   }
 
@@ -861,6 +870,16 @@ class AudioEngine {
     } else if (name === "encounterFailed") {
       [55, 50, 43].forEach((note, index) => this.tone(note, .24, "sawtooth", .045, now + index * .07, this.sfxBus, -7));
       this.noise(.18, .045, now + .04, 420);
+    } else if (name === "rushStart") {
+      [43, 50, 55, 62, 67, 74, 79, 86].forEach((note, index) => this.tone(note, .32, index % 3 ? "square" : "sawtooth", .06, now + index * .038, this.sfxBus, 7));
+      this.tone(31, .52, "sine", .09, now, this.sfxBus, 12);
+      this.noise(.42, .1, now + .05, 1700);
+    } else if (name === "rushHit") {
+      [79, 86, 91].forEach((note, index) => this.tone(note, .09, "square", .04, now + index * .022, this.sfxBus, 4));
+      this.noise(.055, .028, now, 4200);
+    } else if (name === "rushEnd") {
+      [74, 67, 62, 55].forEach((note, index) => this.tone(note, .2, index % 2 ? "triangle" : "square", .045, now + index * .055, this.sfxBus, -5));
+      this.noise(.18, .04, now + .04, 900);
     } else if (name === "stageClear") {
       [60, 64, 67, 72, 76, 79].forEach((note, i) => this.tone(note, .22, i % 2 ? "square" : "triangle", .06, now + i * .075, this.sfxBus));
     } else if (name === "unlock") {
@@ -954,6 +973,14 @@ const world = {
   encounterObjects: [],
   encounterHistory: [],
   encounterSerial: 0,
+  rushCharge: 0,
+  rushTimer: 0,
+  rushCooldown: 0,
+  rushChain: 0,
+  rushBestChain: 0,
+  rushCount: 0,
+  rushPulseTimer: 0,
+  rushLastBonus: 0,
 };
 
 const activeStage = (index = world.stageIndex) => world.routeStages[index] || STAGES[index] || STAGES[0];
@@ -1146,11 +1173,12 @@ function renderResultBuild() {
     .join(t("result.routeSeparator"));
   const encounterChip = encounters ? `<span>${t("result.encounters", { encounters })}</span>` : "";
   const talentChip = `<span>${t("result.talents", { current: profile.talents.length, total: TALENT_NODES.length })}</span>`;
+  const rushChip = `<span>${t("result.rushSummary", { count: world.rushCount, chain: world.rushBestChain, score: world.rushLastBonus })}</span>`;
   const upgradeChips = uniqueIds.map((id) => {
     const upgrade = UPGRADE_DEFS.find((entry) => entry.id === id);
     return upgrade ? `<span>${upgradeIcon(id)}${localizedName(upgrade)} <b>Lv.${upgradeLevel(id)}</b></span>` : "";
   }).join("");
-  resultBuild.innerHTML = seedChip + talentChip + routeChip + pathChip + encounterChip + (upgradeChips || `<span>${t("result.buildEmpty")}</span>`);
+  resultBuild.innerHTML = seedChip + talentChip + rushChip + routeChip + pathChip + encounterChip + (upgradeChips || `<span>${t("result.buildEmpty")}</span>`);
 }
 
 function renderUpgradeDraft(focusSelected = false) {
@@ -1637,6 +1665,14 @@ function resetWorld() {
   world.encounterObjects = [];
   world.encounterHistory = [];
   world.encounterSerial = 0;
+  world.rushCharge = QA_RUSH_MODE ? RUSH_CONFIG.threshold : 0;
+  world.rushTimer = 0;
+  world.rushCooldown = 0;
+  world.rushChain = 0;
+  world.rushBestChain = 0;
+  world.rushCount = 0;
+  world.rushPulseTimer = 0;
+  world.rushLastBonus = 0;
   world.routeStages = STAGES.map((stage, index) => {
     const biome = world.biomes[index];
     return {
@@ -1755,6 +1791,81 @@ function burst(x, y, color, count = 8, speed = 55) {
       size: visualRandom() < 0.4 ? 2 : 1,
     });
   }
+}
+
+const rushActive = () => world.rushTimer > 0;
+
+function addRushCharge(type) {
+  if (rushActive()) {
+    if (["kill", "elite", "bossPhase"].includes(type)) {
+      world.rushChain += type === "elite" ? 3 : 1;
+      world.rushBestChain = Math.max(world.rushBestChain, world.rushChain);
+      world.rushTimer = Math.min(RUSH_CONFIG.maximumDuration, world.rushTimer + RUSH_CONFIG.killExtension * (type === "elite" ? 2 : 1));
+      if (world.rushChain % 4 === 0) audio.sfx("rushHit");
+    }
+    return;
+  }
+  world.rushCharge = SpaceRush.addEventCharge(world.rushCharge, type, world.linked);
+}
+
+function startRush() {
+  if (rushActive() || world.rushCooldown > 0) return;
+  world.rushCharge = RUSH_CONFIG.threshold;
+  world.rushTimer = RUSH_CONFIG.duration;
+  world.rushChain = 0;
+  world.rushCount += 1;
+  world.rushPulseTimer = 0;
+  world.enemyBullets = [];
+  for (const player of world.players) {
+    if (player.downed) continue;
+    player.energy = Math.min(100, player.energy + 18 * player.energyGain);
+    burst(player.x, player.y, PLAYER_CONFIG[player.index].light, 36, 130);
+  }
+  world.flash = Math.max(world.flash, .58);
+  world.shake = Math.max(world.shake, .48);
+  world.cinematic = { type: "rush", timer: .9, total: .9 };
+  audio.sfx("rushStart");
+  pulseGamepad(0, 260, .58, .48);
+  pulseGamepad(1, 260, .58, .48);
+  showToast(t("toast.rushStart"));
+}
+
+function calculateRushBonus() {
+  return Math.round(world.rushChain * 75 * (1 + world.stageIndex * .25) * (world.contract?.score || 1) * (world.activeBranch?.score || 1));
+}
+
+function finishRush() {
+  const bonus = calculateRushBonus();
+  world.score += bonus;
+  world.rushLastBonus = bonus;
+  world.rushTimer = 0;
+  world.rushCharge = 0;
+  world.rushCooldown = RUSH_CONFIG.cooldown;
+  audio.sfx("rushEnd");
+  showToast(t("toast.rushEnd", { chain: world.rushChain, score: bonus }));
+}
+
+function updateRush(dt) {
+  world.rushCooldown = Math.max(0, world.rushCooldown - dt);
+  if (rushActive()) {
+    world.rushTimer -= dt;
+    world.rushPulseTimer -= dt;
+    if (world.rushPulseTimer <= 0 && world.players.length >= 2 && world.players.every((player) => !player.downed)) {
+      world.rushPulseTimer = .16;
+      const [p1, p2] = world.players;
+      for (const bullet of world.enemyBullets) {
+        if (!bullet.dead && pointToSegmentDistance(bullet.x, bullet.y, p1.x, p1.y, p2.x, p2.y) <= RUSH_CONFIG.bulletGuardRadius) {
+          bullet.dead = true;
+          burst(bullet.x, bullet.y, "#fff2a6", 3, 24);
+        }
+      }
+    }
+    if (world.rushTimer <= 0) finishRush();
+    return;
+  }
+  const eligible = world.introTimer <= 0 && world.clearTimer <= 0 && !world.routeChoice;
+  world.rushCharge = SpaceRush.advanceCharge(world.rushCharge, dt, world.linked, eligible);
+  if (world.rushCharge >= RUSH_CONFIG.threshold && world.rushCooldown <= 0) startRush();
 }
 
 function aimedVelocity(source, speed, spread = 0) {
@@ -1950,6 +2061,7 @@ function enterBossPhase(boss, nextPhase) {
   world.shake = Math.max(world.shake, .52);
   world.cinematic = { type: "phase", timer: 1.1, total: 1.1 };
   burst(boss.x, boss.y, activeStage().accent, 42, 120);
+  addRushCharge("bossPhase");
   audio.sfx("bossPhase");
   showToast(`${t("hud.phaseTitle", { phase: nextPhase })} // ${bossPhaseText(world.stageIndex, nextPhase)}`);
 }
@@ -2106,6 +2218,7 @@ function updateBoss(boss, dt) {
 
 function playerShoot(player) {
   const config = PLAYER_CONFIG[player.index];
+  const rush = SpaceRush.combatMultipliers(rushActive());
   const patterns = [
     [{ x: 0, vx: 0, damage: 1.25 }],
     [{ x: -3, vx: -5, damage: 1.15 }, { x: 3, vx: 5, damage: 1.15 }],
@@ -2120,7 +2233,7 @@ function playerShoot(player) {
       vx: shot.vx,
       vy: -player.projectileSpeed,
       r: 2,
-      damage: shot.damage * player.damage * damageScale * (world.activeBranch?.reward.damage || 1),
+      damage: shot.damage * player.damage * damageScale * rush.damage * (world.activeBranch?.reward.damage || 1),
       owner: player.index,
       color: config.color,
       pierceLeft: player.pierce,
@@ -2138,7 +2251,7 @@ function playerShoot(player) {
     addShot({ x: -offset, vx: -spread, damage: .72 }, 1 + (player.droneLevel - 1) * .16);
     addShot({ x: offset, vx: spread, damage: .72 }, 1 + (player.droneLevel - 1) * .16);
   }
-  player.fireTimer = Math.max(0.085, (0.2 - player.weapon * 0.016) / player.fireRate);
+  player.fireTimer = Math.max(0.065, (0.2 - player.weapon * 0.016) / (player.fireRate * rush.fireRate));
   player.shots += 1;
   audio.sfx("shoot", player.index);
 }
@@ -2238,6 +2351,7 @@ function revivePlayer(player) {
   player.downTimer = 0;
   player.revive = 0;
   burst(player.x, player.y, PLAYER_CONFIG[player.index].light, 28, 90);
+  addRushCharge("rescue");
   audio.sfx("revive");
   showToast(t("toast.revived", { player: player.index + 1 }));
 }
@@ -2301,12 +2415,13 @@ function updatePlayers(dt) {
   const linkRange = Math.max(p1.linkRange, p2.linkRange) * (world.activeBranch?.reward.link || 1);
   const linked = !p1.downed && !p2.downed && distance(p1, p2) < linkRange;
   if (linked) {
+    const rush = SpaceRush.combatMultipliers(rushActive());
     world.beamTimer -= dt;
     if (world.beamTimer <= 0) {
-      world.beamTimer = 0.12;
+      world.beamTimer = 0.12 / rush.linkRate;
       for (const enemy of world.enemies) {
         if (!enemy.dead && pointToSegmentDistance(enemy.x, enemy.y, p1.x, p1.y, p2.x, p2.y) < enemy.r + 3) {
-          damageEnemy(enemy, 1.2 * ((p1.beamDamage + p2.beamDamage) * .5));
+          damageEnemy(enemy, 1.2 * rush.linkDamage * ((p1.beamDamage + p2.beamDamage) * .5));
           p1.energy = clamp(p1.energy + 0.45 * p1.energyGain, 0, 100);
           p2.energy = clamp(p2.energy + 0.45 * p2.energyGain, 0, 100);
           if (enemy.hp <= 0) killEnemy(enemy, 0);
@@ -2325,10 +2440,13 @@ function killEnemy(enemy, owner = 0) {
   world.comboTimer = 2.4;
   world.bestCombo = Math.max(world.bestCombo, world.combo);
   const multiplier = 1 + Math.floor(world.combo / 8) * 0.5;
-  world.score += Math.round(enemy.score * multiplier * (world.contract?.score || 1) * (world.activeBranch?.score || 1));
+  const rush = SpaceRush.combatMultipliers(rushActive());
+  world.score += Math.round(enemy.score * multiplier * rush.score * (world.contract?.score || 1) * (world.activeBranch?.score || 1));
   const player = world.players[owner];
   if (player) player.energy = clamp(player.energy + (enemy.boss ? 35 : 4.5) * player.energyGain, 0, 100);
   burst(enemy.x, enemy.y, enemy.boss ? "#fff2a6" : activeStage().accent, enemy.boss ? 80 : 12, enemy.boss ? 150 : 65);
+  addRushCharge("kill");
+  if (enemy.elite) addRushCharge("elite");
 
   if (!enemy.boss && player?.chainDamage > 0 && !world.chainResolving) {
     const chainLevel = upgradeLevel("chain");
@@ -2393,6 +2511,7 @@ function applyPickup(player, pickup) {
   else if (pickup.type === "shield") player.shield = Math.min(player.maxShield, player.shield + 2);
   else player.energy = Math.min(100, player.energy + 40 * player.energyGain);
   pickup.dead = true;
+  addRushCharge("pickup");
   burst(pickup.x, pickup.y, PLAYER_CONFIG[player.index].light, 15, 65);
   audio.sfx("pickup");
   pulseGamepad(player.index, 75, 0.08, 0.28);
@@ -2513,6 +2632,7 @@ function finishEncounter(success) {
       player.shield = Math.min(player.maxShield, player.shield + (reward.shield || 0));
     }
     world.score += Math.round((reward.score || 0) * (world.contract?.score || 1) * (world.activeBranch?.score || 1));
+    addRushCharge("encounter");
     burst(encounter.x, encounter.y, encounter.color, 34, 110);
     world.flash = Math.max(world.flash, .36);
     world.shake = Math.max(world.shake, .28);
@@ -2652,16 +2772,17 @@ function updateObjects(dt) {
   for (const pickup of world.pickups) {
     pickup.age += dt;
     pickup.y += pickup.vy * dt;
+    const rushMagnet = SpaceRush.combatMultipliers(rushActive()).pickupMagnet;
     const magnetTarget = world.players
-      .filter((player) => !player.downed && player.pickupMagnetRadius > 0)
-      .map((player) => ({ player, range: distance(pickup, player) }))
-      .filter(({ player, range }) => range <= player.pickupMagnetRadius)
+      .filter((player) => !player.downed && player.pickupMagnetRadius + rushMagnet > 0)
+      .map((player) => ({ player, range: distance(pickup, player), radius: player.pickupMagnetRadius + rushMagnet }))
+      .filter(({ range, radius }) => range <= radius)
       .sort((a, b) => a.range - b.range)[0];
     if (magnetTarget) {
       const dx = magnetTarget.player.x - pickup.x;
       const dy = magnetTarget.player.y - pickup.y;
       const range = Math.max(1, magnetTarget.range);
-      const pull = 70 + 145 * (1 - range / magnetTarget.player.pickupMagnetRadius);
+      const pull = 70 + 145 * (1 - range / magnetTarget.radius);
       pickup.x += dx / range * pull * dt;
       pickup.y += dy / range * pull * dt;
     } else {
@@ -2872,6 +2993,7 @@ function update(dt) {
     input.endFrame();
     return;
   }
+  updateRush(dt);
   updateEncounter(dt);
   updateObjects(dt);
   handleCollisions();
@@ -2907,6 +3029,13 @@ function renderResult() {
 
 function endGame(victory) {
   if (world.mode === "ended") return;
+  if (rushActive()) {
+    const bonus = calculateRushBonus();
+    world.score += bonus;
+    world.rushLastBonus = bonus;
+    world.rushTimer = 0;
+    world.rushCharge = 0;
+  }
   world.mode = "ended";
   upgradePanel.hidden = true;
   world.enemyBullets = [];
@@ -3453,6 +3582,20 @@ function drawHud() {
     const scale = Math.min(2, 1 + world.combo * 0.02);
     pixelText(t("hud.combo", { combo: world.combo }), W - 9, 43, world.combo > 20 ? "#ffe27a" : "#ffffff", "right", 7 * scale);
   }
+  if (rushActive() || world.rushCharge > 0) {
+    const active = rushActive();
+    const ratio = active
+      ? clamp(world.rushTimer / RUSH_CONFIG.duration, 0, 1)
+      : clamp(world.rushCharge / RUSH_CONFIG.threshold, 0, 1);
+    const pulse = active ? .72 + Math.sin(world.time * 18) * .28 : 1;
+    const color = active ? (world.rushChain >= 12 ? "#ffe56d" : "#92fff0") : "#8585a4";
+    ctx.globalAlpha = pulse;
+    pixelText(active
+      ? t("hud.rushActive", { time: world.rushTimer.toFixed(1), chain: world.rushChain })
+      : t("hud.rushCharge", { percent: Math.floor(ratio * 100) }), W / 2, H - 25, color, "center", active ? 6.5 : 5.5);
+    drawBar(W / 2 - 58, H - 21, 116, ratio, color);
+    ctx.globalAlpha = 1;
+  }
   if (world.linked) pixelText(t("hud.resonance"), W / 2, H - 8, "#92fff0", "center", 6);
 
   if (world.boss) {
@@ -3684,6 +3827,13 @@ function draw() {
     : "";
   canvas.dataset.encounterHistory = world.encounterHistory.map((record) => `${record.encounter.id}:${record.success ? "success" : "failed"}`).join(",");
   canvas.dataset.encounterObjects = String(world.encounterObjects.length);
+  canvas.dataset.rushCharge = world.rushCharge.toFixed(2);
+  canvas.dataset.rushActive = String(rushActive());
+  canvas.dataset.rushTimer = world.rushTimer.toFixed(2);
+  canvas.dataset.rushChain = String(world.rushChain);
+  canvas.dataset.rushBestChain = String(world.rushBestChain);
+  canvas.dataset.rushCount = String(world.rushCount);
+  canvas.dataset.rushLastBonus = String(world.rushLastBonus);
   canvas.dataset.hudResolution = `${canvas.width}x${canvas.height}`;
   canvas.dataset.hudScale = `${hudScaleX.toFixed(3)}x${hudScaleY.toFixed(3)}`;
 }
