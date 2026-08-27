@@ -791,6 +791,30 @@
       }
     }
 
+    drawProtocols(world) {
+      const protocols = world.activeProtocols || [];
+      const players = world.players.filter((player) => !player.downed);
+      if (!protocols.length || !players.length) return;
+      const centerX = players.reduce((sum, player) => sum + player.x, 0) / players.length;
+      const centerY = players.reduce((sum, player) => sum + player.y, 0) / players.length;
+      const center = this.toWorld(centerX, centerY, .92);
+      const flash = clamp((world.protocolFlashTimer || 0) / .38, 0, 1);
+      protocols.forEach((protocol, protocolIndex) => {
+        const radius = .34 + protocolIndex * .18;
+        const angle = this.time * (1.4 + protocolIndex * .16) + protocolIndex * 1.9;
+        const position = [center[0] + Math.cos(angle) * radius, .88 + Math.sin(this.time * 3 + protocolIndex) * .08, center[2] + Math.sin(angle) * radius];
+        const scale = .11 + flash * .045;
+        const mesh = protocolIndex % 3 === 0 ? this.meshes.octa : protocolIndex % 3 === 1 ? this.meshes.box : this.meshes.wedge;
+        this.drawMesh(mesh, compose(position, [angle * 1.4, -angle, angle * .5], [scale, scale, scale]), hexColor(protocol.color, .96), 1);
+        this.drawMesh(this.meshes.torus, compose(center, [.12 + protocolIndex * .05, -angle * .34, 0], [radius + .22, .055, radius + .22]), hexColor(protocol.color, .3 + flash * .3), .85);
+      });
+      for (const player of players) {
+        const position = this.toWorld(player.x, player.y, .7);
+        const color = protocols[player.index % protocols.length].color;
+        this.drawMesh(this.meshes.octa, compose(position, [this.time * 2, -this.time * 1.5, 0], [.105, .105, .105]), hexColor(color, .86), 1);
+      }
+    }
+
     render(world, stages, playerConfigs, settings = {}) {
       if (!this.ready) return false;
       this.quality = settings.quality || "high";
@@ -854,6 +878,7 @@
       for (const bullet of world.enemyBullets) this.drawProjectile(bullet, true);
       if (world.linked) this.drawBeam(world.players[0], world.players[1]);
       if (world.rushTimer > 0) this.drawRush(world);
+      if (world.activeProtocols?.length) this.drawProtocols(world);
       for (const player of world.players) {
         if (!player.downed && !(player.invulnerability > 0 && Math.floor(world.time * 14) % 2 === 0)) {
           this.drawShip(player, playerConfigs[player.index]);

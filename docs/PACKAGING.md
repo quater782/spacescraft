@@ -32,16 +32,16 @@ npm run make:win
 当前已验证产物：
 
 - `out/SPACECRAFT 星航双子-win32-x64/SPACECRAFT.exe`
-- `dist/SPACECRAFT-0.13.0-windows-x64.zip`
+- `dist/SPACECRAFT-0.14.0-windows-x64.zip`
 
-0.13.0 Windows x64 校验值：
+0.14.0 Windows x64 校验值：
 
 ```text
-ZIP  SHA-256  4c95b55ab3324f4bd9163581a9accd9c01cc5bf032b88c361eedf50815983b90
-EXE  SHA-256  226c5ded91eb9d091b1bf7290bc6faf96bbbc83196c0a71a686c35aa79fb14dd
+ZIP  SHA-256  ffe9a9473b04ae2f762337fd53a18b9df685b5aa1302b3307214ae5b4a0c6141
+EXE  SHA-256  6c8179044d6a33fe53d24d8a952029c00f902fc659cf871bb502fd4f6eb457e2
 ```
 
-ZIP 为 157,674,286 字节，EXE 为 244,440,576 字节，解压后内容为 384,201,549 字节，共 76 个归档条目。ZIP 内部根目录使用 ASCII `SPACECRAFT-win32-x64`，避免跨平台解压工具误判中文文件夹编码；归档不包含 `__MACOSX` 或 `.DS_Store`，`unzip -tq` 完整性检查通过。`app.asar` 为 662,533 字节，SHA-256 为 `3636f0dc4a538e19e96675abfe79988be6a5c25051e4eb726e6439745b27c626`，已核对为 0.13.0，并包含 `src/constellation.js`、`src/rush.js`、九项恒星天赋、星链狂潮、v5 profile、15 项局内升级、9 种生态、7 种星门协议、5 类动态遭遇、64 种敌军构筑、真实 Electron 冒烟脚本、双语目录、游戏逻辑与 3D 渲染器。
+ZIP 为 157,680,790 字节，EXE 为 244,440,576 字节，解压后内容为 384,227,588 字节，共 76 个归档条目。ZIP 内部根目录使用 ASCII `SPACECRAFT-win32-x64`，避免跨平台解压工具误判中文文件夹编码；归档不包含 `__MACOSX` 或 `.DS_Store`，`unzip -tq` 完整性检查通过。`app.asar` 为 688,572 字节，SHA-256 为 `e300211ba56b003d415341b33be2f2787e55598486cb0dcd3ff1bc65c00d403a`，已核对为 0.14.0，并包含 `src/constellation.js`、`src/rush.js`、`src/relics.js`、九项恒星天赋、星链狂潮、七种双件套遗物协议、v5 profile、15 项局内升级、9 种生态、7 种星门协议、5 类动态遭遇、64 种敌军构筑、真实 Electron 冒烟脚本、双语目录、游戏逻辑与 3D 渲染器。
 
 Windows EXE 使用 `assets/icon.ico`，其中包含从 `favicon.svg` 直接渲染的 16、24、32、48、64、128 和 256px 图像。macOS 上可运行 `npm run icons` 重新生成 ICO、PNG 与 ICNS。
 

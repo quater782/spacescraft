@@ -517,6 +517,16 @@ kbd {
 .upgrade-choice p { margin: 0; color: #8c8a9f; font: 10px/1.55 system-ui, sans-serif; }
 .upgrade-level { align-self: end; color: #6f6d86; font-size: 8px; }
 .upgrade-choice.selected .upgrade-level { color: var(--cyan); }
+.upgrade-choice.protocol-ready { border-color: var(--protocol-color, #ffe56d); box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--protocol-color, #ffe56d) 70%, transparent); }
+.protocol-ready-badge { display: inline-flex; align-items: center; gap: 5px; padding: 5px 6px; border: 1px solid var(--protocol-color); color: var(--protocol-color); background: color-mix(in srgb, var(--protocol-color) 9%, #080918); font-size: 7px; line-height: 1.25; }
+.protocol-ready-badge svg { width: 12px; height: 12px; fill: currentColor; stroke: currentColor; }
+.protocol-cometDrive { --protocol-color: #69f7e4; }
+.protocol-phaseLance { --protocol-color: #9ed8ff; }
+.protocol-prismChoir { --protocol-color: #ff8fd2; }
+.protocol-stormCircuit { --protocol-color: #ffe56d; }
+.protocol-aegisNova { --protocol-color: #82b8ff; }
+.protocol-salvageReactor { --protocol-color: #91ff9d; }
+.protocol-resonantGyro { --protocol-color: #c993ff; }
 .draft-controls { margin: 13px 0 0 !important; color: #77758f !important; font-size: 8px !important; text-align: center; }
 
 .build-tray {
@@ -536,6 +546,7 @@ kbd {
 .build-chip { position: relative; display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid #414369; color: var(--cyan); background: #101229; }
 .build-chip.rare { color: #bd8cff; }
 .build-chip.legendary { color: #ffe56d; }
+.build-chip.protocol-chip { color: var(--protocol-color); border-color: var(--protocol-color); box-shadow: 0 0 10px color-mix(in srgb, var(--protocol-color) 38%, transparent), inset 0 0 8px color-mix(in srgb, var(--protocol-color) 16%, transparent); }
 .build-chip svg { width: 13px; height: 13px; fill: currentColor; stroke: currentColor; }
 .build-chip b { position: absolute; margin: 17px 0 0 17px; padding: 1px 2px; color: #080918; background: currentColor; font-size: 6px; }
 

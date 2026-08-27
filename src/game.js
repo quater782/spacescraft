@@ -80,6 +80,10 @@ const QA_WALLET_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-wallet");
 const QA_CONTRACTS_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-contracts");
 const QA_DRAFT_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-draft");
 const QA_RUSH_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-rush");
+const REQUESTED_QA_PROTOCOL = LOCAL_QA_HOST ? URL_PARAMS.get("qa-protocol") : null;
+const QA_PROTOCOL_ID = SpaceRelics.PROTOCOLS.some((protocol) => protocol.id === REQUESTED_QA_PROTOCOL)
+  ? REQUESTED_QA_PROTOCOL
+  : null;
 const REQUESTED_QA_PATH = LOCAL_QA_HOST ? Number.parseInt(URL_PARAMS.get("qa-path") || "", 10) : Number.NaN;
 const QA_PATH_INDEX = [0, 1, 2].includes(REQUESTED_QA_PATH) ? REQUESTED_QA_PATH : null;
 const REQUESTED_QA_ENCOUNTER = LOCAL_QA_HOST ? URL_PARAMS.get("qa-encounter") : null;
@@ -87,11 +91,12 @@ const QA_ENCOUNTER_ID = SpaceExpedition.ENCOUNTER_PROTOCOLS.some((encounter) => 
   ? REQUESTED_QA_ENCOUNTER
   : null;
 const REQUESTED_RUN_SEED = Number.parseInt(URL_PARAMS.get("seed") || "", 10);
-const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_RUSH_MODE && "rush", QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`].filter(Boolean).join("+") || "off";
+const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_RUSH_MODE && "rush", QA_PROTOCOL_ID && `protocol-${QA_PROTOCOL_ID}`, QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`].filter(Boolean).join("+") || "off";
 const t = (key, variables) => SpaceI18n.t(key, variables);
 const UPGRADE_DEFS = SpaceRoguelike.UPGRADE_DEFS;
 const TALENT_NODES = SpaceConstellation.TALENT_NODES;
 const RUSH_CONFIG = SpaceRush.RUSH_CONFIG;
+const PROTOCOLS = SpaceRelics.PROTOCOLS;
 
 ctx.imageSmoothingEnabled = false;
 
@@ -782,6 +787,11 @@ class AudioEngine {
       if (s % 2 === 0) this.kick(when + .025);
       if (s % 4 === 3) this.noise(.028, .028, when, 5200, this.musicBus);
     }
+    if (world.activeProtocols?.length && (s === 5 || s === 13)) {
+      const signature = world.activeProtocols[0].id.length % 7;
+      this.tone(root + 19 + signature + (s === 13 ? 12 : 0), .12, "triangle", .022 * intensity, when, this.musicBus, 4);
+      this.tone(root + 31 + signature, .055, "square", .012, when + .035, this.musicBus, -3);
+    }
   }
 
   sfx(name, owner = 0) {
@@ -880,6 +890,13 @@ class AudioEngine {
     } else if (name === "rushEnd") {
       [74, 67, 62, 55].forEach((note, index) => this.tone(note, .2, index % 2 ? "triangle" : "square", .045, now + index * .055, this.sfxBus, -5));
       this.noise(.18, .04, now + .04, 900);
+    } else if (name === "protocolOnline") {
+      [48, 55, 60, 67, 72, 79, 84].forEach((note, index) => this.tone(note, .34, index % 2 ? "square" : "triangle", .055, now + index * .048, this.sfxBus, 5));
+      this.tone(36, .68, "sawtooth", .07, now, this.sfxBus, 12);
+      this.noise(.36, .075, now + .08, 2600);
+    } else if (name === "protocolProc") {
+      [76, 83, 88].forEach((note, index) => this.tone(note, .085, index === 1 ? "triangle" : "square", .026, now + index * .018, this.sfxBus, 3));
+      this.noise(.045, .018, now, 5600);
     } else if (name === "stageClear") {
       [60, 64, 67, 72, 76, 79].forEach((note, i) => this.tone(note, .22, i % 2 ? "square" : "triangle", .06, now + i * .075, this.sfxBus));
     } else if (name === "unlock") {
@@ -981,6 +998,10 @@ const world = {
   rushCount: 0,
   rushPulseTimer: 0,
   rushLastBonus: 0,
+  activeProtocols: [],
+  protocolProcs: 0,
+  protocolFlashTimer: 0,
+  protocolSoundTimer: 0,
 };
 
 const activeStage = (index = world.stageIndex) => world.routeStages[index] || STAGES[index] || STAGES[0];
@@ -1138,27 +1159,44 @@ function upgradeIcon(upgradeId) {
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[upgradeId] || paths.novaCore}</svg>`;
 }
 
+function protocolIcon(protocolId) {
+  const paths = {
+    cometDrive: '<path d="M3 12h8l-4-4 2-2 8 6-8 6-2-2 4-4H3Zm14-7h4v4h-4V5Zm0 10h4v4h-4v-4Z"/>',
+    phaseLance: '<path d="M3 11h11V6l8 6-8 6v-5H3v-2Zm5-6h2v14H8V5Z"/>',
+    prismChoir: '<path d="m12 2 6 7-6 7-6-7 6-7Zm0 6-2 2 2 2 2-2-2-2Zm-8 9 4-3 2 3-4 4-2-4Zm16 0-4-3-2 3 4 4 2-4Z"/>',
+    stormCircuit: '<path d="M8 3h8l-2 6h5l-9 12 2-8H6L8 3Zm-5 7h4v3H3v-3Zm14 2h4v3h-4v-3Z"/>',
+    aegisNova: '<path d="m12 2 8 3v6c0 5-3 8.5-8 11-5-2.5-8-6-8-11V5l8-3Zm0 5-1.3 3.7L7 12l3.7 1.3L12 17l1.3-3.7L17 12l-3.7-1.3L12 7Z"/>',
+    salvageReactor: '<path d="M5 3h5v7a2 2 0 0 0 4 0V3h5v7a7 7 0 0 1-14 0V3Zm7 11 2 3h-2l1 4-4-6h2l-1-3 2 2Z"/>',
+    resonantGyro: '<circle cx="6" cy="12" r="3"/><circle cx="18" cy="12" r="3"/><path d="M9 12h6M12 3a9 9 0 0 1 9 9h-3l4 4 2-7h-3M12 21a9 9 0 0 1-9-9h3L2 8 0 15h3"/>',
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[protocolId] || paths.cometDrive}</svg>`;
+}
+
 function upgradeLevel(upgradeId) {
   return world.upgrades[upgradeId] || 0;
 }
 
 function rollDraftOptions() {
-  return SpaceRoguelike.rollDraftOptions({
+  const choices = SpaceRoguelike.rollDraftOptions({
     levels: world.upgrades,
     stageIndex: world.stageIndex,
     random,
   });
+  return SpaceRelics.injectProtocolChoice({ choices, levels: world.upgrades, upgrades: UPGRADE_DEFS, random });
 }
 
 function renderBuildTray() {
   const uniqueIds = [...new Set(world.upgradeHistory)];
-  buildTray.hidden = uniqueIds.length === 0 || ["menu", "ended"].includes(world.mode);
-  buildTray.innerHTML = uniqueIds.map((id) => {
+  const protocols = world.activeProtocols || [];
+  buildTray.hidden = (uniqueIds.length === 0 && protocols.length === 0) || ["menu", "ended"].includes(world.mode);
+  const upgrades = uniqueIds.map((id) => {
     const upgrade = UPGRADE_DEFS.find((entry) => entry.id === id);
     if (!upgrade) return "";
     const level = upgradeLevel(id);
     return `<span class="build-chip ${upgrade.rarity}" aria-label="${localizedName(upgrade)} Lv.${level}">${upgradeIcon(id)}<b>${level}</b></span>`;
   }).join("");
+  const protocolChips = protocols.map((protocol) => `<span class="build-chip protocol-chip protocol-${protocol.id}" aria-label="${t("hud.protocolOnline", { protocol: localizedName(protocol) })}">${protocolIcon(protocol.id)}</span>`).join("");
+  buildTray.innerHTML = upgrades + protocolChips;
 }
 
 function renderResultBuild() {
@@ -1174,11 +1212,14 @@ function renderResultBuild() {
   const encounterChip = encounters ? `<span>${t("result.encounters", { encounters })}</span>` : "";
   const talentChip = `<span>${t("result.talents", { current: profile.talents.length, total: TALENT_NODES.length })}</span>`;
   const rushChip = `<span>${t("result.rushSummary", { count: world.rushCount, chain: world.rushBestChain, score: world.rushLastBonus })}</span>`;
+  const protocolChip = world.activeProtocols.length
+    ? `<span>${t("result.protocols", { protocols: world.activeProtocols.map(localizedName).join(t("result.separator")) })}</span>`
+    : `<span>${t("result.protocolsEmpty")}</span>`;
   const upgradeChips = uniqueIds.map((id) => {
     const upgrade = UPGRADE_DEFS.find((entry) => entry.id === id);
     return upgrade ? `<span>${upgradeIcon(id)}${localizedName(upgrade)} <b>Lv.${upgradeLevel(id)}</b></span>` : "";
   }).join("");
-  resultBuild.innerHTML = seedChip + talentChip + rushChip + routeChip + pathChip + encounterChip + (upgradeChips || `<span>${t("result.buildEmpty")}</span>`);
+  resultBuild.innerHTML = seedChip + talentChip + rushChip + protocolChip + routeChip + pathChip + encounterChip + (upgradeChips || `<span>${t("result.buildEmpty")}</span>`);
 }
 
 function renderUpgradeDraft(focusSelected = false) {
@@ -1187,7 +1228,9 @@ function renderUpgradeDraft(focusSelected = false) {
   upgradeOptions.innerHTML = world.draftOptions.map((upgrade, index) => {
     const selected = index === world.draftIndex;
     const nextLevel = upgradeLevel(upgrade.id) + 1;
-    return `<button class="upgrade-choice ${upgrade.rarity} ${selected ? "selected" : ""}" type="button" role="listitem" data-upgrade-id="${upgrade.id}" aria-pressed="${selected}" aria-label="${t("draft.choose", { name: localizedName(upgrade) })}"><span class="upgrade-icon">${upgradeIcon(upgrade.id)}</span><span class="upgrade-kicker"><i>${t(`draft.category.${upgrade.category}`)}</i><b>${t(`draft.rarity.${upgrade.rarity}`)}</b></span><strong>${localizedName(upgrade)}</strong><p>${localizedDescription(upgrade)}</p><span class="upgrade-level">${t("draft.level", { current: nextLevel, max: upgrade.max })}</span></button>`;
+    const protocol = SpaceRelics.protocolUnlockedByChoice(world.upgrades, upgrade.id);
+    const protocolBadge = protocol ? `<span class="protocol-ready-badge protocol-${protocol.id}">${protocolIcon(protocol.id)}${t("draft.protocolReady", { protocol: localizedName(protocol) })}</span>` : "";
+    return `<button class="upgrade-choice ${upgrade.rarity} ${protocol ? `protocol-ready protocol-${protocol.id}` : ""} ${selected ? "selected" : ""}" type="button" role="listitem" data-upgrade-id="${upgrade.id}" aria-pressed="${selected}" aria-label="${t("draft.choose", { name: localizedName(upgrade) })}"><span class="upgrade-icon">${upgradeIcon(upgrade.id)}</span><span class="upgrade-kicker"><i>${t(`draft.category.${upgrade.category}`)}</i><b>${t(`draft.rarity.${upgrade.rarity}`)}</b></span><strong>${localizedName(upgrade)}</strong><p>${localizedDescription(upgrade)}</p>${protocolBadge}<span class="upgrade-level">${t("draft.level", { current: nextLevel, max: upgrade.max })}</span></button>`;
   }).join("");
   if (focusSelected) upgradeOptions.querySelector(`[data-upgrade-id="${world.draftOptions[world.draftIndex]?.id}"]`)?.focus();
 }
@@ -1213,6 +1256,7 @@ function moveDraftSelection(direction) {
 }
 
 function applyRunUpgrade(upgrade) {
+  const previousProtocols = new Set(world.activeProtocols.map((protocol) => protocol.id));
   const level = upgradeLevel(upgrade.id) + 1;
   if (level > upgrade.max) return;
   world.upgrades[upgrade.id] = level;
@@ -1220,10 +1264,23 @@ function applyRunUpgrade(upgrade) {
   for (const player of world.players) {
     SpaceRoguelike.applyUpgradeToPlayer(player, upgrade.id, level);
   }
-  audio.sfx("upgrade");
+  world.activeProtocols = SpaceRelics.activeProtocols(world.upgrades);
+  const activated = world.activeProtocols.find((protocol) => !previousProtocols.has(protocol.id));
+  if (activated) {
+    world.protocolFlashTimer = 1.15;
+    world.flash = Math.max(world.flash, .42);
+    world.shake = Math.max(world.shake, .3);
+    for (const player of world.players) burst(player.x, player.y, activated.color, 30, 105);
+    audio.sfx("protocolOnline");
+    pulseGamepad(0, 240, .48, .4);
+    pulseGamepad(1, 240, .48, .4);
+    showToast(t("toast.protocolOnline", { protocol: localizedName(activated) }));
+  } else {
+    audio.sfx("upgrade");
+    showToast(t("toast.upgrade", { name: localizedName(upgrade), level }));
+  }
   pulseGamepad(0, 220, .55, .42);
   pulseGamepad(1, 220, .55, .42);
-  showToast(t("toast.upgrade", { name: localizedName(upgrade), level }));
 }
 
 function confirmDraftSelection() {
@@ -1553,6 +1610,7 @@ function createPlayer(index) {
     downTimer: 0,
     revive: 0,
     shots: 0,
+    protocolCooldown: 0,
   };
   return SpaceConstellation.applyToPlayer(player, profile.talents);
 }
@@ -1673,6 +1731,10 @@ function resetWorld() {
   world.rushCount = 0;
   world.rushPulseTimer = 0;
   world.rushLastBonus = 0;
+  world.activeProtocols = [];
+  world.protocolProcs = 0;
+  world.protocolFlashTimer = 0;
+  world.protocolSoundTimer = 0;
   world.routeStages = STAGES.map((stage, index) => {
     const biome = world.biomes[index];
     return {
@@ -1735,6 +1797,15 @@ function resetWorld() {
   world.variantNoticeCooldown = 0;
   world.volatileResolving = false;
   world.players = [createPlayer(0), createPlayer(1)];
+  if (QA_PROTOCOL_ID) {
+    const protocol = PROTOCOLS.find((entry) => entry.id === QA_PROTOCOL_ID);
+    for (const upgradeId of protocol.required) {
+      world.upgrades[upgradeId] = 1;
+      world.upgradeHistory.push(upgradeId);
+      for (const player of world.players) SpaceRoguelike.applyUpgradeToPlayer(player, upgradeId, 1);
+    }
+    world.activeProtocols = SpaceRelics.activeProtocols(world.upgrades);
+  }
   world.bullets = [];
   world.enemyBullets = [];
   world.enemies = [];
@@ -1791,6 +1862,35 @@ function burst(x, y, color, count = 8, speed = 55) {
       size: visualRandom() < 0.4 ? 2 : 1,
     });
   }
+}
+
+const relicBonuses = () => SpaceRelics.combatBonuses(world.upgrades);
+
+function markProtocolProc(protocolId, x, y) {
+  const protocol = PROTOCOLS.find((entry) => entry.id === protocolId);
+  if (!protocol) return;
+  world.protocolProcs += 1;
+  world.protocolFlashTimer = Math.max(world.protocolFlashTimer, .38);
+  burst(x, y, protocol.color, 8, 58);
+  if (world.protocolSoundTimer <= 0) {
+    audio.sfx("protocolProc");
+    world.protocolSoundTimer = .14;
+  }
+}
+
+function triggerAegisNova(player) {
+  if (!relicBonuses().aegisNova || player.protocolCooldown > 0) return;
+  player.protocolCooldown = 2.2;
+  for (const bullet of world.enemyBullets) {
+    if (!bullet.dead && distance(player, bullet) <= 64) bullet.dead = true;
+  }
+  for (const enemy of world.enemies) {
+    if (enemy.dead || distance(player, enemy) > 72) continue;
+    damageEnemy(enemy, enemy.boss ? 5 : 12);
+    if (enemy.hp <= 0) killEnemy(enemy, player.index);
+  }
+  burst(player.x, player.y, "#82b8ff", 28, 112);
+  markProtocolProc("aegisNova", player.x, player.y);
 }
 
 const rushActive = () => world.rushTimer > 0;
@@ -1864,7 +1964,8 @@ function updateRush(dt) {
     return;
   }
   const eligible = world.introTimer <= 0 && world.clearTimer <= 0 && !world.routeChoice;
-  world.rushCharge = SpaceRush.advanceCharge(world.rushCharge, dt, world.linked, eligible);
+  const linkedCharge = world.linked ? relicBonuses().linkedCharge : 1;
+  world.rushCharge = SpaceRush.advanceCharge(world.rushCharge, dt * linkedCharge, world.linked, eligible);
   if (world.rushCharge >= RUSH_CONFIG.threshold && world.rushCooldown <= 0) startRush();
 }
 
@@ -2219,6 +2320,8 @@ function updateBoss(boss, dt) {
 function playerShoot(player) {
   const config = PLAYER_CONFIG[player.index];
   const rush = SpaceRush.combatMultipliers(rushActive());
+  const relic = relicBonuses();
+  const movingFast = Math.hypot(player.vx, player.vy) > player.speed * .42;
   const patterns = [
     [{ x: 0, vx: 0, damage: 1.25 }],
     [{ x: -3, vx: -5, damage: 1.15 }, { x: 3, vx: 5, damage: 1.15 }],
@@ -2232,11 +2335,13 @@ function playerShoot(player) {
       y: player.y - 9,
       vx: shot.vx,
       vy: -player.projectileSpeed,
-      r: 2,
-      damage: shot.damage * player.damage * damageScale * rush.damage * (world.activeBranch?.reward.damage || 1),
+      r: shot.r || (relic.phaseLance ? 2.7 : 2),
+      damage: shot.damage * player.damage * damageScale * rush.damage * relic.phaseDamage * (world.activeBranch?.reward.damage || 1),
       owner: player.index,
-      color: config.color,
-      pierceLeft: player.pierce,
+      color: shot.color || (relic.phaseLance ? "#d7f1ff" : config.color),
+      pierceLeft: player.pierce + (relic.phaseLance ? 1 : 0),
+      phaseBarrier: relic.phaseLance,
+      seeker: shot.seeker || 0,
       hitIds: [],
       dead: false,
     });
@@ -2248,10 +2353,20 @@ function playerShoot(player) {
   if (player.droneLevel > 0 && player.shots % 3 === 2) {
     const offset = 11 + player.droneLevel * 3;
     const spread = 25 + player.droneLevel * 5;
-    addShot({ x: -offset, vx: -spread, damage: .72 }, 1 + (player.droneLevel - 1) * .16);
-    addShot({ x: offset, vx: spread, damage: .72 }, 1 + (player.droneLevel - 1) * .16);
+    addShot({ x: -offset, vx: -spread, damage: .72, seeker: relic.seekerTurn }, 1 + (player.droneLevel - 1) * .16);
+    addShot({ x: offset, vx: spread, damage: .72, seeker: relic.seekerTurn }, 1 + (player.droneLevel - 1) * .16);
+    if (relic.prismChoir) {
+      addShot({ x: -offset - 5, vx: -spread * 1.35, damage: .48, seeker: relic.seekerTurn, color: "#ff8fd2" });
+      addShot({ x: offset + 5, vx: spread * 1.35, damage: .48, seeker: relic.seekerTurn, color: "#ff8fd2" });
+      markProtocolProc("prismChoir", player.x, player.y - 8);
+    }
   }
-  player.fireTimer = Math.max(0.065, (0.2 - player.weapon * 0.016) / (player.fireRate * rush.fireRate));
+  if (relic.cometDrive && movingFast && player.shots % 4 === 3) {
+    addShot({ x: -9, vx: -54, damage: .62, color: "#69f7e4" });
+    addShot({ x: 9, vx: 54, damage: .62, color: "#69f7e4" });
+    markProtocolProc("cometDrive", player.x, player.y);
+  }
+  player.fireTimer = Math.max(0.06, (0.2 - player.weapon * 0.016) / (player.fireRate * rush.fireRate * (movingFast ? relic.movingFireRate : 1)));
   player.shots += 1;
   audio.sfx("shoot", player.index);
 }
@@ -2317,6 +2432,7 @@ function damagePlayer(player) {
     burst(player.x, player.y, "#9be9ff", 8, 45);
     audio.sfx("shield");
     pulseGamepad(player.index, 80, 0.16, 0.34);
+    triggerAegisNova(player);
     return true;
   }
 
@@ -2362,6 +2478,7 @@ function updatePlayers(dt) {
     player.controls = controls;
     player.invulnerability = Math.max(0, player.invulnerability - dt);
     player.fireTimer -= dt;
+    player.protocolCooldown = Math.max(0, player.protocolCooldown - dt);
 
     if (player.downed) {
       player.downTimer -= dt;
@@ -2381,6 +2498,7 @@ function updatePlayers(dt) {
           player.shieldRegenTimer = player.shieldRegenInterval;
           burst(player.x, player.y, "#9be9ff", 10, 38);
           audio.sfx("shield");
+          triggerAegisNova(player);
         }
       } else {
         player.shieldRegenTimer = player.shieldRegenInterval;
@@ -2416,12 +2534,14 @@ function updatePlayers(dt) {
   const linked = !p1.downed && !p2.downed && distance(p1, p2) < linkRange;
   if (linked) {
     const rush = SpaceRush.combatMultipliers(rushActive());
+    const relic = relicBonuses();
     world.beamTimer -= dt;
     if (world.beamTimer <= 0) {
       world.beamTimer = 0.12 / rush.linkRate;
       for (const enemy of world.enemies) {
-        if (!enemy.dead && pointToSegmentDistance(enemy.x, enemy.y, p1.x, p1.y, p2.x, p2.y) < enemy.r + 3) {
-          damageEnemy(enemy, 1.2 * rush.linkDamage * ((p1.beamDamage + p2.beamDamage) * .5));
+        if (!enemy.dead && pointToSegmentDistance(enemy.x, enemy.y, p1.x, p1.y, p2.x, p2.y) < enemy.r + 3 + relic.beamRadius) {
+          damageEnemy(enemy, 1.2 * rush.linkDamage * relic.beamDamage * ((p1.beamDamage + p2.beamDamage) * .5));
+          if (relic.resonantGyro && world.protocolSoundTimer <= 0) markProtocolProc("resonantGyro", enemy.x, enemy.y);
           p1.energy = clamp(p1.energy + 0.45 * p1.energyGain, 0, 100);
           p2.energy = clamp(p2.energy + 0.45 * p2.energyGain, 0, 100);
           if (enemy.hp <= 0) killEnemy(enemy, 0);
@@ -2450,21 +2570,23 @@ function killEnemy(enemy, owner = 0) {
 
   if (!enemy.boss && player?.chainDamage > 0 && !world.chainResolving) {
     const chainLevel = upgradeLevel("chain");
-    const radius = 52 + Math.max(0, chainLevel - 1) * 12;
+    const relic = relicBonuses();
+    const radius = 52 + Math.max(0, chainLevel - 1) * 12 + (relic.stormCircuit ? 14 : 0);
     const targets = world.enemies
       .filter((target) => !target.dead && target !== enemy && distance(enemy, target) <= radius)
       .sort((a, b) => distance(enemy, a) - distance(enemy, b))
-      .slice(0, 2 + chainLevel);
+      .slice(0, 2 + chainLevel + relic.chainTargets);
     world.chainResolving = true;
     try {
       for (const target of targets) {
-        damageEnemy(target, player.chainDamage);
+        damageEnemy(target, player.chainDamage * relic.chainDamage);
         burst(target.x, target.y, "#b6f7ff", 5, 42);
         if (target.hp <= 0) killEnemy(target, owner);
       }
     } finally {
       world.chainResolving = false;
     }
+    if (targets.length && relic.stormCircuit) markProtocolProc("stormCircuit", enemy.x, enemy.y);
   }
 
   if (!enemy.boss && enemy.volatileRadius > 0 && !world.volatileResolving) {
@@ -2512,6 +2634,28 @@ function applyPickup(player, pickup) {
   else player.energy = Math.min(100, player.energy + 40 * player.energyGain);
   pickup.dead = true;
   addRushCharge("pickup");
+  const relic = relicBonuses();
+  if (relic.salvageReactor) {
+    player.energy = Math.min(100, player.energy + relic.pickupEnergy * player.energyGain);
+    if (!rushActive()) world.rushCharge = SpaceRush.clampCharge(world.rushCharge + relic.pickupRush);
+    for (let index = 0; index < 8; index += 1) {
+      const angle = index / 8 * TAU;
+      world.bullets.push({
+        x: pickup.x,
+        y: pickup.y,
+        vx: Math.cos(angle) * 128,
+        vy: Math.sin(angle) * 128,
+        r: 2.4,
+        damage: 5.5 * player.damage,
+        owner: player.index,
+        color: "#91ff9d",
+        pierceLeft: 1,
+        hitIds: [],
+        dead: false,
+      });
+    }
+    markProtocolProc("salvageReactor", pickup.x, pickup.y);
+  }
   burst(pickup.x, pickup.y, PLAYER_CONFIG[player.index].light, 15, 65);
   audio.sfx("pickup");
   pulseGamepad(player.index, 75, 0.08, 0.28);
@@ -2756,9 +2900,23 @@ function updateStage(dt) {
 
 function updateObjects(dt) {
   for (const bullet of world.bullets) {
+    if (bullet.seeker > 0) {
+      const target = world.enemies
+        .filter((enemy) => !enemy.dead && !bullet.hitIds?.includes(enemy.id))
+        .sort((a, b) => distance(bullet, a) - distance(bullet, b))[0];
+      if (target) {
+        const speed = Math.max(80, Math.hypot(bullet.vx, bullet.vy));
+        const dx = target.x - bullet.x;
+        const dy = target.y - bullet.y;
+        const range = Math.max(1, Math.hypot(dx, dy));
+        const turn = 1 - Math.exp(-dt * bullet.seeker);
+        bullet.vx = lerp(bullet.vx, dx / range * speed, turn);
+        bullet.vy = lerp(bullet.vy, dy / range * speed, turn);
+      }
+    }
     bullet.x += bullet.vx * dt;
     bullet.y += bullet.vy * dt;
-    if (bullet.y < -12 || bullet.x < -12 || bullet.x > W + 12) bullet.dead = true;
+    if (bullet.y < -12 || bullet.y > H + 12 || bullet.x < -12 || bullet.x > W + 12) bullet.dead = true;
   }
 
   for (const bullet of world.enemyBullets) {
@@ -2846,9 +3004,10 @@ function handleCollisions() {
         }
         const damage = damageEnemy(enemy, bullet.damage);
         bullet.hitIds?.push(enemy.id);
-        if (damage.barrier > 0) bullet.dead = true;
+        if (damage.barrier > 0 && !bullet.phaseBarrier) bullet.dead = true;
         else if (bullet.pierceLeft > 0) bullet.pierceLeft -= 1;
         else bullet.dead = true;
+        if (damage.barrier > 0 && bullet.phaseBarrier) markProtocolProc("phaseLance", bullet.x, bullet.y);
         if (enemy.boss) world.shake = Math.max(world.shake, .035);
         const owner = world.players[bullet.owner];
         owner.energy = clamp(owner.energy + 0.28 * owner.energyGain, 0, 100);
@@ -2957,6 +3116,8 @@ function update(dt) {
   }
 
   world.time += dt;
+  world.protocolFlashTimer = Math.max(0, world.protocolFlashTimer - dt);
+  world.protocolSoundTimer = Math.max(0, world.protocolSoundTimer - dt);
   if (world.routeChoice) {
     world.shake = Math.max(0, world.shake - dt * 2.2);
     world.flash = Math.max(0, world.flash - dt * 2.7);
@@ -3597,6 +3758,10 @@ function drawHud() {
     ctx.globalAlpha = 1;
   }
   if (world.linked) pixelText(t("hud.resonance"), W / 2, H - 8, "#92fff0", "center", 6);
+  if (world.activeProtocols.length) {
+    const protocol = world.activeProtocols[0];
+    pixelText(t("hud.protocolActive", { protocol: localizedName(protocol), procs: world.protocolProcs }), 9, H - 8, protocol.color, "left", 5.5);
+  }
 
   if (world.boss) {
     pixelText(stageText(stage, "boss"), W / 2, 34, stage.accent, "center", 7);
@@ -3834,6 +3999,9 @@ function draw() {
   canvas.dataset.rushBestChain = String(world.rushBestChain);
   canvas.dataset.rushCount = String(world.rushCount);
   canvas.dataset.rushLastBonus = String(world.rushLastBonus);
+  canvas.dataset.protocols = world.activeProtocols.map((protocol) => protocol.id).join(",");
+  canvas.dataset.protocolCount = String(world.activeProtocols.length);
+  canvas.dataset.protocolProcs = String(world.protocolProcs);
   canvas.dataset.hudResolution = `${canvas.width}x${canvas.height}`;
   canvas.dataset.hudScale = `${hudScaleX.toFixed(3)}x${hudScaleY.toFixed(3)}`;
 }

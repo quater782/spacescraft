@@ -20,7 +20,7 @@ http://127.0.0.1:4173/?qa-fast
 
 此模式仅在 `localhost` 或 `127.0.0.1` 生效，会加速章节时间并降低 Boss 测试耐久，用于快速检查九个事件、三场精英战、Boss 阶段和完整通关路径。测试结果不会写入出航、通关、最高分等生涯统计，也不会在正式域名或 Electron 文件协议下启用。
 
-自动化或人工检查可以读取 `#game` 上的 `data-mode`、`data-language`、`data-stage`、`data-stage-time`、`data-events`、`data-enemies`、`data-boss-phase`、`data-player-hp`、`data-fps` 与 `data-qa` 诊断属性。机库、合约、构筑与远征还提供 `data-frame`、`data-module`、`data-contract`、`data-talents`、`data-talent-count`、`data-score-multiplier`、`data-player-shield`、`data-player-speed`、`data-player-fire-rate`、`data-player-damage`、`data-player-energy-gain`、`data-achievement-count`、`data-stardust-reward`、`data-run-seed`、`data-upgrade-count`、`data-upgrades`、`data-draft-options`、`data-route-signature`、`data-biome`、`data-enemy-variants`、`data-active-builds`、`data-path-plan`、`data-active-path`、`data-path-options`、`data-path-selection`、`data-path-history`、`data-encounter-plan`、`data-active-encounter`、`data-encounter-progress`、`data-encounter-objects`、`data-encounter-history` 及七项 `data-rush-*` 狂潮状态。
+自动化或人工检查可以读取 `#game` 上的 `data-mode`、`data-language`、`data-stage`、`data-stage-time`、`data-events`、`data-enemies`、`data-boss-phase`、`data-player-hp`、`data-fps` 与 `data-qa` 诊断属性。机库、合约、构筑与远征还提供 `data-frame`、`data-module`、`data-contract`、`data-talents`、`data-talent-count`、`data-score-multiplier`、`data-player-shield`、`data-player-speed`、`data-player-fire-rate`、`data-player-damage`、`data-player-energy-gain`、`data-achievement-count`、`data-stardust-reward`、`data-run-seed`、`data-upgrade-count`、`data-upgrades`、`data-draft-options`、`data-protocols`、`data-protocol-count`、`data-protocol-procs`、`data-route-signature`、`data-biome`、`data-enemy-variants`、`data-active-builds`、`data-path-plan`、`data-active-path`、`data-path-options`、`data-path-selection`、`data-path-history`、`data-encounter-plan`、`data-active-encounter`、`data-encounter-progress`、`data-encounter-objects`、`data-encounter-history` 及七项 `data-rush-*` 狂潮状态。
 
 ### 本地机库经济测试
 
@@ -47,6 +47,16 @@ http://127.0.0.1:4173/?qa-fast&qa-draft&seed=20260826
 ```
 
 构筑页同样遵循“只控制方向”的产品约束：左右选择，上下确认；P1 可使用 WASD，P2 可使用方向键。`npm run verify` 会额外检查 15 项升级效果、同种子复现、类别覆盖、满级过滤、早期稀有度权重、叠层和玩法/视觉随机源隔离，并验证 9 种生态、64 种敌军构筑、第一章安全包络与后期模块多样性。
+
+### 遗物协议测试
+
+第一次构筑选择任意协议组件后，下一次三选一必须至少包含一件仍可升级的配套组件，并用协议色矢量徽记标记“将激活”；同一 seed 和选择历史必须复现相同配套项。可用 `qa-protocol` 在本机直接预置任一两件套：
+
+```text
+http://127.0.0.1:4173/?qa-fast&qa-protocol=cometDrive&qa-path=1&qa-encounter=relay&seed=2
+```
+
+可选稳定 ID：`cometDrive`、`phaseLance`、`prismChoir`、`stormCircuit`、`aegisNova`、`salvageReactor`、`resonantGyro`。检查 `data-protocols`、`data-protocol-count` 和 `data-protocol-procs`，并确认构筑托盘 SVG、HUD、3D 轨道遗物与自动触发音效。测试期间只发送方向输入，不得出现协议触发键。
 
 ### 星门分支测试
 
@@ -84,7 +94,7 @@ http://127.0.0.1:4173/?qa-fast&qa-rush&qa-path=1&qa-encounter=relay&seed=2
 npm run smoke:electron
 ```
 
-成功输出必须同时包含 `talentPurchase.owned: true`、`talentCount: "1"`、双机 `playerSpeed` 大于 96、`rushActive: "true"`、`rushCount: "1"`、`encounterHistory: "relay:success"`、`webgl: true`、`consoleErrors: 0`、接近 60 的 `fps` 和不低于 CSS 显示尺寸的 `hudResolution`；`settledRush` 还必须记录 `rushActive: "false"` 和大于 0 的 `rushLastBonus`。这项测试不能替代可见窗口下对自然充能时长、九天赋组合、其余四类目标、Boss 狂潮音频、双人和手柄的人工回归。
+成功输出必须同时包含 `talentPurchase.owned: true`、`talentCount: "1"`、`protocols: "cometDrive"`、`protocolCount: "1"`、大于 0 的 `protocolProcs`、双机 `playerSpeed` 大于 109、`rushActive: "true"`、`rushCount: "1"`、`encounterHistory: "relay:success"`、`webgl: true`、`consoleErrors: 0`、接近 60 的 `fps` 和不低于 CSS 显示尺寸的 `hudResolution`；`settledRush` 还必须记录 `rushActive: "false"` 和大于 0 的 `rushLastBonus`。这项测试不能替代可见窗口下对其余六协议、自然构筑/充能、九天赋组合、其余四类目标、Boss 音频、双人和手柄的人工回归。
 
 ## 桌面版本
 
@@ -120,13 +130,15 @@ npm start
 16. 覆盖信标、回收、护航、陨星和裂隙，检查单人 AI、双人目标、成功/错失、奖励、3D 实体、遭遇音乐和结果历史；运行 `npm run smoke:electron`。
 17. 使用测试钱包按三条依赖链点亮九项天赋，检查精确扣款、刷新持久化、双机属性、前置拒绝、v4 迁移和清档恢复。
 18. 在自然充能和 `qa-rush` 两条路径检查自动触发、火力倍率、拾取牵引、光链消弹、击破延时、3D 能量环、动态音乐、结算与七项诊断。
-19. 更新 `CHANGELOG.md`、[当前项目状态](./PROJECT-STATE.md)、发行说明和相关设计文档。
+19. 逐项覆盖七种遗物协议，检查第二次构筑配套注入、方向确认、自动触发、SVG/HUD/3D、协议音乐、结果摘要与 CSP 控制台。
+20. 更新 `CHANGELOG.md`、[当前项目状态](./PROJECT-STATE.md)、发行说明和相关设计文档。
 
 ## 架构
 
 - `src/renderer3d.js`：原生 WebGL 渲染、矩阵、着色器和 3D 模型。
 - `src/game.js`：固定时间步、关卡、碰撞、AI、音频和 HUD。
 - `src/roguelike.js`：局内升级池、确定性 RNG、候选生成和升级效果。
+- `src/relics.js`：七种两件套协议、激活判定、配套候选注入和自动协同倍率。
 - `src/constellation.js`：九项长期天赋、前置依赖、购买判定、存档清洗和玩家效果。
 - `src/rush.js`：星链狂潮阈值、事件充能、共振增益/衰减和自动战斗倍率。
 - `src/expedition.js`：生态航线、星门协议/航道判定、动态遭遇计划/结果判定、敌型权重与模块化敌军组装规则。
@@ -136,6 +148,7 @@ npm start
 - `scripts/build-icons.mjs`：从 SVG 母版生成多分辨率桌面图标。
 - `scripts/verify-localization.mjs`：收集 HTML 与游戏逻辑引用键，验证两种语言完整覆盖。
 - `scripts/verify-roguelike.mjs`：验证构筑池、随机复现、权重、满级过滤与全部升级效果。
+- `scripts/verify-relics.mjs`：验证七种精确配对、双语、候选注入、战斗效果、首章安全与 3D 接线。
 - `scripts/verify-constellation.mjs`：验证九项天赋、三条依赖、购买门槛、存档清洗与实际属性效果。
 - `scripts/verify-rush.mjs`：验证六类事件、充能边界、共振速率、战斗倍率、QA 与 3D 接线。
 - `scripts/verify-expedition.mjs`：验证生态、星门、动态遭遇、敌军组合、早期安全、后期多样性与 3D 集成。

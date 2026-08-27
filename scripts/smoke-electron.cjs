@@ -44,7 +44,7 @@ async function run() {
   window.webContents.on("console-message", (_event, level, message) => {
     if (level >= 2) errors.push(message);
   });
-  await window.loadURL(`http://127.0.0.1:${port}/?qa-fast&qa-wallet&qa-rush&qa-path=1&qa-encounter=relay&seed=2`);
+  await window.loadURL(`http://127.0.0.1:${port}/?qa-fast&qa-wallet&qa-rush&qa-protocol=cometDrive&qa-path=1&qa-encounter=relay&seed=2`);
   const talentState = await window.webContents.executeJavaScript(`(() => {
     document.querySelector('#hangarButton').click();
     document.querySelector('[data-talent-id="vectorThrusters"]').click();
@@ -68,7 +68,7 @@ async function run() {
     await delay(100);
     state = await window.webContents.executeJavaScript(`(() => {
       const game = document.querySelector('#game');
-      return Object.fromEntries(['mode', 'qa', 'stage', 'fps', 'activeEncounter', 'encounterProgress', 'encounterObjects', 'encounterPlan', 'hudResolution', 'talents', 'talentCount', 'playerSpeed', 'rushActive', 'rushCharge', 'rushTimer', 'rushChain', 'rushBestChain', 'rushCount'].map((key) => [key, game.dataset[key]]));
+      return Object.fromEntries(['mode', 'qa', 'stage', 'fps', 'activeEncounter', 'encounterProgress', 'encounterObjects', 'encounterPlan', 'hudResolution', 'talents', 'talentCount', 'playerSpeed', 'rushActive', 'rushCharge', 'rushTimer', 'rushChain', 'rushBestChain', 'rushCount', 'protocols', 'protocolCount', 'protocolProcs'].map((key) => [key, game.dataset[key]]));
     })()`);
     if (state.activeEncounter === "relay" && state.rushCount === "1") break;
   }
@@ -87,6 +87,16 @@ async function run() {
     if (encounterHistory) break;
   }
   if (encounterHistory !== "relay:success") throw new Error(`direction-only encounter did not complete: ${encounterHistory}`);
+  window.webContents.sendInputEvent({ type: "keyDown", keyCode: "A" });
+  window.webContents.sendInputEvent({ type: "keyDown", keyCode: "S" });
+  await delay(520);
+  window.webContents.sendInputEvent({ type: "keyUp", keyCode: "A" });
+  window.webContents.sendInputEvent({ type: "keyUp", keyCode: "S" });
+  const protocolState = await window.webContents.executeJavaScript(`(() => {
+    const game = document.querySelector('#game');
+    return Object.fromEntries(['protocols', 'protocolCount', 'protocolProcs'].map((key) => [key, game.dataset[key]]));
+  })()`);
+  if (protocolState.protocols !== "cometDrive" || protocolState.protocolCount !== "1" || Number(protocolState.protocolProcs) <= 0) throw new Error(`relic protocol did not activate and proc: ${JSON.stringify(protocolState)}`);
   if (state.talents !== "vectorThrusters" || state.talentCount !== "1") throw new Error(`talent diagnostics missing: ${JSON.stringify(state)}`);
   if (!state.playerSpeed.split(",").every((speed) => Number(speed) > 96)) throw new Error(`talent combat effect missing: ${state.playerSpeed}`);
   if (errors.length) throw new Error(`renderer console errors: ${errors.join(" | ")}`);
@@ -108,7 +118,7 @@ async function run() {
     if (settledRush.rushActive === "false" && Number(settledRush.rushLastBonus) > 0) break;
   }
   if (settledRush.rushActive !== "false" || Number(settledRush.rushLastBonus) <= 0) throw new Error(`rush did not settle with a score bonus: ${JSON.stringify(settledRush)}`);
-  process.stdout.write(`${JSON.stringify({ ...state, rushState, settledRush, talentPurchase: talentState, encounterHistory, webgl, consoleErrors: errors.length, screenshot: screenshotPath, talentScreenshot: talentScreenshotPath })}\n`);
+  process.stdout.write(`${JSON.stringify({ ...state, protocolState, rushState, settledRush, talentPurchase: talentState, encounterHistory, webgl, consoleErrors: errors.length, screenshot: screenshotPath, talentScreenshot: talentScreenshotPath })}\n`);
   window.destroy();
   server.close();
   app.quit();
