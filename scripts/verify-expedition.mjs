@@ -3,12 +3,14 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 const roguelikeSource = fs.readFileSync(new URL("../src/roguelike.js", import.meta.url), "utf8");
+const directorSource = fs.readFileSync(new URL("../src/director.js", import.meta.url), "utf8");
 const expeditionSource = fs.readFileSync(new URL("../src/expedition.js", import.meta.url), "utf8");
 const gameSource = fs.readFileSync(new URL("../src/game.js", import.meta.url), "utf8");
 const rendererSource = fs.readFileSync(new URL("../src/renderer3d.js", import.meta.url), "utf8");
 const i18nSource = fs.readFileSync(new URL("../src/i18n.js", import.meta.url), "utf8");
 const sandbox = { window: {} };
 vm.runInNewContext(roguelikeSource, sandbox, { filename: "src/roguelike.js" });
+vm.runInNewContext(directorSource, sandbox, { filename: "src/director.js" });
 vm.runInNewContext(expeditionSource, sandbox, { filename: "src/expedition.js" });
 
 const expedition = sandbox.window.SpaceExpedition;
@@ -74,13 +76,16 @@ const encounterSignatures = (seed) => [...expedition.generateEncounterPlans(seed
 assert.deepEqual(encounterSignatures(20260827), encounterSignatures(20260827), "same seed must reproduce dynamic encounters");
 assert.notDeepEqual(encounterSignatures(20260826), encounterSignatures(20260827), "different seeds should alter encounter plans");
 for (const [stageIndex, plan] of [...expedition.generateEncounterPlans(20260827)].entries()) {
-  assert.equal(plan.length, 2, "every stage must contain two dynamic encounters");
-  assert.equal(new Set(plan.map((encounter) => encounter.id)).size, 2, "a stage cannot repeat an encounter type");
-  assert.equal(new Set(plan.map((encounter) => encounter.lane)).size, 2, "consecutive encounters must move the objective lane");
+  assert.equal(plan.length, 4, "every stage must contain four dynamic encounters");
+  assert.notEqual(plan[0].id, plan[1].id, "encounter types cannot immediately repeat");
+  assert.notEqual(plan[1].id, plan[2].id, "encounter types cannot immediately repeat");
+  assert.notEqual(plan[2].id, plan[3].id, "encounter types cannot immediately repeat");
+  assert.ok(new Set(plan.map((encounter) => encounter.lane)).size >= 2, "encounters must move the objective lane");
+  for (let slot = 1; slot < plan.length; slot += 1) assert.notEqual(plan[slot - 1].lane, plan[slot].lane, "consecutive encounters must change lane");
   plan.forEach((encounter, slot) => {
     assert.equal(encounter.stageIndex, stageIndex);
     assert.equal(encounter.slot, slot);
-    assert.equal(encounter.at, [.3, .64][slot]);
+    assert.equal(encounter.at, [.14, .34, .58, .79][slot]);
     assert.ok(encounter.minStage <= stageIndex);
   });
 }
@@ -199,4 +204,4 @@ assert.match(rendererSource, /drawRouteGates\(choice\)/);
 assert.match(rendererSource, /drawEncounter\(encounter\)/);
 assert.match(rendererSource, /drawEncounterObject\(object\)/);
 
-console.log(`Expedition verified: ${BIOMES.length} ecosystems, ${PATH_PROTOCOLS.length} branch protocols, ${ENCOUNTER_PROTOCOLS.length} dynamic encounter types across six seeded objectives, three gate choices per stage, ${HULL_MODULES.length} organic chassis families and ${builds.length} integrated modular builds, early safety, branch bias, late-game diversity, and 3D integration.`);
+console.log(`Expedition verified: ${BIOMES.length} ecosystems, ${PATH_PROTOCOLS.length} branch protocols, ${ENCOUNTER_PROTOCOLS.length} dynamic encounter types across twelve seeded objectives, three gate choices per stage, ${HULL_MODULES.length} organic chassis families and ${builds.length} integrated modular builds, early safety, branch bias, late-game diversity, and 3D integration.`);

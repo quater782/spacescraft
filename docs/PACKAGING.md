@@ -32,19 +32,19 @@ npm run make:win
 当前已验证产物：
 
 - `out/SPACECRAFT 星航双子-win32-x64/SPACECRAFT.exe`
-- `dist/SPACECRAFT-0.21.0-windows-x64.zip`
+- `dist/SPACECRAFT-0.22.0-windows-x64.zip`
 
-0.21.0 Windows x64 校验值：
+0.22.0 Windows x64 校验值：
 
 ```text
-ZIP   SHA-256  da832c12380456da9c720477d6990fe9410afb2093ef0a69aef9437a438c4972
-EXE   SHA-256  38ee41cbb73804be04996277813a666853048341b616f4b162a9a9bd6160c3e5
-ASAR  SHA-256  711f1227824e34358bf8a5b433afeea2ea2b44840657eafe61413f88053b0439
+ZIP   SHA-256  dfc2895f73e6243c9d66c20dd0fdcaea15e81dd78a1588b639a180693186346e
+EXE   SHA-256  0acfa7e2989bf52ba7a6b5df54fd8e0ac553bf2348ab7d57546501da1a0ea09c
+ASAR  SHA-256  5d3b1309294a912f1e35293435c4f656349c350b35b868480511237c40b8123f
 ```
 
-ZIP 为 157,792,823 字节，EXE 为 244,440,576 字节，共 76 个归档条目。ZIP 内部根目录使用 ASCII `SPACECRAFT-win32-x64`，避免跨平台解压工具误判中文文件夹编码；归档不包含 `__MACOSX` 或 `.DS_Store`，`unzip -tq` 完整性检查通过。ZIP 内 EXE 与 ASAR 的 SHA-256 已分别与构建目录一致。
+ZIP 为 157,793,236 字节，EXE 为 244,440,576 字节，共 76 个归档条目。ZIP 内部根目录使用 ASCII `SPACECRAFT-win32-x64`，避免跨平台解压工具误判中文文件夹编码；归档不包含 `__MACOSX` 或 `.DS_Store`，`unzip -tq` 完整性检查通过。ZIP 内 EXE 与 ASAR 的 SHA-256 已分别与构建目录一致。
 
-`app.asar` 为 1,145,415 字节，已核对为 0.21.0。它包含 Three.js `three.module.min.js`、三阶 Toon+Glow、三种玩家战机、七类异形舰、三套阶段生长 Boss、12 种攻击状态、体素蓄力器官、竞技场光路、阶段 8-bit 编曲、`qa-boss-state`/`smoke:boss-state`，以及九套生态、三层航路、分段拖尾、4 Buff/3 Debuff、六维 7,168 构筑、15 项升级、9 项天赋、7 项遗物协议、星链狂潮、7 种星门协议和 5 类动态遭遇。ASAR 内 package 版本、0.21.0 页脚、`telegraph-state-arena` 和版本门禁均已读取确认。
+`app.asar` 为 1,164,169 字节，已核对为 0.22.0。它包含 Three.js `three.module.min.js`、三阶 Toon+Glow、三种玩家战机、七类异形舰、三套阶段生长 Boss、12 种攻击状态、体素蓄力器官、竞技场光路与阶段 8-bit 编曲；还包含 `SpaceDirector`、570/600/630 秒时长、九战区体素门架、27 编队、12 遭遇、八构筑节点、90× QA 压缩模拟，以及九生态、4 Buff/3 Debuff、六维 7,168 构筑、15 项升级、9 项天赋、7 项遗物协议、星链狂潮和 7 种星门协议。ASAR 内 package 版本、0.22.0 页脚、`src/director.js`、时长数组和版本门禁均已读取确认。
 
 Windows EXE 使用 `assets/icon.ico`，其中包含从 `favicon.svg` 直接渲染的 16、24、32、48、64、128 和 256px 图像。macOS 上可运行 `npm run icons` 重新生成 ICO、PNG 与 ICNS。
 

@@ -18,7 +18,7 @@ python3 -m http.server 4173 --bind 127.0.0.1
 http://127.0.0.1:4173/?qa-fast
 ```
 
-此模式仅在 `localhost` 或 `127.0.0.1` 生效，会加速章节时间并降低 Boss 测试耐久，用于快速检查九个事件、三场精英战、Boss 阶段和完整通关路径。测试结果不会写入出航、通关、最高分等生涯统计，也不会在正式域名或 Electron 文件协议下启用。
+此模式仅在 `localhost` 或 `127.0.0.1` 生效，会把远征章节时间加速到 90 倍并降低 Boss 测试耐久，用于快速检查九战区、27 个事件、12 次遭遇、八个构筑节点、三场 Boss 和完整通关路径。测试结果不会写入出航、通关、最高分等生涯统计，也不会在正式域名或 Electron 文件协议下启用；`qa-voxel` 保持 1 倍速度，避免建模验收场被跳过。
 
 自动化或人工检查可以读取 `#game` 上的 `data-mode`、`data-language`、`data-stage`、`data-stage-time`、`data-events`、`data-enemies`、`data-boss-phase`、`data-player-hp`、`data-fps` 与 `data-qa` 诊断属性。机库、合约、构筑与远征还提供 `data-frame`、`data-module`、`data-contract`、`data-talents`、`data-talent-count`、`data-score-multiplier`、`data-player-shield`、`data-player-speed`、`data-player-fire-rate`、`data-player-damage`、`data-player-energy-gain`、`data-achievement-count`、`data-stardust-reward`、`data-run-seed`、`data-upgrade-count`、`data-upgrades`、`data-draft-options`、`data-protocols`、`data-protocol-count`、`data-protocol-procs`、`data-player-buffs`、`data-player-debuffs`、`data-enemy-module-slots`、`data-enemy-build-catalog`、`data-qa-enemy-build`、`data-route-signature`、`data-biome`、`data-enemy-variants`、`data-active-builds`、`data-path-plan`、`data-active-path`、`data-path-options`、`data-path-selection`、`data-path-history`、`data-encounter-plan`、`data-active-encounter`、`data-encounter-progress`、`data-encounter-objects`、`data-encounter-history` 及七项 `data-rush-*` 狂潮状态。3D Canvas 还应为 `data-renderer="three-r185-instanced-voxel"`、`data-art-style="toon-glow-light-blocks"` 和 `data-model-palette="saturated-no-black"`。
 
@@ -92,7 +92,7 @@ http://127.0.0.1:4173/?qa-boss-gallery&qa-boss-phase=3&seed=2
 
 ### Boss 攻击状态机实战
 
-`qa-boss-state` 建立仅 localhost 有效的长耐久第一章 Boss 会话，并把阶段计时加速到 18 倍；Boss 出现后玩家临时免伤，便于动态观察编舞，正式战役不会启用：
+`qa-boss-state` 建立仅 localhost 有效的长耐久第一章 Boss 会话，并把章节计时加速到 180 倍；Boss 出现后玩家临时免伤，便于动态观察编舞，正式战役不会启用：
 
 ```text
 http://127.0.0.1:4173/?qa-fast&qa-boss-state&qa-path=1&seed=7
@@ -130,13 +130,23 @@ http://127.0.0.1:4173/?qa-fast&qa-path=2&seed=20260827
 
 ### 动态遭遇测试
 
-默认每章在 30% 与 64% 进度各生成一次目标。用 `qa-encounter` 强制覆盖某一类遭遇；可选值为 `relay`、`salvage`、`courier`、`meteor`、`rift`。陨星与裂隙遵守正式章节门槛，只会从第二章开始替换首个目标：
+默认每章在 14%、34%、58% 与 79% 进度各生成一次目标，每局共十二个；同类目标不会连续出现，连续目标也不会占用同一航道。用 `qa-encounter` 强制覆盖某一类遭遇；可选值为 `relay`、`salvage`、`courier`、`meteor`、`rift`。陨星与裂隙遵守正式章节门槛，只会从第二章开始替换首个目标：
 
 ```text
 http://127.0.0.1:4173/?qa-fast&qa-path=1&qa-encounter=salvage&seed=2
 ```
 
 `qa-fast` 会同比缩短非生存目标量和遭遇时长，奖励规则不变。检查 `data-encounter-plan`、`data-active-encounter`、`data-encounter-progress`、`data-encounter-objects` 和 `data-encounter-history`。第一章必须只出现信标、回收或护航，且同期增援倍率不得高于 1。
+
+### 30 分钟远征导演测试
+
+正常模式三章基础航行必须分别为 570、600、630 秒，合计 1,800 秒；Boss、星门和构筑暂停会让实际完整一局略长于 30 分钟。每章在三分之一和三分之二进度切换战区，25%/72% 处暂停进入章中构筑，九次编队事件分布在 8%–88%。运行：
+
+```bash
+npm run smoke:director
+```
+
+该脚本使用 90 倍 localhost QA 时间在真实 Electron/WebGL 中压缩模拟第一章，必须观察全局战区 1/2/3、事件 9/9、遭遇 4/4、至少两次 `mid-stage` 构筑并进入 Boss，同时断言 `data-run-target-seconds="1800"`、`data-expedition-sectors="9-progressive-voxel-gates"`、40 FPS 下限和零控制台错误。`scripts/verify-director.mjs` 另行精确检查 1× 正常倍率、全部相对阈值、27/12/8 总数和 90× QA 隔离。两者证明结构与压缩执行路径成立，但不能替代一次正常 1×、含三 Boss 和所有选择暂停的完整 30 分钟实玩/性能长测。
 
 ### 星链狂潮测试
 
@@ -193,7 +203,8 @@ npm start
 19. 逐项覆盖七种遗物协议，检查第二次构筑配套注入、方向确认、自动触发、SVG/HUD/3D、协议音乐、结果摘要与 CSP 控制台。
 20. 用有/无状态两种 `qa-voxel` 画面检查玩家/敌军相反朝向、尖鼻/连续承力翼/尾焰、六维模块对主体轮廓的改变、饱和 Toon 色块、轻微 Glow、体素弹幕/背景和 60 FPS；确认没有近黑舰体、过曝粉白、悬浮微方块、面片堆砌或共面闪烁。
 21. 运行 `npm run smoke:biomes`，逐项人工检查九生态截图的近/中/远纵深、独立剪影、饱和 Toon+Glow、分段弹体拖尾与无黑色地标。
-22. 更新 `CHANGELOG.md`、[当前项目状态](./PROJECT-STATE.md)、发行说明和相关设计文档。
+22. 运行 `npm run smoke:director`，确认第一章三战区、九事件、四遭遇、两次章中构筑、Boss 接续、60 FPS 目标和零控制台错误。
+23. 更新 `CHANGELOG.md`、[当前项目状态](./PROJECT-STATE.md)、发行说明和相关设计文档。
 
 ## 架构
 
@@ -204,6 +215,7 @@ npm start
 - `src/status.js`：四种自动 Buff、三种敌方 Debuff、拾取映射、计时目录和战斗倍率。
 - `src/constellation.js`：九项长期天赋、前置依赖、购买判定、存档清洗和玩家效果。
 - `src/rush.js`：星链狂潮阈值、事件充能、共振增益/衰减和自动战斗倍率。
+- `src/director.js`：30 分钟章节时长、战区、编队/遭遇/构筑阈值、强度曲线和 QA 倍率。
 - `src/expedition.js`：生态航线、星门协议/航道判定、动态遭遇计划/结果判定、敌型权重与模块化敌军组装规则。
 - `src/i18n.js`：简体中文/英文文案目录、插值、DOM 与元数据同步。
 - `electron/main.cjs`：安全桌面窗口与生命周期。
@@ -215,10 +227,12 @@ npm start
 - `scripts/verify-constellation.mjs`：验证九项天赋、三条依赖、购买门槛、存档清洗与实际属性效果。
 - `scripts/verify-rush.mjs`：验证六类事件、充能边界、共振速率、战斗倍率、QA 与 3D 接线。
 - `scripts/verify-expedition.mjs`：验证生态、星门、动态遭遇、敌军组合、早期安全、后期多样性与 3D 集成。
+- `scripts/verify-director.mjs`：验证 1,800 秒基础航行、九战区、27 编队、12 遭遇、八构筑和 QA 倍率隔离。
 - `scripts/verify-renderer3d.mjs`：验证 Three.js 精确依赖、实例化方块、分层深度、相反机头和禁止原生面片/光滑几何回退。
 - `scripts/verify-status.mjs`：验证四 Buff、三 Debuff、双语、自动规则与玩法/音频/HUD/3D 接线。
 - `scripts/smoke-electron.cjs`：启动隔离的真实 Electron/WebGL 会话，验证方向交互并生成截图。
 - `scripts/smoke-biomes.cjs`：逐一强制九个生态，验证 WebGL/视觉诊断/帧率/控制台并生成九张截图。
+- `scripts/smoke-director.cjs`：在真实 Electron/WebGL 中压缩运行第一章导演全时线。
 - `scripts/verify-docs.mjs`：检查必需文档、Codex 指令大小和仓库内 Markdown 链接。
 
 完整模块边界与数据流见[系统架构](./ARCHITECTURE.md)。

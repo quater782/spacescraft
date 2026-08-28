@@ -119,13 +119,15 @@
 
   function generateEncounterPlans(seed) {
     const random = window.SpaceRoguelike.createRng((Number(seed) ^ 0xc41f2d87) >>> 0);
-    const triggerPoints = [.3, .64];
+    const triggerPoints = window.SpaceDirector.ENCOUNTER_POINTS;
     return Object.freeze([0, 1, 2].map((stageIndex) => {
       const pool = ENCOUNTER_PROTOCOLS.filter((encounter) => encounter.minStage <= stageIndex);
       const chosen = [];
-      while (chosen.length < 2) {
-        const candidate = pick(pool, random);
-        if (!chosen.some((encounter) => encounter.id === candidate.id)) chosen.push(candidate);
+      while (chosen.length < triggerPoints.length) {
+        const unused = pool.filter((encounter) => !chosen.some((entry) => entry.id === encounter.id));
+        const previousId = chosen.at(-1)?.id;
+        const candidates = (unused.length ? unused : pool).filter((encounter) => encounter.id !== previousId);
+        chosen.push(pick(candidates.length ? candidates : pool, random));
       }
       let previousLane = -1;
       return Object.freeze(chosen.map((encounter, slot) => {

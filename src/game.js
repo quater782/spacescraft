@@ -122,6 +122,7 @@ const RUSH_CONFIG = SpaceRush.RUSH_CONFIG;
 const PROTOCOLS = SpaceRelics.PROTOCOLS;
 const BUFF_MODULES = SpaceStatus.BUFF_MODULES;
 const DEBUFF_MODULES = SpaceStatus.DEBUFF_MODULES;
+const DIRECTOR = SpaceDirector;
 
 ctx.imageSmoothingEnabled = false;
 
@@ -437,7 +438,7 @@ const STAGES = [
     nameKey: "stage.1.name",
     subtitleKey: "stage.1.subtitle",
     bossKey: "stage.1.boss",
-    duration: 38,
+    duration: DIRECTOR.STAGE_DURATIONS[0],
     bpm: 132,
     sky: "#090a24",
     haze: "#42205d",
@@ -450,7 +451,7 @@ const STAGES = [
     nameKey: "stage.2.name",
     subtitleKey: "stage.2.subtitle",
     bossKey: "stage.2.boss",
-    duration: 42,
+    duration: DIRECTOR.STAGE_DURATIONS[1],
     bpm: 148,
     sky: "#071923",
     haze: "#124557",
@@ -463,7 +464,7 @@ const STAGES = [
     nameKey: "stage.3.name",
     subtitleKey: "stage.3.subtitle",
     bossKey: "stage.3.boss",
-    duration: 46,
+    duration: DIRECTOR.STAGE_DURATIONS[2],
     bpm: 164,
     sky: "#100719",
     haze: "#3b113b",
@@ -473,23 +474,24 @@ const STAGES = [
   },
 ];
 
-const STAGE_EVENTS = [
+const STAGE_EVENT_TEMPLATES = [
   [
-    { at: 7, nameKey: "event.bubble.name", subtitleKey: "event.bubble.subtitle", pattern: "chevron" },
-    { at: 18, nameKey: "event.spiral.name", subtitleKey: "event.spiral.subtitle", pattern: "crossfire" },
-    { at: 29, nameKey: "event.candyElite.name", subtitleKey: "event.candyElite.subtitle", pattern: "elite", eliteType: "tank" },
+    { nameKey: "event.bubble.name", subtitleKey: "event.bubble.subtitle", pattern: "chevron" },
+    { nameKey: "event.spiral.name", subtitleKey: "event.spiral.subtitle", pattern: "crossfire" },
+    { nameKey: "event.candyElite.name", subtitleKey: "event.candyElite.subtitle", pattern: "elite", eliteType: "tank" },
   ],
   [
-    { at: 8, nameKey: "event.convoy.name", subtitleKey: "event.convoy.subtitle", pattern: "convoy" },
-    { at: 21, nameKey: "event.gear.name", subtitleKey: "event.gear.subtitle", pattern: "pinwheel" },
-    { at: 33, nameKey: "event.forgeElite.name", subtitleKey: "event.forgeElite.subtitle", pattern: "elite", eliteType: "spinner" },
+    { nameKey: "event.convoy.name", subtitleKey: "event.convoy.subtitle", pattern: "convoy" },
+    { nameKey: "event.gear.name", subtitleKey: "event.gear.subtitle", pattern: "pinwheel" },
+    { nameKey: "event.forgeElite.name", subtitleKey: "event.forgeElite.subtitle", pattern: "elite", eliteType: "spinner" },
   ],
   [
-    { at: 8, nameKey: "event.mines.name", subtitleKey: "event.mines.subtitle", pattern: "minefield" },
-    { at: 23, nameKey: "event.pincer.name", subtitleKey: "event.pincer.subtitle", pattern: "pincer" },
-    { at: 36, nameKey: "event.nightElite.name", subtitleKey: "event.nightElite.subtitle", pattern: "elite", eliteType: "tank" },
+    { nameKey: "event.mines.name", subtitleKey: "event.mines.subtitle", pattern: "minefield" },
+    { nameKey: "event.pincer.name", subtitleKey: "event.pincer.subtitle", pattern: "pincer" },
+    { nameKey: "event.nightElite.name", subtitleKey: "event.nightElite.subtitle", pattern: "elite", eliteType: "tank" },
   ],
 ];
+const STAGE_EVENTS = STAGE_EVENT_TEMPLATES.map((templates) => DIRECTOR.buildEventTimeline(templates));
 
 const BOSS_PHASE_KEYS = [
   ["bossPhase.1.1", "bossPhase.1.2", "bossPhase.1.3"],
@@ -782,10 +784,13 @@ class AudioEngine {
 
   scheduleStep(step, when) {
     const roots = [45, 42, 40];
+    const stageProgress = clamp(world.stageTime / Math.max(1, STAGES[this.stage]?.duration || 1), 0, 1);
+    const sectorLift = DIRECTOR.intensityFor(this.stage, stageProgress).musicLift;
     const root = roots[this.stage]
       + (world.routeStages?.[this.stage]?.musicShift || 0)
       + (world.activeBranch?.musicShift || 0)
-      + (world.activeEncounter?.musicShift || 0);
+      + (world.activeEncounter?.musicShift || 0)
+      + sectorLift;
     const leads = [
       [12, 15, 19, 22, 19, 15, 17, 15, 12, 15, 20, 22, 20, 19, 15, 10],
       [12, 14, 17, 21, 24, 21, 17, 14, 12, 17, 19, 24, 22, 19, 17, 14],
@@ -914,6 +919,11 @@ class AudioEngine {
       [67, 55, 43].forEach((note, index) => this.tone(note + this.stage * 2, .18, index === 1 ? "square" : "sawtooth", .07 - index * .012, now + index * .025, this.sfxBus, -12));
       this.tone(31, .32, "square", .08, now, this.sfxBus, -19);
       this.noise(.26, .11, now, 320);
+    } else if (name === "sectorShift") {
+      const lift = (world.sectorIndex || 0) * 2;
+      [48, 55, 60, 67, 72].forEach((note, index) => this.tone(note + lift, .24, index % 2 ? "square" : "triangle", .045 + index * .003, now + index * .045, this.sfxBus, 7));
+      this.tone(36 + lift, .38, "triangle", .065, now, this.sfxBus, 14);
+      this.noise(.22, .04, now + .06, 3600);
     } else if (name === "elite") {
       [48, 55, 51, 60].forEach((note, i) => this.tone(note, .16, "square", .055, now + i * .07, this.sfxBus, i % 2 ? -5 : 4));
       this.noise(.18, .045, now, 1200);
@@ -1014,6 +1024,10 @@ const world = {
   time: 0,
   stageIndex: 0,
   stageTime: 0,
+  sectorIndex: 0,
+  globalSector: 1,
+  sectorFlashTimer: 0,
+  midDraftIndex: 0,
   introTimer: 0,
   clearTimer: 0,
   eventIndex: 0,
@@ -1054,6 +1068,7 @@ const world = {
   draftOptions: [],
   draftIndex: 0,
   draftCount: 0,
+  draftContext: "stage-clear",
   draftTimer: 0,
   draftInputCooldown: 0,
   enemySerial: 0,
@@ -1314,7 +1329,7 @@ function renderResultBuild() {
 
 function renderUpgradeDraft(focusSelected = false) {
   runSeedLabel.textContent = `#${String(world.runSeed).padStart(8, "0")}`;
-  draftProgress.textContent = t("draft.progress", { current: world.draftCount, total: STAGES.length - 1 });
+  draftProgress.textContent = t("draft.progress", { current: world.draftCount, total: DIRECTOR.TOTAL_DRAFTS });
   upgradeOptions.innerHTML = world.draftOptions.map((upgrade, index) => {
     const selected = index === world.draftIndex;
     const nextLevel = upgradeLevel(upgrade.id) + 1;
@@ -1325,9 +1340,10 @@ function renderUpgradeDraft(focusSelected = false) {
   if (focusSelected) upgradeOptions.querySelector(`[data-upgrade-id="${world.draftOptions[world.draftIndex]?.id}"]`)?.focus();
 }
 
-function beginUpgradeDraft() {
+function beginUpgradeDraft(context = "stage-clear") {
   world.mode = "draft";
   world.draftCount += 1;
+  world.draftContext = context;
   world.draftIndex = 0;
   world.draftTimer = 0;
   world.draftInputCooldown = .35;
@@ -1379,8 +1395,15 @@ function confirmDraftSelection() {
   if (!upgrade) return;
   applyRunUpgrade(upgrade);
   upgradePanel.hidden = true;
+  const context = world.draftContext;
+  world.draftContext = "stage-clear";
   world.mode = "playing";
-  advanceStage();
+  if (context === "stage-clear") {
+    advanceStage();
+  } else {
+    world.spawnTimer = Math.max(world.spawnTimer, .8);
+    for (const player of world.players) player.invulnerability = Math.max(player.invulnerability, .75);
+  }
   renderBuildTray();
 }
 
@@ -1808,10 +1831,10 @@ function resetWorld() {
         stageIndex,
         slot: 0,
         at: base.at,
-        lane: base.lane,
+        lane: 1,
         variant: base.variant,
         intensity: base.intensity,
-        signature: `${forced.id}:${base.lane}:${base.variant}`,
+        signature: `${forced.id}:1:${base.variant}`,
       });
     }
   }
@@ -1857,6 +1880,10 @@ function resetWorld() {
   world.time = 0;
   world.stageIndex = 0;
   world.stageTime = 0;
+  world.sectorIndex = 0;
+  world.globalSector = DIRECTOR.globalSector(0, 0);
+  world.sectorFlashTimer = 0;
+  world.midDraftIndex = 0;
   world.introTimer = 0;
   world.clearTimer = 0;
   world.eventIndex = 0;
@@ -1886,6 +1913,7 @@ function resetWorld() {
   world.draftOptions = [];
   world.draftIndex = 0;
   world.draftCount = 0;
+  world.draftContext = "stage-clear";
   world.draftTimer = 0;
   world.draftInputCooldown = 0;
   world.enemySerial = 0;
@@ -2279,11 +2307,28 @@ function spawnStageEvent(event) {
     addFormationEnemy(guardType, W / 2 + 68, -42, { shootDelay: 2.6 });
     audio.sfx("elite");
   }
+  for (let reinforcement = 1; reinforcement < (event.tier || 1); reinforcement += 1) {
+    const guardType = stage === 0 ? "scout" : stage === 1 ? "dart" : "spinner";
+    const spacing = 84 + reinforcement * 22;
+    addFormationEnemy(guardType, W / 2 - spacing, -42 - reinforcement * 22, { shootDelay: 2.45 + reinforcement * .24 });
+    addFormationEnemy(guardType, W / 2 + spacing, -42 - reinforcement * 22, { shootDelay: 2.65 + reinforcement * .24 });
+  }
   world.stageEvent = { ...event, timer: 3.1, total: 3.1 };
   world.spawnTimer = Math.max(world.spawnTimer, 1.8);
   world.flash = Math.max(world.flash, .18);
   world.shake = Math.max(world.shake, .14);
   showToast(t("toast.event", { route: stageText(activeStage(stage), "code"), event: eventText(event, "name") }));
+}
+
+function enterSector(sectorIndex) {
+  world.sectorIndex = sectorIndex;
+  world.globalSector = DIRECTOR.globalSector(world.stageIndex, sectorIndex);
+  world.sectorFlashTimer = 1.45;
+  world.flash = Math.max(world.flash, .24);
+  world.shake = Math.max(world.shake, .2);
+  world.spawnTimer = Math.max(world.spawnTimer, 1.15);
+  audio.sfx("sectorShift");
+  showToast(t("toast.sectorShift", { current: world.globalSector, total: DIRECTOR.TOTAL_SECTORS }));
 }
 
 function spawnEnemy() {
@@ -2982,6 +3027,10 @@ function advanceStage() {
   }
   world.stageIndex += 1;
   world.stageTime = 0;
+  world.sectorIndex = 0;
+  world.globalSector = DIRECTOR.globalSector(world.stageIndex, 0);
+  world.sectorFlashTimer = 0;
+  world.midDraftIndex = 0;
   world.introTimer = 0;
   world.clearTimer = 0;
   world.eventIndex = 0;
@@ -3152,7 +3201,7 @@ function updateStage(dt) {
   if (world.clearTimer > 0) {
     world.clearTimer -= dt;
     if (world.clearTimer <= 0) {
-      if (world.stageIndex < STAGES.length - 1) beginUpgradeDraft();
+      if (world.stageIndex < STAGES.length - 1) beginUpgradeDraft("stage-clear");
       else advanceStage();
     }
     return;
@@ -3163,21 +3212,29 @@ function updateStage(dt) {
   }
   if (world.bossSpawned) return;
 
-  world.stageTime += dt * (QA_BOSS_STATE_MODE ? 18 : QA_FAST_MODE && !QA_VOXEL_MODE ? 6 : 1);
+  world.stageTime += dt * DIRECTOR.timeScale({ bossState: QA_BOSS_STATE_MODE, fast: QA_FAST_MODE, voxel: QA_VOXEL_MODE });
   world.spawnTimer -= dt;
+  const progress = clamp(world.stageTime / stage.duration, 0, 1);
+  const intensity = DIRECTOR.intensityFor(world.stageIndex, progress);
+  if (!QA_VOXEL_MODE && intensity.sector !== world.sectorIndex) enterSector(intensity.sector);
+  const nextDraftPoint = DIRECTOR.MID_DRAFT_POINTS[world.midDraftIndex];
+  if (!QA_VOXEL_MODE && !world.activeEncounter && nextDraftPoint !== undefined && progress >= nextDraftPoint) {
+    world.midDraftIndex += 1;
+    beginUpgradeDraft("mid-stage");
+    return;
+  }
   const nextEncounter = world.encounterPlans[world.stageIndex]?.[world.encounterIndex];
   if (!QA_VOXEL_MODE && !world.activeEncounter && nextEncounter && world.stageTime >= nextEncounter.at * stage.duration) {
     startEncounter(nextEncounter);
     world.encounterIndex += 1;
   }
   const nextEvent = STAGE_EVENTS[world.stageIndex][world.eventIndex];
-  if (!QA_VOXEL_MODE && nextEvent && world.stageTime >= nextEvent.at) {
+  if (!QA_VOXEL_MODE && nextEvent && world.stageTime >= nextEvent.at * stage.duration) {
     spawnStageEvent(nextEvent);
     world.eventIndex += 1;
   }
   if (world.spawnTimer <= 0) {
-    const progress = world.stageTime / stage.duration;
-    const enemyCap = 6 + world.stageIndex * 2 + Math.floor(progress * 2);
+    const enemyCap = 6 + world.stageIndex * 2 + intensity.enemyCapBonus;
     const activeEnemies = world.enemies.filter((enemy) => !enemy.boss).length;
     if (activeEnemies < enemyCap) {
       spawnEnemy();
@@ -3192,7 +3249,7 @@ function updateStage(dt) {
     const encounterRate = world.stageIndex === 0 && progress < .4
       ? Math.min(1, world.activeEncounter?.spawnRate || 1)
       : world.activeEncounter?.spawnRate || 1;
-    world.spawnTimer = Math.max(0.62, (1.72 - world.stageIndex * 0.13 - progress * 0.55) / ((world.contract?.spawnRate || 1) * ecologyRate * routeRate * encounterRate));
+    world.spawnTimer = Math.max(0.62, (1.72 - world.stageIndex * 0.13 - progress * 0.55) / ((world.contract?.spawnRate || 1) * ecologyRate * routeRate * encounterRate * intensity.spawnCadence));
   }
   if (!QA_VOXEL_MODE && world.stageTime >= stage.duration) spawnBoss();
 }
@@ -3417,6 +3474,7 @@ function update(dt) {
   world.time += dt;
   world.protocolFlashTimer = Math.max(0, world.protocolFlashTimer - dt);
   world.protocolSoundTimer = Math.max(0, world.protocolSoundTimer - dt);
+  world.sectorFlashTimer = Math.max(0, world.sectorFlashTimer - dt);
   if (world.routeChoice) {
     world.shake = Math.max(0, world.shake - dt * 2.2);
     world.flash = Math.max(0, world.flash - dt * 2.7);
@@ -4055,7 +4113,7 @@ function drawHud() {
   const progress = world.bossSpawned ? 1 : world.stageTime / stage.duration;
   drawBar(W / 2 - 46, 15, 92, progress, stage.accent);
   const routeStatus = world.activeBranch
-    ? `${pathText(world.activeBranch, "name")} ×${world.activeBranch.score.toFixed(2)}`
+    ? `${pathText(world.activeBranch, "name")} ×${world.activeBranch.score.toFixed(2)} // ${t("hud.sector", { current: world.globalSector, total: DIRECTOR.TOTAL_SECTORS })}`
     : t("hud.pathPending");
   pixelText(routeStatus, W / 2, 24, world.activeBranch?.color || "#85849e", "center", 5);
 
@@ -4134,7 +4192,7 @@ function drawEncounterHud() {
   ctx.fillRect(x, y, 236, 27);
   ctx.fillStyle = encounter.color;
   ctx.fillRect(x, y, 3, 27);
-  pixelText(t("hud.encounter", { current: world.encounterIndex, total: 2 }), x + 9, y + 9, encounter.color, "left", 5);
+  pixelText(t("hud.encounter", { current: world.encounterIndex, total: world.encounterPlans[world.stageIndex]?.length || 0 }), x + 9, y + 9, encounter.color, "left", 5);
   pixelText(encounterText(encounter, "name"), W / 2, y + 10, "#ffffff", "center", 7);
   pixelText(t("hud.encounterTimer", { time: Math.max(0, encounter.timer).toFixed(1) }), x + 227, y + 9, "#9d9bb4", "right", 5);
   pixelText(objective, W / 2, y + 20, "#c9c7db", "center", 5.5);
@@ -4288,7 +4346,14 @@ function draw() {
   canvas.dataset.language = SpaceI18n.language;
   canvas.dataset.stage = String(world.stageIndex + 1);
   canvas.dataset.stageTime = world.stageTime.toFixed(2);
+  canvas.dataset.runTargetSeconds = String(DIRECTOR.BASE_RUN_SECONDS);
+  canvas.dataset.sector = String(world.globalSector);
+  canvas.dataset.sectorLocal = String(world.sectorIndex + 1);
+  canvas.dataset.sectorFlash = world.sectorFlashTimer.toFixed(2);
   canvas.dataset.events = String(world.eventIndex);
+  canvas.dataset.encounters = String(world.encounterIndex);
+  canvas.dataset.drafts = String(world.draftCount);
+  canvas.dataset.draftContext = world.draftContext;
   canvas.dataset.enemies = String(world.enemies.length);
   canvas.dataset.enemyBullets = String(world.enemyBullets.length);
   canvas.dataset.bossPhase = world.boss ? String(world.boss.phaseLevel) : "0";

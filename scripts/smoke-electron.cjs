@@ -119,7 +119,7 @@ async function run() {
   const image = await window.webContents.capturePage();
   fs.writeFileSync(screenshotPath, image.toPNG());
   let settledRush = rushState;
-  for (let attempt = 0; attempt < 70; attempt += 1) {
+  for (let attempt = 0; attempt < 220; attempt += 1) {
     await delay(100);
     settledRush = await window.webContents.executeJavaScript(`(() => {
       const game = document.querySelector('#game');

@@ -93,6 +93,7 @@ class SpaceRenderer3D {
     this.canvas.dataset.moduleAnatomy = "integrated-large-form";
     this.canvas.dataset.bossFamilies = "3-organic-phase-forms";
     this.canvas.dataset.bossChoreography = "telegraph-state-arena";
+    this.canvas.dataset.expeditionSectors = "9-progressive-voxel-gates";
   }
 
   createStars(count, size, seed) {
@@ -807,6 +808,34 @@ class SpaceRenderer3D {
     });
   }
 
+  drawSectorArchitecture(world, stage) {
+    const sector = clamp(world.sectorIndex || 0, 0, 2);
+    const accent = stage.biome?.accent || stage.accent;
+    const secondary = stage.biome?.secondary || stage.star;
+    const speed = 2.45 + sector * .62;
+    for (let gate = 0; gate < 3 + sector; gate += 1) {
+      const z = this.streamZ(gate, 10.5 - sector * .7, speed, -36, 3 + sector);
+      const color = (gate + sector) % 2 ? accent : secondary;
+      const base = compose([0, -.46, z]);
+      for (const side of [-1, 1]) {
+        this.voxel(base, [side * 7.25, 1.2, 0], [.2 + sector * .035, 2.4, .38], color, .28 + sector * .1);
+        this.voxel(base, [side * 5.55, 3.12, 0], [3.25, .18 + sector * .03, .38], color, .55 + sector * .1, [0, 0, side * .08]);
+      }
+      this.voxel(base, [0, 3.38, 0], [3.35, .14, .34], secondary, .48 + sector * .12);
+    }
+    if ((world.sectorFlashTimer || 0) > 0) {
+      const remaining = clamp(world.sectorFlashTimer / 1.45, 0, 1);
+      const approach = 1 - remaining;
+      const portal = compose([0, -.46, lerp(-16, -1.2, approach)]);
+      const pulse = 1 + Math.sin(this.time * 18) * .08;
+      for (const side of [-1, 1]) {
+        this.voxel(portal, [side * 5.7, 2.1, 0], [.26 * pulse, 4.2, .62], side > 0 ? accent : secondary, .92);
+        this.voxel(portal, [side * 3.05, 4.02, 0], [5.4, .24 * pulse, .62], side > 0 ? secondary : accent, .95, [0, 0, side * .08]);
+      }
+      this.voxel(portal, [0, 4.32, 0], [1.1 + sector * .32, .18, .62], "#ffffff", 1);
+    }
+  }
+
   drawEncounter(encounter) {
     if (!encounter) return;
     const position = this.toWorld(encounter.x, encounter.y, encounter.kind === "siege" ? .55 : .12);
@@ -1134,7 +1163,7 @@ class SpaceRenderer3D {
     this.starLayers[0].position.z = (this.time * .8) % 18;
     this.starLayers[1].position.z = ((this.time * .55) % 18) - 12;
     this.rimLight.color.set(stage.biome?.accent || stage.grid);
-    this.rimLight.intensity = this.quality === "low" ? 1.45 : 2.6;
+    this.rimLight.intensity = (this.quality === "low" ? 1.45 : 2.6) + (world.sectorIndex || 0) * .28;
     this.renderer.shadowMap.enabled = false;
     for (const batch of this.toonBatches.values()) batch.castShadow = false;
     this.playerLights.forEach((light, index) => {
@@ -1189,6 +1218,7 @@ class SpaceRenderer3D {
     }
     this.canvas.dataset.modelGallery = "off";
     this.drawLandmark(this.stageIndex, stage.biome);
+    this.drawSectorArchitecture(world, stage);
     if (world.boss) this.drawBossArena(world.boss);
     if (world.mode === "menu") {
       this.drawShip({ index: 0, frameId: world.loadoutFrame, x: 4.8 + Math.sin(this.time * .6) * .4, z: -.5 + Math.cos(this.time) * .25 }, playerConfigs[0], true);
