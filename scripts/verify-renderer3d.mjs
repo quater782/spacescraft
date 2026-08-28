@@ -12,10 +12,10 @@ const forge = fs.readFileSync(new URL("../forge.config.cjs", import.meta.url), "
 const packageJson = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
 assert.equal(packageJson.dependencies?.three, "0.185.1", "Three.js must be an exact production dependency");
-assert.equal(packageJson.version, "0.22.0", "package metadata must match the 30-Minute Odyssey Director release");
-assert.match(html, /<script type="module" src="\.\/src\/renderer3d\.js\?v=20"><\/script>/);
-assert.match(html, /<script type="module" src="\.\/src\/game\.js\?v=28"><\/script>/);
-assert.match(html, /30-MINUTE ODYSSEY DIRECTOR 0\.22\.0/);
+assert.equal(packageJson.version, "0.23.0", "package metadata must match the Adaptive Threat Matrix release");
+assert.match(html, /<script type="module" src="\.\/src\/renderer3d\.js\?v=21"><\/script>/);
+assert.match(html, /<script type="module" src="\.\/src\/game\.js\?v=29"><\/script>/);
+assert.match(html, /ADAPTIVE THREAT MATRIX 0\.23\.0/);
 assert.match(renderer, /import \* as THREE from "\.\.\/node_modules\/three\/build\/three\.module\.min\.js"/);
 assert.match(renderer, /new THREE\.WebGLRenderer/);
 assert.match(renderer, /new THREE\.InstancedMesh/);

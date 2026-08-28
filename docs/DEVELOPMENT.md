@@ -148,6 +148,24 @@ npm run smoke:director
 
 该脚本使用 90 倍 localhost QA 时间在真实 Electron/WebGL 中压缩模拟第一章，必须观察全局战区 1/2/3、事件 9/9、遭遇 4/4、至少两次 `mid-stage` 构筑并进入 Boss，同时断言 `data-run-target-seconds="1800"`、`data-expedition-sectors="9-progressive-voxel-gates"`、40 FPS 下限和零控制台错误。`scripts/verify-director.mjs` 另行精确检查 1× 正常倍率、全部相对阈值、27/12/8 总数和 90× QA 隔离。两者证明结构与压缩执行路径成立，但不能替代一次正常 1×、含三 Boss 和所有选择暂停的完整 30 分钟实玩/性能长测。
 
+### 自适应威胁矩阵测试
+
+正常航行会自动在缓冲、巡航、交锋、激涌和极限五级之间调整压力。首章前 40% 最高只能处于巡航；双机平均耐久低于 52% 同样封顶巡航，低于 34% 或任一队员倒地会强制缓冲。候选状态需连续保持 1.25 秒，且一次只升降一级。检查 HUD 右侧等级/刻度、同色 3D 航道信标、升降级专属音效、配乐节拍/密度变化，以及结算页峰值/调整/累计秒数。
+
+本机可用 `qa-threat=0|1|2|3|4` 强制任一级，不修改正式域名或 Electron 文件协议：
+
+```text
+http://127.0.0.1:4173/?qa-fast&qa-path=0&qa-threat=4&seed=2304
+```
+
+`#game` 公开 `data-threat-tier`、`data-threat-id`、`data-threat-score`、`data-threat-target`、`data-threat-peak`、`data-threat-changes`、`data-threat-relief-seconds`、`data-threat-apex-seconds` 以及五项战斗倍率；3D Canvas 公开 `data-adaptive-threat="5-tier-telegraphed"`、`data-threat-tier`、`data-threat-color` 和脉冲值。运行：
+
+```bash
+npm run smoke:threat
+```
+
+脚本先比较缓冲与极限强制端点，再以 1× 时间运行首章前 20 秒；它会断言增援/弹速/开火/耐久单调提高、瞄准误差收紧、WebGL 有效、40 FPS 下限、首章不越过巡航、前六秒零敌弹、普通敌军不超过六架、双机未倒地和零应用控制台错误，并把 `relief.png` 与 `apex.png` 写入系统临时目录。该矩阵证明两端接线与开局安全，但不能代替一次正常 1× 长局对自然等级分布、倒地减压和恢复升档的观察。
+
 ### 星链狂潮测试
 
 正式玩法中，保持共振、击破、精英、拾取、遭遇成功、自动救援和 Boss 阶段会自然把星链充到 100 并自动启动。需要快速目视检查时追加只在 localhost 生效的 `qa-rush`：
@@ -204,7 +222,8 @@ npm start
 20. 用有/无状态两种 `qa-voxel` 画面检查玩家/敌军相反朝向、尖鼻/连续承力翼/尾焰、六维模块对主体轮廓的改变、饱和 Toon 色块、轻微 Glow、体素弹幕/背景和 60 FPS；确认没有近黑舰体、过曝粉白、悬浮微方块、面片堆砌或共面闪烁。
 21. 运行 `npm run smoke:biomes`，逐项人工检查九生态截图的近/中/远纵深、独立剪影、饱和 Toon+Glow、分段弹体拖尾与无黑色地标。
 22. 运行 `npm run smoke:director`，确认第一章三战区、九事件、四遭遇、两次章中构筑、Boss 接续、60 FPS 目标和零控制台错误。
-23. 更新 `CHANGELOG.md`、[当前项目状态](./PROJECT-STATE.md)、发行说明和相关设计文档。
+23. 运行 `npm run smoke:threat`，复核缓冲/极限倍率、HUD、3D 信标、WebGL、帧率和零错误；正常速度抽样观察自然升降档与残血/倒地保护。
+24. 更新 `CHANGELOG.md`、[当前项目状态](./PROJECT-STATE.md)、发行说明和相关设计文档。
 
 ## 架构
 
@@ -216,6 +235,7 @@ npm start
 - `src/constellation.js`：九项长期天赋、前置依赖、购买判定、存档清洗和玩家效果。
 - `src/rush.js`：星链狂潮阈值、事件充能、共振增益/衰减和自动战斗倍率。
 - `src/director.js`：30 分钟章节时长、战区、编队/遭遇/构筑阈值、强度曲线和 QA 倍率。
+- `src/threat.js`：五级威胁配置、动态评分、首章/残血/倒地保护、迟滞与单级步进。
 - `src/expedition.js`：生态航线、星门协议/航道判定、动态遭遇计划/结果判定、敌型权重与模块化敌军组装规则。
 - `src/i18n.js`：简体中文/英文文案目录、插值、DOM 与元数据同步。
 - `electron/main.cjs`：安全桌面窗口与生命周期。
@@ -228,11 +248,13 @@ npm start
 - `scripts/verify-rush.mjs`：验证六类事件、充能边界、共振速率、战斗倍率、QA 与 3D 接线。
 - `scripts/verify-expedition.mjs`：验证生态、星门、动态遭遇、敌军组合、早期安全、后期多样性与 3D 集成。
 - `scripts/verify-director.mjs`：验证 1,800 秒基础航行、九战区、27 编队、12 遭遇、八构筑和 QA 倍率隔离。
+- `scripts/verify-threat.mjs`：验证五级单调参数、保护包络、迟滞步进与战斗/收益/表现接线。
 - `scripts/verify-renderer3d.mjs`：验证 Three.js 精确依赖、实例化方块、分层深度、相反机头和禁止原生面片/光滑几何回退。
 - `scripts/verify-status.mjs`：验证四 Buff、三 Debuff、双语、自动规则与玩法/音频/HUD/3D 接线。
 - `scripts/smoke-electron.cjs`：启动隔离的真实 Electron/WebGL 会话，验证方向交互并生成截图。
 - `scripts/smoke-biomes.cjs`：逐一强制九个生态，验证 WebGL/视觉诊断/帧率/控制台并生成九张截图。
 - `scripts/smoke-director.cjs`：在真实 Electron/WebGL 中压缩运行第一章导演全时线。
+- `scripts/smoke-threat.cjs`：在真实 Electron/WebGL 中比较缓冲与极限两端并生成截图。
 - `scripts/verify-docs.mjs`：检查必需文档、Codex 指令大小和仓库内 Markdown 链接。
 
 完整模块边界与数据流见[系统架构](./ARCHITECTURE.md)。

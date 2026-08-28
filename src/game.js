@@ -87,6 +87,8 @@ const QA_BOSS_GALLERY = LOCAL_QA_HOST && URL_PARAMS.has("qa-boss-gallery");
 const QA_BOSS_STATE_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-boss-state");
 const REQUESTED_QA_BOSS_PHASE = Number.parseInt(URL_PARAMS.get("qa-boss-phase") || "", 10);
 const QA_BOSS_PHASE = [1, 2, 3].includes(REQUESTED_QA_BOSS_PHASE) ? REQUESTED_QA_BOSS_PHASE : 3;
+const REQUESTED_QA_THREAT = LOCAL_QA_HOST ? Number.parseInt(URL_PARAMS.get("qa-threat") || "", 10) : Number.NaN;
+const QA_THREAT_TIER = [0, 1, 2, 3, 4].includes(REQUESTED_QA_THREAT) ? REQUESTED_QA_THREAT : null;
 const REQUESTED_QA_STATUS = LOCAL_QA_HOST ? URL_PARAMS.get("qa-status") : null;
 const QA_STATUS_ID = SpaceStatus.DEBUFF_MODULES.some((debuff) => debuff.id === REQUESTED_QA_STATUS) ? REQUESTED_QA_STATUS : null;
 const REQUESTED_QA_PROTOCOL = LOCAL_QA_HOST ? URL_PARAMS.get("qa-protocol") : null;
@@ -114,7 +116,7 @@ const QA_ENEMY_BUILD = (() => {
   return SpaceExpedition.build(...parts, 2, QA_HULL_ID || "scout");
 })();
 const REQUESTED_RUN_SEED = Number.parseInt(URL_PARAMS.get("seed") || "", 10);
-const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_RUSH_MODE && "rush", QA_BUFFS_MODE && "buffs", QA_VOXEL_MODE && "voxel", QA_MODEL_GALLERY && "model-gallery", QA_BOSS_GALLERY && "boss-gallery", QA_BOSS_GALLERY && `boss-phase${QA_BOSS_PHASE}`, QA_BOSS_STATE_MODE && "boss-state", QA_STATUS_ID && `status-${QA_STATUS_ID}`, QA_PROTOCOL_ID && `protocol-${QA_PROTOCOL_ID}`, QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_BIOME_ID && `biome-${QA_BIOME_ID}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`, QA_HULL_ID && `hull-${QA_HULL_ID}`, QA_ENEMY_BUILD && `enemy-${QA_ENEMY_BUILD.moduleSignature}`].filter(Boolean).join("+") || "off";
+const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_RUSH_MODE && "rush", QA_BUFFS_MODE && "buffs", QA_VOXEL_MODE && "voxel", QA_MODEL_GALLERY && "model-gallery", QA_BOSS_GALLERY && "boss-gallery", QA_BOSS_GALLERY && `boss-phase${QA_BOSS_PHASE}`, QA_BOSS_STATE_MODE && "boss-state", QA_THREAT_TIER !== null && `threat${QA_THREAT_TIER}`, QA_STATUS_ID && `status-${QA_STATUS_ID}`, QA_PROTOCOL_ID && `protocol-${QA_PROTOCOL_ID}`, QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_BIOME_ID && `biome-${QA_BIOME_ID}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`, QA_HULL_ID && `hull-${QA_HULL_ID}`, QA_ENEMY_BUILD && `enemy-${QA_ENEMY_BUILD.moduleSignature}`].filter(Boolean).join("+") || "off";
 const t = (key, variables) => SpaceI18n.t(key, variables);
 const UPGRADE_DEFS = SpaceRoguelike.UPGRADE_DEFS;
 const TALENT_NODES = SpaceConstellation.TALENT_NODES;
@@ -123,6 +125,7 @@ const PROTOCOLS = SpaceRelics.PROTOCOLS;
 const BUFF_MODULES = SpaceStatus.BUFF_MODULES;
 const DEBUFF_MODULES = SpaceStatus.DEBUFF_MODULES;
 const DIRECTOR = SpaceDirector;
+const THREAT_TIERS = SpaceThreat.TIERS;
 
 ctx.imageSmoothingEnabled = false;
 
@@ -776,6 +779,7 @@ class AudioEngine {
       const bpm = (world.routeStages?.[this.stage]?.bpm || STAGES[this.stage]?.bpm || 132)
         + (world.activeBranch?.bpmOffset || 0)
         + (world.activeEncounter?.bpmOffset || 0)
+        + threatConfig().bpm
         + (rushActive() ? 18 : 0);
       this.nextStep += 60 / bpm / 4;
       this.step += 1;
@@ -812,7 +816,8 @@ class AudioEngine {
     const chordRoot = progressions[this.stage][bar];
     const encounterActive = Boolean(world.activeEncounter);
     const rush = rushActive();
-    const intensity = rush ? 1.38 : this.boss ? 1.22 : encounterActive ? 1.1 : 1;
+    const adaptiveMusic = threatConfig().music;
+    const intensity = (rush ? 1.38 : this.boss ? 1.22 : encounterActive ? 1.1 : 1) * adaptiveMusic;
     const bossPhase = this.boss ? world.boss?.phaseLevel || 1 : 0;
     const bossCharging = this.boss && world.boss?.attackState === "telegraph";
 
@@ -850,6 +855,11 @@ class AudioEngine {
       this.tone(root + signal, .06, "square", .021, when, this.musicBus, s === 10 ? 5 : 0);
       if (s === 6 || s === 14) this.noise(.032, .021, when, 2800, this.musicBus);
     }
+    if (!this.boss && world.threatTier >= 3 && s % 4 === 2) {
+      this.tone(root + 24 + arpeggios[this.stage][(s + bar) % 8], .055, "square", .018 * adaptiveMusic, when, this.musicBus, 5);
+      this.noise(.026, .018 * adaptiveMusic, when, 4600, this.musicBus);
+    }
+    if (!this.boss && world.threatTier === 4 && (s === 6 || s === 14)) this.kick(when + .02);
     if (rush) {
       this.tone(root + 24 + arpeggios[this.stage][(s + bar) % 8], .055, s % 2 ? "square" : "triangle", .027, when, this.musicBus, s % 4 === 3 ? 7 : 0);
       if (s % 2 === 0) this.kick(when + .025);
@@ -924,6 +934,13 @@ class AudioEngine {
       [48, 55, 60, 67, 72].forEach((note, index) => this.tone(note + lift, .24, index % 2 ? "square" : "triangle", .045 + index * .003, now + index * .045, this.sfxBus, 7));
       this.tone(36 + lift, .38, "triangle", .065, now, this.sfxBus, 14);
       this.noise(.22, .04, now + .06, 3600);
+    } else if (name === "threatRise") {
+      [55, 62, 67, 74].forEach((note, index) => this.tone(note, .15, index % 2 ? "triangle" : "square", .038 + index * .003, now + index * .042, this.sfxBus, 5));
+      this.tone(43, .3, "triangle", .045, now, this.sfxBus, 12);
+      this.noise(.16, .035, now + .04, 3800);
+    } else if (name === "threatRelief") {
+      [72, 67, 62].forEach((note, index) => this.tone(note, .16, "triangle", .032 - index * .004, now + index * .06, this.sfxBus, -4));
+      this.tone(50, .28, "sine", .028, now, this.sfxBus, -5);
     } else if (name === "elite") {
       [48, 55, 51, 60].forEach((note, i) => this.tone(note, .16, "square", .055, now + i * .07, this.sfxBus, i % 2 ? -5 : 4));
       this.noise(.18, .045, now, 1200);
@@ -1028,6 +1045,18 @@ const world = {
   globalSector: 1,
   sectorFlashTimer: 0,
   midDraftIndex: 0,
+  threatTier: 1,
+  threatScore: 0,
+  threatDesiredTier: 1,
+  threatCandidateTier: 1,
+  threatHoldTimer: 0,
+  threatRecentDamage: 0,
+  threatKillMomentum: 0,
+  threatPeak: 1,
+  threatChanges: 0,
+  threatReliefSeconds: 0,
+  threatApexSeconds: 0,
+  threatPulseTimer: 0,
   introTimer: 0,
   clearTimer: 0,
   eventIndex: 0,
@@ -1110,6 +1139,69 @@ const world = {
 };
 
 const activeStage = (index = world.stageIndex) => world.routeStages[index] || STAGES[index] || STAGES[0];
+const threatConfig = () => THREAT_TIERS[world.threatTier] || THREAT_TIERS[1];
+
+function updateAdaptiveThreat(dt) {
+  world.threatRecentDamage = Math.max(0, world.threatRecentDamage - dt / 6);
+  world.threatKillMomentum *= Math.exp(-dt / 20);
+  world.threatPulseTimer = Math.max(0, world.threatPulseTimer - dt);
+  const stage = activeStage();
+  const healthRatio = world.players.length
+    ? world.players.reduce((sum, player) => sum + Math.max(0, player.hp) / Math.max(1, player.maxHp), 0) / world.players.length
+    : 1;
+  const downedCount = world.players.filter((player) => player.downed).length;
+  const evaluation = SpaceThreat.evaluate({
+    stageIndex: world.stageIndex,
+    sectorIndex: world.sectorIndex,
+    progress: clamp(world.stageTime / Math.max(1, stage.duration), 0, 1),
+    healthRatio,
+    downed: downedCount,
+    combo: world.combo,
+    killsPerMinute: world.threatKillMomentum * 3,
+    recentDamage: world.threatRecentDamage,
+    contractPressure: SpaceThreat.contractPressure(world.contractId),
+    rushActive: rushActive(),
+    linked: world.linked,
+  });
+  world.threatScore = evaluation.score;
+  world.threatDesiredTier = QA_THREAT_TIER ?? evaluation.tier;
+  const commitThreatTier = (nextTier) => {
+    const previousTier = world.threatTier;
+    if (nextTier === previousTier) return;
+    world.threatTier = nextTier;
+    world.threatPeak = Math.max(world.threatPeak, world.threatTier);
+    world.threatChanges += 1;
+    world.threatPulseTimer = 1.1;
+    world.flash = Math.max(world.flash, .12);
+    world.shake = Math.max(world.shake, .08);
+    audio.sfx(world.threatTier > previousTier ? "threatRise" : "threatRelief");
+    showToast(t(world.threatTier > previousTier ? "toast.threatRise" : "toast.threatRelief", { threat: t(threatConfig().nameKey) }));
+  };
+  if (QA_THREAT_TIER !== null) {
+    world.threatTier = QA_THREAT_TIER;
+    world.threatCandidateTier = QA_THREAT_TIER;
+    world.threatHoldTimer = 0;
+  } else if (downedCount > 0 || healthRatio < .34) {
+    commitThreatTier(0);
+    world.threatCandidateTier = 0;
+    world.threatHoldTimer = 0;
+  } else if (world.threatDesiredTier === world.threatTier) {
+    world.threatCandidateTier = world.threatTier;
+    world.threatHoldTimer = 0;
+  } else {
+    if (world.threatCandidateTier !== world.threatDesiredTier) {
+      world.threatCandidateTier = world.threatDesiredTier;
+      world.threatHoldTimer = 0;
+    }
+    world.threatHoldTimer += dt;
+    if (world.threatHoldTimer >= SpaceThreat.HOLD_SECONDS) {
+      commitThreatTier(SpaceThreat.stepTier(world.threatTier, world.threatDesiredTier));
+      world.threatHoldTimer = 0;
+    }
+  }
+  if (world.threatTier === 0) world.threatReliefSeconds += dt;
+  if (world.threatTier === 4) world.threatApexSeconds += dt;
+}
 
 let settingsReturnContext = "menu";
 let resetSaveArmed = false;
@@ -1317,6 +1409,8 @@ function renderResultBuild() {
   const encounterChip = encounters ? `<span>${t("result.encounters", { encounters })}</span>` : "";
   const talentChip = `<span>${t("result.talents", { current: profile.talents.length, total: TALENT_NODES.length })}</span>`;
   const rushChip = `<span>${t("result.rushSummary", { count: world.rushCount, chain: world.rushBestChain, score: world.rushLastBonus })}</span>`;
+  const peakThreat = THREAT_TIERS[world.threatPeak] || THREAT_TIERS[1];
+  const threatChip = `<span>${t("result.threatSummary", { peak: t(peakThreat.nameKey), changes: world.threatChanges, relief: Math.round(world.threatReliefSeconds), apex: Math.round(world.threatApexSeconds) })}</span>`;
   const protocolChip = world.activeProtocols.length
     ? `<span>${t("result.protocols", { protocols: world.activeProtocols.map(localizedName).join(t("result.separator")) })}</span>`
     : `<span>${t("result.protocolsEmpty")}</span>`;
@@ -1324,7 +1418,7 @@ function renderResultBuild() {
     const upgrade = UPGRADE_DEFS.find((entry) => entry.id === id);
     return upgrade ? `<span>${upgradeIcon(id)}${localizedName(upgrade)} <b>Lv.${upgradeLevel(id)}</b></span>` : "";
   }).join("");
-  resultBuild.innerHTML = seedChip + talentChip + rushChip + protocolChip + routeChip + pathChip + encounterChip + (upgradeChips || `<span>${t("result.buildEmpty")}</span>`);
+  resultBuild.innerHTML = seedChip + talentChip + rushChip + threatChip + protocolChip + routeChip + pathChip + encounterChip + (upgradeChips || `<span>${t("result.buildEmpty")}</span>`);
 }
 
 function renderUpgradeDraft(focusSelected = false) {
@@ -1884,6 +1978,18 @@ function resetWorld() {
   world.globalSector = DIRECTOR.globalSector(0, 0);
   world.sectorFlashTimer = 0;
   world.midDraftIndex = 0;
+  world.threatTier = QA_THREAT_TIER ?? 1;
+  world.threatScore = 0;
+  world.threatDesiredTier = world.threatTier;
+  world.threatCandidateTier = world.threatTier;
+  world.threatHoldTimer = 0;
+  world.threatRecentDamage = 0;
+  world.threatKillMomentum = 0;
+  world.threatPeak = world.threatTier;
+  world.threatChanges = 0;
+  world.threatReliefSeconds = 0;
+  world.threatApexSeconds = 0;
+  world.threatPulseTimer = 0;
   world.introTimer = 0;
   world.clearTimer = 0;
   world.eventIndex = 0;
@@ -2202,7 +2308,8 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     ? Math.min(1, world.activeBranch?.enemyHp || 1)
     : world.activeBranch?.enemyHp || 1;
   const contractHealth = (world.contract?.enemyHp || 1) * (stage.biome?.enemyHp || 1) * branchHealth;
-  const maxHp = stats.hp * (elite ? 3.1 : 1) * contractHealth * build.hp;
+  const adaptiveThreat = threatConfig();
+  const maxHp = stats.hp * (elite ? 3.1 : 1) * contractHealth * build.hp * adaptiveThreat.enemyHp;
   const enemy = {
     id: ++world.enemySerial,
     type,
@@ -2236,7 +2343,7 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     payloadNameKey: build.payloadNameKey,
     buildSignature: build.signature,
     moduleScale: build.scale,
-    moveSpeed: build.speed,
+    moveSpeed: build.speed * adaptiveThreat.moveSpeed,
     moveSway: build.sway,
     moveDrift: build.drift,
     weaponBulletSpeed: build.bulletSpeed,
@@ -2257,6 +2364,7 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     debuffIntensity: build.debuffIntensity,
     payloadColor: build.payloadColor,
     moduleColor: world.activeBranch?.color || stage.biome?.secondary || stage.accent,
+    threatReward: adaptiveThreat.score,
   };
   if (build.signature !== "standard.pulse.light.sentry.clean" && !world.discoveredVariants.has(build.signature)) {
     world.discoveredVariants.add(build.signature);
@@ -2419,7 +2527,7 @@ function enemyBullet(x, y, vx, vy, color = "#ff7d8b", size = 3, source = null) {
   const branchSpeed = world.stageIndex === 0 && progress < .4
     ? Math.min(1, world.activeBranch?.bulletSpeed || 1)
     : world.activeBranch?.bulletSpeed || 1;
-  const speedMultiplier = (world.contract?.bulletSpeed || 1) * (stage.biome?.bulletSpeed || 1) * branchSpeed;
+  const speedMultiplier = (world.contract?.bulletSpeed || 1) * (stage.biome?.bulletSpeed || 1) * branchSpeed * threatConfig().bulletSpeed;
   world.enemyBullets.push({
     x,
     y,
@@ -2443,7 +2551,7 @@ function enemyBullet(x, y, vx, vy, color = "#ff7d8b", size = 3, source = null) {
 function fireAimed(enemy, speed = 62, count = 1, spread = 0.12, color) {
   const finalSpeed = speed * (enemy.weaponBulletSpeed || 1);
   const finalCount = count + (enemy.weaponExtraShots || 0);
-  const finalSpread = spread * (enemy.weaponSpread || 1);
+  const finalSpread = spread * (enemy.weaponSpread || 1) * threatConfig().aimSpread;
   for (let i = 0; i < finalCount; i += 1) {
     const offset = (i - (finalCount - 1) / 2) * finalSpread;
     const velocity = aimedVelocity(enemy, finalSpeed);
@@ -2532,7 +2640,7 @@ function updateEnemyIntelligence(enemy, dt) {
 
 function updateEnemy(enemy, dt) {
   enemy.age += dt;
-  enemy.shootTimer -= dt;
+  enemy.shootTimer -= dt * (enemy.boss ? 1 : threatConfig().fireRate);
   enemy.hitFlash = Math.max(0, (enemy.hitFlash || 0) - dt);
   const canFire = world.stageTime > 6;
 
@@ -2542,7 +2650,7 @@ function updateEnemy(enemy, dt) {
   }
 
   if (enemy.elite) {
-    enemy.eliteTimer -= dt;
+    enemy.eliteTimer -= dt * threatConfig().fireRate;
     if (enemy.y < 58) enemy.y += 22 * (enemy.moveSpeed || 1) * dt;
     else {
       enemy.y = lerp(enemy.y, 58, 1 - Math.exp(-dt * 3));
@@ -2766,6 +2874,7 @@ function damagePlayer(player) {
   if (QA_BOSS_STATE_MODE && world.boss) return false;
   if (player.invulnerability > 0 || player.downed) return false;
   if (player.shield > 0) {
+    world.threatRecentDamage = 1;
     player.shield -= 1;
     player.invulnerability = 0.45;
     player.shieldRegenTimer = player.shieldRegenInterval || Number.POSITIVE_INFINITY;
@@ -2776,6 +2885,7 @@ function damagePlayer(player) {
     return true;
   }
 
+  world.threatRecentDamage = 1;
   player.hp -= 1;
   player.invulnerability = player.hitInvulnerability;
   player.shieldRegenTimer = player.shieldRegenInterval || Number.POSITIVE_INFINITY;
@@ -2899,12 +3009,13 @@ function killEnemy(enemy, owner = 0) {
   if (enemy.dead) return;
   enemy.dead = true;
   world.kills += 1;
+  world.threatKillMomentum += enemy.elite ? 2.2 : enemy.boss ? 4 : 1;
   world.combo = world.comboTimer > 0 ? world.combo + 1 : 1;
   world.comboTimer = 2.4;
   world.bestCombo = Math.max(world.bestCombo, world.combo);
   const multiplier = 1 + Math.floor(world.combo / 8) * 0.5;
   const rush = SpaceRush.combatMultipliers(rushActive());
-  world.score += Math.round(enemy.score * multiplier * rush.score * (world.contract?.score || 1) * (world.activeBranch?.score || 1));
+  world.score += Math.round(enemy.score * multiplier * rush.score * (world.contract?.score || 1) * (world.activeBranch?.score || 1) * (enemy.threatReward || 1));
   const player = world.players[owner];
   if (player) player.energy = clamp(player.energy + (enemy.boss ? 35 : 4.5) * player.energyGain * statusBonuses(player).energyGain, 0, 100);
   burst(enemy.x, enemy.y, enemy.boss ? "#fff2a6" : activeStage().accent, enemy.boss ? 80 : 12, enemy.boss ? 150 : 65);
@@ -3234,7 +3345,8 @@ function updateStage(dt) {
     world.eventIndex += 1;
   }
   if (world.spawnTimer <= 0) {
-    const enemyCap = 6 + world.stageIndex * 2 + intensity.enemyCapBonus;
+    const adaptiveThreat = threatConfig();
+    const enemyCap = Math.max(4, 6 + world.stageIndex * 2 + intensity.enemyCapBonus + adaptiveThreat.capBonus);
     const activeEnemies = world.enemies.filter((enemy) => !enemy.boss).length;
     if (activeEnemies < enemyCap) {
       spawnEnemy();
@@ -3249,7 +3361,7 @@ function updateStage(dt) {
     const encounterRate = world.stageIndex === 0 && progress < .4
       ? Math.min(1, world.activeEncounter?.spawnRate || 1)
       : world.activeEncounter?.spawnRate || 1;
-    world.spawnTimer = Math.max(0.62, (1.72 - world.stageIndex * 0.13 - progress * 0.55) / ((world.contract?.spawnRate || 1) * ecologyRate * routeRate * encounterRate * intensity.spawnCadence));
+    world.spawnTimer = Math.max(0.62, (1.72 - world.stageIndex * 0.13 - progress * 0.55) / ((world.contract?.spawnRate || 1) * ecologyRate * routeRate * encounterRate * intensity.spawnCadence * adaptiveThreat.spawnRate));
   }
   if (!QA_VOXEL_MODE && world.stageTime >= stage.duration) spawnBoss();
 }
@@ -3483,6 +3595,7 @@ function update(dt) {
     input.endFrame();
     return;
   }
+  updateAdaptiveThreat(dt);
   world.variantNoticeCooldown = Math.max(0, world.variantNoticeCooldown - dt);
   if (world.variantNotice) {
     world.variantNotice.timer -= dt;
@@ -4121,6 +4234,12 @@ function drawHud() {
     const scale = Math.min(2, 1 + world.combo * 0.02);
     pixelText(t("hud.combo", { combo: world.combo }), W - 9, 43, world.combo > 20 ? "#ffe27a" : "#ffffff", "right", 7 * scale);
   }
+  const threat = threatConfig();
+  const threatPulse = world.threatPulseTimer > 0 ? .72 + Math.sin(world.time * 20) * .28 : 1;
+  ctx.globalAlpha = threatPulse;
+  pixelText(t("hud.threatLevel", { level: world.threatTier + 1, name: t(threat.nameKey) }), W - 9, 53, threat.color, "right", 5.5);
+  drawBar(W - 62, 57, 53, (world.threatTier + 1) / THREAT_TIERS.length, threat.color, true);
+  ctx.globalAlpha = 1;
   if (rushActive() || world.rushCharge > 0) {
     const active = rushActive();
     const ratio = active
@@ -4356,6 +4475,20 @@ function draw() {
   canvas.dataset.draftContext = world.draftContext;
   canvas.dataset.enemies = String(world.enemies.length);
   canvas.dataset.enemyBullets = String(world.enemyBullets.length);
+  const adaptiveThreat = threatConfig();
+  canvas.dataset.threatTier = String(world.threatTier);
+  canvas.dataset.threatId = adaptiveThreat.id;
+  canvas.dataset.threatScore = world.threatScore.toFixed(3);
+  canvas.dataset.threatTarget = String(world.threatDesiredTier);
+  canvas.dataset.threatPeak = String(world.threatPeak);
+  canvas.dataset.threatChanges = String(world.threatChanges);
+  canvas.dataset.threatReliefSeconds = world.threatReliefSeconds.toFixed(2);
+  canvas.dataset.threatApexSeconds = world.threatApexSeconds.toFixed(2);
+  canvas.dataset.threatSpawnRate = String(adaptiveThreat.spawnRate);
+  canvas.dataset.threatBulletSpeed = String(adaptiveThreat.bulletSpeed);
+  canvas.dataset.threatFireRate = String(adaptiveThreat.fireRate);
+  canvas.dataset.threatEnemyHp = String(adaptiveThreat.enemyHp);
+  canvas.dataset.threatAimSpread = String(adaptiveThreat.aimSpread);
   canvas.dataset.bossPhase = world.boss ? String(world.boss.phaseLevel) : "0";
   canvas.dataset.bossAttackState = world.boss?.attackState || "off";
   canvas.dataset.bossAttack = world.boss?.attackId || "";

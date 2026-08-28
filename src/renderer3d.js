@@ -94,6 +94,7 @@ class SpaceRenderer3D {
     this.canvas.dataset.bossFamilies = "3-organic-phase-forms";
     this.canvas.dataset.bossChoreography = "telegraph-state-arena";
     this.canvas.dataset.expeditionSectors = "9-progressive-voxel-gates";
+    this.canvas.dataset.adaptiveThreat = "5-tier-telegraphed";
   }
 
   createStars(count, size, seed) {
@@ -836,6 +837,32 @@ class SpaceRenderer3D {
     }
   }
 
+  drawThreatMatrix(world) {
+    const colors = ["#68f4df", "#76dbff", "#ffe16c", "#ff936b", "#ff67d4"];
+    const tier = clamp(Number(world.threatTier) || 0, 0, 4);
+    const color = colors[tier];
+    const pulseTimer = clamp(Number(world.threatPulseTimer) || 0, 0, 1.1);
+    const pulse = 1 + pulseTimer * .12 + Math.sin(this.time * 12) * .025;
+    for (let marker = 0; marker < 4; marker += 1) {
+      const z = this.streamZ(marker, 7.4, 3.25 + tier * .13, -34, 4);
+      const base = compose([0, -.47, z]);
+      for (const side of [-1, 1]) {
+        this.voxel(base, [side * 6.45, .46, 0], [.12, .92, .18], color, .38 + tier * .1);
+        for (let pip = 0; pip < 5; pip += 1) {
+          const active = pip <= tier;
+          this.voxel(base, [side * (6.3 - pip * .25), 1.02 + pip * .15, 0], [.1 * pulse, .1 * pulse, .1], active ? color : "#4a5278", active ? .94 : .12);
+        }
+      }
+      if (tier >= 3) {
+        this.voxel(base, [0, 3.02, 0], [1.25 + tier * .18, .09 * pulse, .2], color, .82);
+        this.voxel(base, [0, 2.78, 0], [.12, .4, .12], color, 1);
+      }
+    }
+    this.canvas.dataset.threatTier = String(tier);
+    this.canvas.dataset.threatColor = color;
+    this.canvas.dataset.threatPulse = pulseTimer.toFixed(2);
+  }
+
   drawEncounter(encounter) {
     if (!encounter) return;
     const position = this.toWorld(encounter.x, encounter.y, encounter.kind === "siege" ? .55 : .12);
@@ -1163,7 +1190,7 @@ class SpaceRenderer3D {
     this.starLayers[0].position.z = (this.time * .8) % 18;
     this.starLayers[1].position.z = ((this.time * .55) % 18) - 12;
     this.rimLight.color.set(stage.biome?.accent || stage.grid);
-    this.rimLight.intensity = (this.quality === "low" ? 1.45 : 2.6) + (world.sectorIndex || 0) * .28;
+    this.rimLight.intensity = (this.quality === "low" ? 1.45 : 2.6) + (world.sectorIndex || 0) * .28 + (world.threatTier || 0) * .12;
     this.renderer.shadowMap.enabled = false;
     for (const batch of this.toonBatches.values()) batch.castShadow = false;
     this.playerLights.forEach((light, index) => {
@@ -1219,6 +1246,7 @@ class SpaceRenderer3D {
     this.canvas.dataset.modelGallery = "off";
     this.drawLandmark(this.stageIndex, stage.biome);
     this.drawSectorArchitecture(world, stage);
+    this.drawThreatMatrix(world);
     if (world.boss) this.drawBossArena(world.boss);
     if (world.mode === "menu") {
       this.drawShip({ index: 0, frameId: world.loadoutFrame, x: 4.8 + Math.sin(this.time * .6) * .4, z: -.5 + Math.cos(this.time) * .25 }, playerConfigs[0], true);
