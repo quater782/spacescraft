@@ -12,10 +12,10 @@ const forge = fs.readFileSync(new URL("../forge.config.cjs", import.meta.url), "
 const packageJson = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
 assert.equal(packageJson.dependencies?.three, "0.185.1", "Three.js must be an exact production dependency");
-assert.equal(packageJson.version, "0.20.0", "package metadata must match the Boss Organism Forge release");
-assert.match(html, /<script type="module" src="\.\/src\/renderer3d\.js\?v=18"><\/script>/);
-assert.match(html, /<script type="module" src="\.\/src\/game\.js\?v=26"><\/script>/);
-assert.match(html, /BOSS ORGANISM FORGE 0\.20\.0/);
+assert.equal(packageJson.version, "0.21.0", "package metadata must match the Boss Choreography Protocol release");
+assert.match(html, /<script type="module" src="\.\/src\/renderer3d\.js\?v=19"><\/script>/);
+assert.match(html, /<script type="module" src="\.\/src\/game\.js\?v=27"><\/script>/);
+assert.match(html, /BOSS CHOREOGRAPHY PROTOCOL 0\.21\.0/);
 assert.match(renderer, /import \* as THREE from "\.\.\/node_modules\/three\/build\/three\.module\.min\.js"/);
 assert.match(renderer, /new THREE\.WebGLRenderer/);
 assert.match(renderer, /new THREE\.InstancedMesh/);

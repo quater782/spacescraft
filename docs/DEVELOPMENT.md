@@ -90,6 +90,16 @@ http://127.0.0.1:4173/?qa-boss-gallery&qa-boss-phase=3&seed=2
 
 运行 `npm run smoke:bosses` 会依次验证三个阶段的 `data-boss-families="3-organic-phase-forms"`、Toon+Glow、无黑色、大型有机模块、WebGL、50 FPS 下限和零应用控制台错误，并输出 `boss-phase-1.png` 到 `boss-phase-3.png`。人工验收必须确认花瓣魟翼、雷枪熔炉、双体虚空冠三套剪影互不复用普通敌舰附肢，第二/三阶段器官确实改变主体轮廓，且下方三种章别弹体分别是花瓣、雷枪和旋转棱体。
 
+### Boss 攻击状态机实战
+
+`qa-boss-state` 建立仅 localhost 有效的长耐久第一章 Boss 会话，并把阶段计时加速到 18 倍；Boss 出现后玩家临时免伤，便于动态观察编舞，正式战役不会启用：
+
+```text
+http://127.0.0.1:4173/?qa-fast&qa-boss-state&qa-path=1&seed=7
+```
+
+`#game` 会公开 `data-boss-attack-state`、`data-boss-attack`、`data-boss-attack-charge` 与 `data-enemy-bullets`。运行 `npm run smoke:boss-state` 必须动态捕获 recover/telegraph、至少两种连续攻击、charge ≥ 0.6、实际敌弹、`telegraph-state-arena`、WebGL、50 FPS 下限和零应用控制台错误。生成的 `spacescraft-boss-state.png` 应显示搏动核心、旋转蓄力块、章别竞技场信标及目标危险光路。
+
 ### 九生态微缩世界与弹体特效矩阵
 
 `qa-biome` 只在 localhost/127.0.0.1 生效，可把任意生态强制到第一章，方便在相同战斗节奏下比较场景：

@@ -39,7 +39,7 @@
 
 ## 观察与测试接口
 
-`#game` Canvas 的 `data-*` 属性公开模式、语言、章节、事件、Boss 阶段、敌人数、玩家耐久、FPS、QA 状态、装备、合约、天赋 ID/数量、倍率、构筑、协议、临时 Buff/Debuff、六槽/7,168 构筑目录、生态、星门、遭遇、狂潮、敌军变体、HUD 分辨率和奖励等稳定摘要。3D Canvas 额外公开 `data-renderer="three-r185-instanced-voxel"`、`data-art-style="toon-glow-light-blocks"`、`data-model-palette="saturated-no-black"`、`data-model-families="3-player-7-alien"`、`data-module-anatomy="integrated-large-form"` 与 `data-boss-families="3-organic-phase-forms"`。本地参数包含 `qa-hull`、`qa-enemy`、`qa-buffs`、`qa-status`、`qa-voxel`、`qa-model-gallery`、`qa-boss-gallery` 与 `qa-boss-phase`。`scripts/smoke-electron.cjs` 验证完整自动战斗，`smoke-models.cjs` 验证 3+7 近景矩阵，`smoke-bosses.cjs` 验证三章 Boss 的三个生长阶段及专属弹体。
+`#game` Canvas 的 `data-*` 属性公开模式、语言、章节、事件、Boss 阶段/攻击/状态/蓄力、敌人数/敌弹数、玩家耐久、FPS、QA 状态、装备、合约、天赋、倍率、构筑、协议、Buff/Debuff、六槽/7,168 构筑目录、生态、星门、遭遇、狂潮、HUD 分辨率和奖励等稳定摘要。3D Canvas 额外公开 `data-renderer="three-r185-instanced-voxel"`、`data-art-style="toon-glow-light-blocks"`、`data-model-palette="saturated-no-black"`、`data-model-families="3-player-7-alien"`、`data-module-anatomy="integrated-large-form"`、`data-boss-families="3-organic-phase-forms"` 与 `data-boss-choreography="telegraph-state-arena"`。本地参数包含 `qa-hull`、`qa-enemy`、`qa-voxel`、`qa-model-gallery`、`qa-boss-gallery`、`qa-boss-phase` 与 `qa-boss-state`。后三个脚本分别验证 3+7 近景矩阵、Boss 三阶段模型矩阵和动态 recover/telegraph/fire 编舞。
 
 3D Canvas 还公开 `data-world-depth-layers="3"`、`data-biome-dioramas="9"` 与 `data-projectile-vfx="segmented-toon-trails"`。仅本机有效的 `qa-biome=<id>` 可以强制九个生态之一；`scripts/smoke-biomes.cjs` 逐项启动真实 Electron/WebGL、断言 45 FPS 下限与零控制台错误并生成截图。
 

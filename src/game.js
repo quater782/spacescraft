@@ -84,6 +84,7 @@ const QA_BUFFS_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-buffs");
 const QA_VOXEL_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-voxel");
 const QA_MODEL_GALLERY = LOCAL_QA_HOST && URL_PARAMS.has("qa-model-gallery");
 const QA_BOSS_GALLERY = LOCAL_QA_HOST && URL_PARAMS.has("qa-boss-gallery");
+const QA_BOSS_STATE_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-boss-state");
 const REQUESTED_QA_BOSS_PHASE = Number.parseInt(URL_PARAMS.get("qa-boss-phase") || "", 10);
 const QA_BOSS_PHASE = [1, 2, 3].includes(REQUESTED_QA_BOSS_PHASE) ? REQUESTED_QA_BOSS_PHASE : 3;
 const REQUESTED_QA_STATUS = LOCAL_QA_HOST ? URL_PARAMS.get("qa-status") : null;
@@ -113,7 +114,7 @@ const QA_ENEMY_BUILD = (() => {
   return SpaceExpedition.build(...parts, 2, QA_HULL_ID || "scout");
 })();
 const REQUESTED_RUN_SEED = Number.parseInt(URL_PARAMS.get("seed") || "", 10);
-const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_RUSH_MODE && "rush", QA_BUFFS_MODE && "buffs", QA_VOXEL_MODE && "voxel", QA_MODEL_GALLERY && "model-gallery", QA_BOSS_GALLERY && "boss-gallery", QA_BOSS_GALLERY && `boss-phase${QA_BOSS_PHASE}`, QA_STATUS_ID && `status-${QA_STATUS_ID}`, QA_PROTOCOL_ID && `protocol-${QA_PROTOCOL_ID}`, QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_BIOME_ID && `biome-${QA_BIOME_ID}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`, QA_HULL_ID && `hull-${QA_HULL_ID}`, QA_ENEMY_BUILD && `enemy-${QA_ENEMY_BUILD.moduleSignature}`].filter(Boolean).join("+") || "off";
+const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_RUSH_MODE && "rush", QA_BUFFS_MODE && "buffs", QA_VOXEL_MODE && "voxel", QA_MODEL_GALLERY && "model-gallery", QA_BOSS_GALLERY && "boss-gallery", QA_BOSS_GALLERY && `boss-phase${QA_BOSS_PHASE}`, QA_BOSS_STATE_MODE && "boss-state", QA_STATUS_ID && `status-${QA_STATUS_ID}`, QA_PROTOCOL_ID && `protocol-${QA_PROTOCOL_ID}`, QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_BIOME_ID && `biome-${QA_BIOME_ID}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`, QA_HULL_ID && `hull-${QA_HULL_ID}`, QA_ENEMY_BUILD && `enemy-${QA_ENEMY_BUILD.moduleSignature}`].filter(Boolean).join("+") || "off";
 const t = (key, variables) => SpaceI18n.t(key, variables);
 const UPGRADE_DEFS = SpaceRoguelike.UPGRADE_DEFS;
 const TALENT_NODES = SpaceConstellation.TALENT_NODES;
@@ -496,6 +497,30 @@ const BOSS_PHASE_KEYS = [
   ["bossPhase.3.1", "bossPhase.3.2", "bossPhase.3.3"],
 ];
 
+const BOSS_ATTACK_SEQUENCES = [
+  [
+    ["petalBurst", "sunLance"],
+    ["petalBurst", "seedSpiral", "sunLance"],
+    ["seedSpiral", "twinBloom", "sunLance", "petalBurst"],
+  ],
+  [
+    ["railWall", "thunderFan"],
+    ["forgeCross", "railWall", "thunderFan"],
+    ["thunderFan", "doubleRail", "forgeCross", "railWall"],
+  ],
+  [
+    ["spiralCrown", "voidPincer"],
+    ["eclipseTwin", "voidPincer", "spiralCrown"],
+    ["voidPincer", "tripleEclipse", "spiralCrown", "eclipseTwin"],
+  ],
+];
+
+const BOSS_ATTACK_TELEGRAPH = Object.freeze({
+  petalBurst: .82, sunLance: .68, seedSpiral: .9, twinBloom: .76,
+  railWall: .72, thunderFan: .82, forgeCross: .88, doubleRail: .68,
+  spiralCrown: .84, voidPincer: .72, eclipseTwin: .9, tripleEclipse: .96,
+});
+
 const PLAYER_CONFIG = [
   {
     nameKey: "player.1",
@@ -783,6 +808,8 @@ class AudioEngine {
     const encounterActive = Boolean(world.activeEncounter);
     const rush = rushActive();
     const intensity = rush ? 1.38 : this.boss ? 1.22 : encounterActive ? 1.1 : 1;
+    const bossPhase = this.boss ? world.boss?.phaseLevel || 1 : 0;
+    const bossCharging = this.boss && world.boss?.attackState === "telegraph";
 
     this.tone(root + chordRoot + arpeggios[this.stage][s % 8] + 12, 0.045, "square", 0.012 * intensity, when);
     if (s % 2 === 0 || (this.boss && s % 4 === 1)) {
@@ -800,6 +827,18 @@ class AudioEngine {
     if (this.boss && s % 4 === 2) {
       this.tone(root + 31, 0.055, "square", 0.025, when);
       this.noise(0.045, 0.025, when, 2400, this.musicBus);
+    }
+    if (this.boss && bossPhase >= 2 && s % 2 === 0) {
+      this.tone(root + 24 + arpeggios[this.stage][(s + bar * 2) % 8], .07, s % 4 ? "square" : "triangle", .017 + bossPhase * .004, when, this.musicBus, s === 14 ? 7 : 0);
+    }
+    if (this.boss && bossPhase >= 3 && (s === 0 || s === 8)) {
+      this.tone(root - 24, .58, "sawtooth", .038, when, this.musicBus, 7);
+      [0, 7, 13].forEach((interval, index) => this.tone(root + interval + 12, .28, "triangle", .018, when + index * .018, this.musicBus, 5));
+    }
+    if (bossCharging && s % 2 === 1) {
+      const charge = clamp(world.boss?.attackCharge || 0, 0, 1);
+      this.tone(root + 19 + Math.floor(charge * 14) + (s % 4) * 2, .065, "square", .018 + charge * .018, when, this.musicBus, 5 + charge * 7);
+      if (s === 7 || s === 15) this.noise(.06, .025 + charge * .025, when, 3400 + charge * 2200, this.musicBus);
     }
     if (encounterActive && !this.boss && s % 4 === 2) {
       const signal = world.activeEncounter.kind === "survive" ? 29 : world.activeEncounter.kind === "siege" ? 24 : 19;
@@ -867,6 +906,14 @@ class AudioEngine {
     } else if (name === "bossPhase") {
       [38, 45, 50, 57].forEach((note, i) => this.tone(note, .28, i % 2 ? "square" : "sawtooth", .075, now + i * .055, this.sfxBus, 7));
       this.noise(.34, .085, now, 420);
+    } else if (name === "bossCharge") {
+      [43, 50, 57, 64, 71].forEach((note, index) => this.tone(note + this.stage, .22, index % 2 ? "square" : "sawtooth", .04 + index * .004, now + index * .055, this.sfxBus, 7));
+      this.tone(31 + this.stage * 2, .54, "triangle", .065, now, this.sfxBus, 19);
+      this.noise(.28, .045, now + .06, 1800);
+    } else if (name === "bossAttack") {
+      [67, 55, 43].forEach((note, index) => this.tone(note + this.stage * 2, .18, index === 1 ? "square" : "sawtooth", .07 - index * .012, now + index * .025, this.sfxBus, -12));
+      this.tone(31, .32, "square", .08, now, this.sfxBus, -19);
+      this.noise(.26, .11, now, 320);
     } else if (name === "elite") {
       [48, 55, 51, 60].forEach((note, i) => this.tone(note, .16, "square", .055, now + i * .07, this.sfxBus, i % 2 ? -5 : 4));
       this.noise(.18, .045, now, 1200);
@@ -2258,7 +2305,7 @@ function spawnBoss() {
   if (world.activeEncounter) finishEncounter(false);
   const baseHealth = [340, 500, 700][world.stageIndex];
   const stage = activeStage();
-  const health = (QA_FAST_MODE ? baseHealth * .14 : baseHealth) * (world.contract?.enemyHp || 1) * (stage.biome?.enemyHp || 1) * (world.activeBranch?.enemyHp || 1);
+  const health = (QA_BOSS_STATE_MODE ? baseHealth * 100 : QA_FAST_MODE ? baseHealth * .14 : baseHealth) * (world.contract?.enemyHp || 1) * (stage.biome?.enemyHp || 1) * (world.activeBranch?.enemyHp || 1);
   for (const enemy of world.enemies) {
     if (!enemy.dead) burst(enemy.x, enemy.y, stage.accent, enemy.elite ? 18 : 6, 55);
   }
@@ -2278,6 +2325,13 @@ function spawnBoss() {
     age: 0,
     shootTimer: 1.5,
     secondaryTimer: 3.4,
+    attackState: "recover",
+    attackId: "",
+    attackTimer: 1.15,
+    attackDuration: 1,
+    attackIndex: 0,
+    attackCharge: 0,
+    attackTargetX: W / 2,
     phaseLevel: 1,
     phaseShield: QA_FAST_MODE ? .45 : 2.2,
     hitFlash: 0,
@@ -2300,6 +2354,10 @@ function enterBossPhase(boss, nextPhase) {
   boss.phaseLevel = nextPhase;
   boss.phaseShield = QA_FAST_MODE ? .28 : 1.15;
   boss.shootTimer = Math.max(boss.shootTimer, 1.25);
+  boss.attackState = "recover";
+  boss.attackId = "";
+  boss.attackTimer = QA_FAST_MODE ? .32 : .9;
+  boss.attackCharge = 0;
   world.enemyBullets = [];
   world.flash = Math.max(world.flash, .62);
   world.shake = Math.max(world.shake, .52);
@@ -2359,6 +2417,57 @@ function fireRing(enemy, count, speed, phase = 0, color = "#ff6b8c") {
     enemyBullet(enemy.x, enemy.y, Math.cos(angle) * finalSpeed, Math.sin(angle) * finalSpeed, color, 2.5, enemy);
   }
   audio.sfx(enemy.weaponModule === "orbit" ? "enemyOrbit" : "enemyShoot");
+}
+
+function beginBossAttack(boss, stage) {
+  const sequence = BOSS_ATTACK_SEQUENCES[stage][boss.phaseLevel - 1];
+  boss.attackId = sequence[boss.attackIndex % sequence.length];
+  boss.attackIndex += 1;
+  boss.attackState = "telegraph";
+  boss.attackDuration = (BOSS_ATTACK_TELEGRAPH[boss.attackId] || .8) * (QA_FAST_MODE ? .52 : 1);
+  boss.attackTimer = boss.attackDuration;
+  boss.attackCharge = 0;
+  boss.attackTargetX = enemyTarget(boss).x;
+  audio.sfx("bossCharge");
+}
+
+function executeBossAttack(boss, stage) {
+  const phase = boss.phaseLevel;
+  const id = boss.attackId;
+  if (id === "petalBurst") {
+    fireRing(boss, 7 + phase * 2, 31 + phase * 4, boss.age * .42, "#ff72ac");
+  } else if (id === "sunLance") {
+    fireAimed(boss, 42 + phase * 3, 1 + phase, .13, "#ffd166");
+  } else if (id === "seedSpiral") {
+    fireRing(boss, 8 + phase * 2, 29 + phase * 3, boss.age * .68, "#ff9dcc");
+    fireRing(boss, 5 + phase, 39, -boss.age * .42, "#ffca58");
+  } else if (id === "twinBloom") {
+    fireRing(boss, 10, 35, boss.age * .4, "#ff72ac");
+    fireRing(boss, 10, 35, boss.age * .4 + Math.PI / 10, "#ffca58");
+  } else if (id === "railWall") {
+    for (let lane = -2; lane <= 2; lane += 1) enemyBullet(boss.x + lane * 12, boss.y + 14, lane * 3, 38 + Math.abs(lane) * 2, "#70eaff", 2.7, boss);
+  } else if (id === "thunderFan") {
+    fireAimed(boss, 46 + phase * 2, 2 + phase, .16, "#ffe16c");
+  } else if (id === "forgeCross") {
+    fireRing(boss, 6 + phase * 2, 33 + phase * 3, Math.PI / 4, "#70eaff");
+    fireAimed(boss, 45, 2, .12, "#ffe16c");
+  } else if (id === "doubleRail") {
+    for (const side of [-1, 1]) for (let lane = -1; lane <= 1; lane += 1) enemyBullet(boss.x + side * 22 + lane * 7, boss.y + 16, side * 5 + lane * 2, 46, side > 0 ? "#ffe16c" : "#70eaff", 3, boss);
+  } else if (id === "spiralCrown") {
+    fireRing(boss, 9 + phase * 3, 31 + phase * 4, -boss.age * .62, "#c183ff");
+  } else if (id === "voidPincer") {
+    fireAimed(boss, 45 + phase * 2, 2 + phase, .2, "#ff4f70");
+  } else if (id === "eclipseTwin") {
+    fireRing(boss, 8 + phase * 2, 34, boss.age * .36, "#c183ff");
+    fireRing(boss, 7 + phase, 43, -boss.age * .28, "#ff4f70");
+  } else if (id === "tripleEclipse") {
+    for (let ring = 0; ring < 3; ring += 1) fireRing(boss, 8, 32 + ring * 7, boss.age * (ring % 2 ? -.34 : .4) + ring * .18, ring === 1 ? "#ff4f70" : "#c183ff");
+  }
+  boss.attackState = "recover";
+  boss.attackTimer = Math.max(.66, 1.42 - phase * .15 - stage * .08) * (QA_FAST_MODE ? .58 : 1);
+  boss.attackCharge = 0;
+  world.shake = Math.max(world.shake, .2 + stage * .05);
+  audio.sfx("bossAttack");
 }
 
 function updateEnemyIntelligence(enemy, dt) {
@@ -2479,20 +2588,13 @@ function updateBoss(boss, dt) {
 
   if (boss.phaseShield > 0) return;
 
-  if (boss.shootTimer <= 0) {
-    if (stage === 0) {
-      fireRing(boss, phase > 0.5 ? 12 : 9, 34 + phase * 10, boss.age * 0.45, "#ff72ac");
-      fireAimed(boss, 43, 2, 0.18, "#ffd166");
-      boss.shootTimer = phase > 0.65 ? 1.2 : 1.65;
-    } else if (stage === 1) {
-      for (let i = -2; i <= 2; i += 1) enemyBullet(boss.x + i * 10, boss.y + 14, i * 5, 39 + Math.abs(i) * 2, "#7fffe2", 2.5);
-      if (phase > 0.35) fireAimed(boss, 48, 3, 0.15, "#ffe16c");
-      boss.shootTimer = phase > 0.7 ? 1.05 : 1.4;
-    } else {
-      fireRing(boss, phase > 0.55 ? 16 : 12, 33 + phase * 14, -boss.age * 0.55, "#c183ff");
-      fireRing(boss, 7, 46, boss.age * 0.3, "#ff4f70");
-      boss.shootTimer = phase > 0.7 ? .92 : 1.25;
-    }
+  boss.attackTimer -= dt;
+  if (boss.attackState === "telegraph") {
+    boss.attackCharge = clamp(1 - boss.attackTimer / boss.attackDuration, 0, 1);
+    boss.x = lerp(boss.x, W / 2 + (boss.attackTargetX - W / 2) * .24, dt * 1.8);
+    if (boss.attackTimer <= 0) executeBossAttack(boss, stage);
+  } else if (boss.attackTimer <= 0) {
+    beginBossAttack(boss, stage);
   }
 
   if (boss.secondaryTimer <= 0) {
@@ -2616,6 +2718,7 @@ function useNova(player) {
 }
 
 function damagePlayer(player) {
+  if (QA_BOSS_STATE_MODE && world.boss) return false;
   if (player.invulnerability > 0 || player.downed) return false;
   if (player.shield > 0) {
     player.shield -= 1;
@@ -3060,7 +3163,7 @@ function updateStage(dt) {
   }
   if (world.bossSpawned) return;
 
-  world.stageTime += dt * (QA_FAST_MODE && !QA_VOXEL_MODE ? 6 : 1);
+  world.stageTime += dt * (QA_BOSS_STATE_MODE ? 18 : QA_FAST_MODE && !QA_VOXEL_MODE ? 6 : 1);
   world.spawnTimer -= dt;
   const nextEncounter = world.encounterPlans[world.stageIndex]?.[world.encounterIndex];
   if (!QA_VOXEL_MODE && !world.activeEncounter && nextEncounter && world.stageTime >= nextEncounter.at * stage.duration) {
@@ -4187,7 +4290,11 @@ function draw() {
   canvas.dataset.stageTime = world.stageTime.toFixed(2);
   canvas.dataset.events = String(world.eventIndex);
   canvas.dataset.enemies = String(world.enemies.length);
+  canvas.dataset.enemyBullets = String(world.enemyBullets.length);
   canvas.dataset.bossPhase = world.boss ? String(world.boss.phaseLevel) : "0";
+  canvas.dataset.bossAttackState = world.boss?.attackState || "off";
+  canvas.dataset.bossAttack = world.boss?.attackId || "";
+  canvas.dataset.bossAttackCharge = (world.boss?.attackCharge || 0).toFixed(2);
   canvas.dataset.playerHp = world.players.map((player) => player.hp).join(",");
   canvas.dataset.playerShield = world.players.map((player) => player.shield).join(",");
   canvas.dataset.playerSpeed = world.players.map((player) => player.speed).join(",");

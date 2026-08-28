@@ -92,6 +92,7 @@ class SpaceRenderer3D {
     this.canvas.dataset.modelFamilies = "3-player-7-alien";
     this.canvas.dataset.moduleAnatomy = "integrated-large-form";
     this.canvas.dataset.bossFamilies = "3-organic-phase-forms";
+    this.canvas.dataset.bossChoreography = "telegraph-state-arena";
   }
 
   createStars(count, size, seed) {
@@ -667,6 +668,42 @@ class SpaceRenderer3D {
     this.alienEye(base, 0, -.98, "#ffd3f2", 1.48);
   }
 
+  drawBossTelegraph(enemy, base, palette, stage) {
+    if (enemy.attackState !== "telegraph") return;
+    const charge = clamp(enemy.attackCharge || 0, 0, 1);
+    const phase = enemy.phaseLevel || 1;
+    const color = ["#ffca58", "#70eaff", "#c98aff"][stage];
+    const pulse = .82 + charge * .48 + Math.sin(this.time * (10 + phase * 2)) * .08;
+    this.voxelHalo(base, 1.7 + charge * .56, .34, color, 6 + phase * 2, 1.25 + stage * .24, stage * .7, .1 + charge * .06);
+    this.voxel(base, [0, .7, -.42], [.62 * pulse, .2 * pulse, .72 * pulse], color, .92);
+    const aimed = ["sunLance", "railWall", "thunderFan", "doubleRail", "voidPincer"].includes(enemy.attackId);
+    const radial = ["petalBurst", "seedSpiral", "twinBloom", "forgeCross", "spiralCrown", "eclipseTwin", "tripleEclipse"].includes(enemy.attackId);
+    if (aimed) {
+      for (const side of [-1, 0, 1]) this.voxel(base, [side * (.42 + stage * .08), .4, -1.72], [.12 + charge * .08, .1 + charge * .06, 1.78], side ? palette[2] : color, .72 + charge * .24, [0, side * .1, 0]);
+    }
+    if (radial) {
+      for (const side of [-1, 1]) this.voxel(base, [side * (1.2 + charge * .45), .34, -.28], [.78, .12 + charge * .06, .32], side > 0 ? color : palette[1], .7 + charge * .25, [0, side * (.48 + charge * .2), 0]);
+    }
+  }
+
+  drawBossArena(boss) {
+    const stage = this.stageIndex;
+    const colors = [["#ff72ac", "#ffca58"], ["#70eaff", "#ffe45c"], ["#c183ff", "#ff6680"]][stage];
+    const charge = boss.attackState === "telegraph" ? clamp(boss.attackCharge || 0, 0, 1) : 0;
+    for (let row = 0; row < 6; row += 1) {
+      const z = this.streamZ(row, 5.8, boss.attackState === "telegraph" ? 4.2 : 2.2, -30, 6);
+      for (const side of [-1, 1]) {
+        const base = compose([side * 7.65, -.45, z]);
+        this.voxel(base, [0, .42, 0], [.2 + charge * .08, .84 + charge * .34, .58], colors[(row + stage) % 2], .34 + charge * .42);
+        this.voxel(base, [side * -.34, .92, 0], [.58, .13 + charge * .05, .46], colors[(row + stage + 1) % 2], .62 + charge * .3);
+      }
+    }
+    if (boss.attackState === "telegraph") {
+      const target = this.toWorld(boss.attackTargetX || this.width / 2, this.height - 62, .16);
+      for (let segment = 0; segment < 5; segment += 1) this.voxel(compose(target), [0, .04, -segment * 1.25], [.34 + charge * .18, .04, .72], colors[segment % 2], .58 + charge * .38);
+    }
+  }
+
   drawBoss(enemy, base, stageOverride = this.stageIndex) {
     const stage = clamp(stageOverride, 0, 2);
     const palettes = enemy.hitFlash > 0 ? ["#72eaff", "#ff73bd", "#ffe15d"] : [["#7b58d7", "#f05aa9", "#ffca58"], ["#357bd8", "#48d8c6", "#ffe45c"], ["#754ed0", "#d950a6", "#ff6680"]][stage];
@@ -675,6 +712,7 @@ class SpaceRenderer3D {
     if (stage === 0) this.drawBossBloom(enemy, bossBase, palettes);
     else if (stage === 1) this.drawBossForge(enemy, bossBase, palettes);
     else this.drawBossVoid(enemy, bossBase, palettes);
+    this.drawBossTelegraph(enemy, bossBase, palettes, stage);
     if (enemy.phaseShield > 0) this.voxelCage(bossBase, 2.45 + Math.sin(this.time * 12) * .04, palettes[2], 1.15);
   }
 
@@ -683,7 +721,8 @@ class SpaceRenderer3D {
     const layout = [[100, 106, -.12], [240, 99, 0], [380, 106, .12]];
     layout.forEach(([x, y, yaw], stage) => {
       const base = compose(this.toWorld(x, y, .34), [0, Math.PI + yaw, 0], [1.18, 1.18, 1.18]);
-      this.drawBoss({ phaseLevel, phaseShield: phaseLevel === 2 ? 1 : 0, hitFlash: 0, seed: stage + 1 }, base, stage);
+      const attackIds = [["petalBurst", "seedSpiral", "twinBloom"], ["railWall", "forgeCross", "doubleRail"], ["spiralCrown", "eclipseTwin", "tripleEclipse"]];
+      this.drawBoss({ phaseLevel, phaseShield: phaseLevel === 2 ? 1 : 0, hitFlash: 0, seed: stage + 1, attackState: "telegraph", attackCharge: .82, attackId: attackIds[stage][phaseLevel - 1] }, base, stage);
       this.drawProjectile({
         x,
         y: 181,
@@ -1150,6 +1189,7 @@ class SpaceRenderer3D {
     }
     this.canvas.dataset.modelGallery = "off";
     this.drawLandmark(this.stageIndex, stage.biome);
+    if (world.boss) this.drawBossArena(world.boss);
     if (world.mode === "menu") {
       this.drawShip({ index: 0, frameId: world.loadoutFrame, x: 4.8 + Math.sin(this.time * .6) * .4, z: -.5 + Math.cos(this.time) * .25 }, playerConfigs[0], true);
       this.drawShip({ index: 1, frameId: world.loadoutFrame, x: 7.2 + Math.sin(this.time * .7) * .5, z: 1.1 + Math.cos(this.time * .8) * .25 }, playerConfigs[1], true);
