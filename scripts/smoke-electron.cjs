@@ -106,11 +106,12 @@ async function run() {
   if (errors.length) throw new Error(`renderer console errors: ${errors.join(" | ")}`);
   const rendererState = await window.webContents.executeJavaScript(`(() => {
     const scene = document.querySelector('#scene');
-    return { backend: scene.dataset.renderer, artStyle: scene.dataset.artStyle, modelPalette: scene.dataset.modelPalette, webgl: Boolean(scene.getContext('webgl2') || scene.getContext('webgl')) };
+    return { backend: scene.dataset.renderer, artStyle: scene.dataset.artStyle, modelPalette: scene.dataset.modelPalette, worldDepthLayers: scene.dataset.worldDepthLayers, biomeDioramas: scene.dataset.biomeDioramas, projectileVfx: scene.dataset.projectileVfx, webgl: Boolean(scene.getContext('webgl2') || scene.getContext('webgl')) };
   })()`);
   const webgl = rendererState.webgl;
   if (!webgl || rendererState.backend !== "three-r185-instanced-voxel") throw new Error(`Three.js WebGL renderer unavailable: ${JSON.stringify(rendererState)}`);
   if (rendererState.artStyle !== "toon-glow-light-blocks" || rendererState.modelPalette !== "saturated-no-black") throw new Error(`Toon+Glow art contract unavailable: ${JSON.stringify(rendererState)}`);
+  if (rendererState.worldDepthLayers !== "3" || rendererState.biomeDioramas !== "9" || rendererState.projectileVfx !== "segmented-toon-trails") throw new Error(`Neon Diorama Worlds art contract unavailable: ${JSON.stringify(rendererState)}`);
   const rushState = await window.webContents.executeJavaScript(`(() => {
     const game = document.querySelector('#game');
     return Object.fromEntries(['rushActive', 'rushCharge', 'rushTimer', 'rushChain', 'rushBestChain', 'rushCount', 'rushLastBonus'].map((key) => [key, game.dataset[key]]));

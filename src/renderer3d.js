@@ -86,6 +86,9 @@ class SpaceRenderer3D {
     this.canvas.dataset.renderer = "three-r185-instanced-voxel";
     this.canvas.dataset.artStyle = "toon-glow-light-blocks";
     this.canvas.dataset.modelPalette = "saturated-no-black";
+    this.canvas.dataset.worldDepthLayers = "3";
+    this.canvas.dataset.biomeDioramas = "9";
+    this.canvas.dataset.projectileVfx = "segmented-toon-trails";
   }
 
   createStars(count, size, seed) {
@@ -253,6 +256,59 @@ class SpaceRenderer3D {
         }
       }
     }
+  }
+
+  streamZ(slot, spacing = 5.2, speed = 2.8, far = -30, count = 9) {
+    const span = spacing * count;
+    return far + ((slot * spacing + this.time * speed) % span);
+  }
+
+  drawFlightCorridor(biome) {
+    const accent = biome?.accent || "#7fffe2";
+    const secondary = biome?.secondary || "#ffcf6e";
+    for (let slot = 0; slot < 9; slot += 1) {
+      const z = this.streamZ(slot, 5.1, 3.05, -31, 9);
+      for (const side of [-1, 1]) {
+        const base = compose([side * 8.15, -.42, z]);
+        this.voxel(base, [0, .34, 0], [.18, .74, .88], slot % 2 ? accent : secondary, .28);
+        this.voxel(base, [side * -.32, .68, 0], [.58, .12, .44], secondary, .66);
+        this.voxel(base, [side * -.62, .02, 0], [.76, .035, .13], accent, .74, [0, side * .42, 0]);
+      }
+      const marker = compose([0, -.47, z]);
+      for (const side of [-1, 1]) this.voxel(marker, [side * 2.8, .02, 0], [.78, .025, .1], slot % 2 ? secondary : accent, .58, [0, side * .55, 0]);
+    }
+  }
+
+  voxelFlower(base, accent, secondary, scale = 1) {
+    this.voxel(base, [0, .45 * scale, 0], [.08 * scale, .9 * scale, .08 * scale], secondary, .25);
+    this.voxel(base, [0, .98 * scale, 0], [.28 * scale, .24 * scale, .28 * scale], accent, .78);
+    for (const side of [-1, 1]) {
+      this.voxel(base, [side * .3 * scale, .98 * scale, 0], [.22 * scale, .14 * scale, .22 * scale], secondary, .55);
+      this.voxel(base, [0, .98 * scale, side * .3 * scale], [.22 * scale, .14 * scale, .22 * scale], accent, .48);
+    }
+  }
+
+  voxelCrystal(base, accent, secondary, height = 1.8) {
+    this.voxel(base, [0, height * .36, 0], [.42, height * .72, .42], accent, .34, [0, .12, .08]);
+    this.voxel(base, [-.42, height * .2, .18], [.24, height * .42, .24], secondary, .5, [0, -.22, -.12]);
+    this.voxel(base, [.42, height * .16, -.12], [.2, height * .34, .2], "#dffcff", .72, [0, .28, .15]);
+  }
+
+  voxelCoral(base, accent, secondary, scale = 1) {
+    this.voxel(base, [0, .34 * scale, 0], [.26 * scale, .68 * scale, .26 * scale], accent, .28);
+    for (const side of [-1, 1]) {
+      this.voxel(base, [side * .3 * scale, .58 * scale, 0], [.34 * scale, .16 * scale, .22 * scale], secondary, .44, [0, 0, side * .42]);
+      this.voxel(base, [side * .5 * scale, .79 * scale, 0], [.12 * scale, .44 * scale, .12 * scale], accent, .62);
+    }
+  }
+
+  voxelTree(base, accent, secondary, scale = 1) {
+    this.voxel(base, [0, .66 * scale, 0], [.16 * scale, 1.32 * scale, .16 * scale], secondary, .24);
+    for (const side of [-1, 1]) {
+      this.voxel(base, [side * .42 * scale, 1.12 * scale, 0], [.72 * scale, .12 * scale, .18 * scale], secondary, .38, [0, 0, side * .42]);
+      this.voxel(base, [side * .72 * scale, 1.38 * scale, 0], [.24 * scale, .42 * scale, .24 * scale], accent, .76);
+    }
+    this.voxel(base, [0, 1.66 * scale, 0], [.34 * scale, .34 * scale, .34 * scale], accent, .68);
   }
 
   voxelThruster(base, x, z, color, flame, scale = 1) {
@@ -661,69 +717,120 @@ class SpaceRenderer3D {
     if (!biome) return;
     const accent = biome.accent || "#7fffe2";
     const secondary = biome.secondary || accent;
-    const landmark = biome.landmark;
-    if (landmark === "bloom" || landmark === "garden") {
-      for (let index = 0; index < 7; index += 1) {
-        const base = compose([-9 + index * 3, -.1, -15 - (index % 3) * 2.8]);
-        this.voxel(base, [0, .5, 0], [.09, 1, .09], secondary, .25);
-        this.voxel(base, [0, 1.08, 0], [.28, .28, .28], index % 2 ? accent : secondary, .7);
-        for (const side of [-1, 1]) this.voxel(base, [side * .31, 1.08, 0], [.24, .16, .24], accent, .45);
-      }
-    } else if (landmark === "crystals" || landmark === "prisms") {
+    if (biome.id === "sugarBloom") {
       for (let index = 0; index < 8; index += 1) {
-        const height = 1.2 + (index % 3) * .65;
-        const base = compose([-10 + index * 2.8, -.45, -17 - (index % 2) * 3]);
-        this.voxel(base, [0, height * .38, 0], [.52, height * .76, .52], index % 2 ? accent : secondary, .45);
-        this.voxel(base, [0, height * .82, 0], [.32, height * .24, .32], "#dffcff", .65);
+        const side = index % 2 ? 1 : -1;
+        this.voxelFlower(compose([side * (6.4 + index % 3), -.48, this.streamZ(index, 5.8, 2.15, -32, 8)]), accent, secondary, .68 + index % 3 * .18);
       }
-    } else if (landmark === "comets") {
-      for (let index = 0; index < 6; index += 1) {
-        const base = compose([-10 + index * 4.1, 2.6 + (index % 2), -17 - (index % 3) * 2.5]);
-        this.voxel(base, [0, 0, 0], [.34, .34, .34], secondary, .8);
-        for (let tail = 1; tail <= 4; tail += 1) this.voxel(base, [tail * .38, 0, tail * .15], [.28 / tail, .18 / tail, .48], accent, .55 / tail);
+    } else if (biome.id === "crystalOrchard") {
+      for (let index = 0; index < 8; index += 1) {
+        const side = index % 2 ? 1 : -1;
+        this.voxelCrystal(compose([side * (6.7 + index % 3 * .65), -.48, this.streamZ(index, 5.6, 2.35, -32, 8)]), index % 3 ? accent : secondary, index % 3 ? secondary : accent, 1.25 + index % 4 * .44);
       }
-    } else if (landmark === "aurora") {
-      for (let strip = 0; strip < 4; strip += 1) for (let segment = 0; segment < 9; segment += 1) {
-        const y = 4.8 + strip * .65 + Math.sin(segment * .7 + this.time * .25) * .35;
-        this.pushVoxel(compose([-9 + segment * 2.2, y, -20 - strip], [0, .18, .08], [1.6, .12, .16]), strip % 2 ? accent : secondary, .7);
+    } else if (biome.id === "cometTide") {
+      for (let index = 0; index < 7; index += 1) {
+        const z = this.streamZ(index, 6.2, 4.4, -34, 7);
+        const side = index % 2 ? 1 : -1;
+        const base = compose([side * (5.4 + index % 3), 2.2 + index % 3 * 1.15, z], [0, side * .72, 0]);
+        this.voxel(base, [0, 0, 0], [.38, .38, .62], secondary, .92);
+        for (let tail = 1; tail <= 3; tail += 1) this.voxel(base, [0, 0, -tail * .72], [.22 / tail, .18 / tail, .52], accent, .82 - tail * .12);
       }
-    } else if (landmark === "gears") {
-      for (let gear = 0; gear < 3; gear += 1) {
-        const base = compose([-7 + gear * 6.5, 1.4 + gear, -18 - gear * 2], [Math.PI / 2, 0, 0]);
-        this.voxelHalo(base, 1.2 + gear * .25, 0, gear % 2 ? accent : secondary, 12, .08 + gear * .025, gear, .18);
+    } else if (biome.id === "auroraFoundry") {
+      for (let strip = 0; strip < 3; strip += 1) {
+        for (let segment = 0; segment < 8; segment += 1) {
+          const wave = Math.sin(segment * .72 + strip + this.time * .55) * .48;
+          this.voxel(compose([0, 0, 0]), [-8.2 + segment * 2.35, 4.6 + strip * .8 + wave, -18.5 - strip * 2.4], [1.72, .11, .16], strip % 2 ? secondary : accent, .76, [0, .08, wave * .15]);
+        }
       }
-    } else if (landmark === "reef") {
-      for (let index = 0; index < 10; index += 1) {
-        const size = .5 + (index % 4) * .22;
-        const base = compose([-10 + index * 2.3, -.45, -17 - (index % 3) * 2.2]);
-        for (let stack = 0; stack < 3; stack += 1) this.voxel(base, [0, size * (.3 + stack * .5), 0], [size * (1 - stack * .18), size * .45, size * (1 - stack * .18)], index % 2 ? accent : secondary, .25);
+      for (const side of [-1, 1]) for (let index = 0; index < 3; index += 1) {
+        const base = compose([side * 7.4, -.48, -10 - index * 8]);
+        this.voxel(base, [0, 1.2, 0], [.34, 2.4, .34], secondary, .25);
+        this.voxel(base, [side * -.45, 2.35, 0], [.9, .18, .56], accent, .7);
       }
-    } else if (landmark === "eclipse") {
-      const base = compose([-7.7, 5.7, -21]);
-      this.voxelOrb(base, 3.1, "#080612", "#18102a");
-      this.voxelHalo(base, 3.7, 0, accent, 24, .02, 0, .16);
+    } else if (biome.id === "thunderWorks") {
+      for (let gear = 0; gear < 5; gear += 1) {
+        const side = gear % 2 ? 1 : -1;
+        const base = compose([side * (6.5 + gear % 2), 1.2 + gear % 3 * .75, this.streamZ(gear, 8, 1.65, -34, 5)], [Math.PI / 2, 0, 0]);
+        this.voxel(base, [0, 0, 0], [.35, .35, .5], secondary, .46);
+        this.voxelHalo(base, 1.05 + gear % 3 * .25, 0, accent, 10, side * .32, gear, .18);
+      }
+      for (let index = 0; index < 5; index += 1) {
+        const base = compose([index % 2 ? 8 : -8, -.46, -13 - index * 5]);
+        this.voxel(base, [0, .55, 0], [.42, 1.1, .52], secondary, .28);
+        this.voxel(base, [0, 1.22, 0], [.7, .16, .7], accent, .7);
+      }
+    } else if (biome.id === "cloudReef") {
+      for (let index = 0; index < 9; index += 1) {
+        const side = index % 2 ? 1 : -1;
+        const scale = .72 + index % 3 * .2;
+        const base = compose([side * (6.2 + index % 3 * .7), -.48, this.streamZ(index, 5.7, 2.05, -33, 9)]);
+        this.voxel(base, [0, .1, 0], [1.28 * scale, .3, .92 * scale], "#b9f2ff", .3);
+        this.voxelCoral(base, accent, secondary, scale);
+      }
+    } else if (biome.id === "eclipseCarnival") {
+      const eclipse = compose([-7.4, 5.5, -23], [0, this.time * .035, 0]);
+      this.voxelOrb(eclipse, 2.7, "#784fd0", "#ff5d78");
+      this.voxelHalo(eclipse, 3.45, 0, secondary, 20, .06, 0, .16);
+      for (let gate = 0; gate < 4; gate += 1) {
+        const z = this.streamZ(gate, 10.5, 2.35, -34, 4);
+        for (const side of [-1, 1]) {
+          const base = compose([side * 7.1, -.48, z]);
+          this.voxel(base, [0, 1.15, 0], [.22, 2.3, .42], gate % 2 ? accent : secondary, .38);
+          this.voxel(base, [side * -.58, 2.18, 0], [1.05, .2, .42], gate % 2 ? secondary : accent, .72);
+        }
+      }
+    } else if (biome.id === "prismGrave") {
+      for (let index = 0; index < 8; index += 1) {
+        const side = index % 2 ? 1 : -1;
+        const base = compose([side * (6.4 + index % 3 * .72), -.48, this.streamZ(index, 5.8, 2.2, -34, 8)], [0, side * .14, side * .08]);
+        this.voxel(base, [0, .9 + index % 3 * .3, 0], [.48, 1.8 + index % 3 * .6, .48], index % 2 ? accent : secondary, .46);
+        this.voxel(base, [side * -.42, 1.65 + index % 3 * .3, 0], [.7, .14, .68], index % 2 ? secondary : accent, .72, [0, 0, side * .58]);
+      }
+    } else if (biome.id === "voidGarden") {
+      for (let index = 0; index < 8; index += 1) {
+        const side = index % 2 ? 1 : -1;
+        this.voxelTree(compose([side * (6.3 + index % 3 * .8), -.48, this.streamZ(index, 6, 1.95, -34, 8)]), accent, secondary, .72 + index % 3 * .2);
+      }
+      for (let mote = 0; mote < 10; mote += 1) {
+        const phase = mote / 10 * TAU + this.time * .22;
+        this.pushVoxel(compose([Math.cos(phase) * (6.5 + mote % 3), 2.3 + Math.sin(phase * 2) * 1.2, -15 - mote % 4 * 3.2], [phase, phase, 0], [.1, .1, .1]), mote % 2 ? accent : secondary, 1);
+      }
     }
   }
 
   drawLandmark(stageIndex, biome) {
+    const accent = biome?.accent || "#7fffe2";
+    const secondary = biome?.secondary || "#ffcf6e";
     if (stageIndex === 0) {
       const planet = compose([8.2, 5.3, -21], [0, this.time * .025, 0]);
-      this.voxelOrb(planet, 2.42, "#c94788", "#ffad7a");
-      this.voxelHalo(planet, 3.18, 0, "#f59ac7", 24, .02, 0, .14);
+      this.voxelOrb(planet, 2.42, accent, secondary);
+      this.voxelHalo(planet, 3.18, 0, secondary, 20, .02, 0, .14);
     } else if (stageIndex === 1) {
-      for (let index = 0; index < 6; index += 1) {
-        const base = compose([-9 + index * 3.7, 5.5 + (index % 2) * 1.2, -21 - (index % 3)]);
-        for (let block = -2; block <= 2; block += 1) this.voxel(base, [block * .62, Math.abs(block) * -.12, 0], [.72, .48, .7], "#4fa9ad", .16);
+      for (let index = 0; index < 5; index += 1) {
+        const base = compose([-8 + index * 4, 5.5 + (index % 2) * .9, -22 - (index % 3)]);
+        for (let block = -2; block <= 2; block += 1) this.voxel(base, [block * .62, Math.abs(block) * -.12, 0], [.72, .42, .64], block % 2 ? accent : secondary, .32);
       }
       const gear = compose([7.3, 6.7, -19], [Math.PI / 2, 0, 0]);
-      this.voxelHalo(gear, 2.2, 0, "#e3be4d", 16, .12, 0, .24);
+      this.voxelHalo(gear, 2.2, 0, secondary, 16, .12, 0, .24);
     } else {
-      const base = compose([7.5, 3.5, -22]);
-      this.voxel(base, [0, 2.8, 0], [4.2, 7.6, 2.8], "#2b123e");
-      this.voxel(base, [0, 7, 0], [3.5, .8, 2.9], "#5f275b");
-      for (let y = 0; y < 5; y += 1) for (let x = -1; x <= 1; x += 1) this.voxel(base, [x * 1.1, y * 1.15 + .2, -1.45], [.32, .32, .06], y === 4 ? "#ff466b" : "#8a427d", .7);
+      const base = compose([7.5, -.42, -23]);
+      for (const side of [-1, 1]) {
+        this.voxel(base, [side * 1.6, 2.9, 0], [1.15, 5.8, 2.1], side > 0 ? accent : secondary, .28, [0, 0, side * .04]);
+        this.voxel(base, [side * 1.6, 6.25, 0], [.62, 1.15, 1.25], side > 0 ? secondary : accent, .65);
+      }
+      this.voxel(base, [0, 1.5, -.95], [.82, 3, .22], "#8f72ff", .54);
+      for (let tier = 0; tier < 4; tier += 1) this.voxel(base, [0, .45 + tier * 1.1, -1.2], [.36 + tier * .06, .22, .08], tier % 2 ? accent : secondary, .84);
     }
+    this.drawFlightCorridor(biome);
     this.drawBiomeFeatures(biome);
+  }
+
+  projectileTrail(base, color, width, length, segments = 3, offsetX = 0) {
+    const count = this.quality === "low" ? 1 : Math.min(3, segments);
+    for (let segment = 0; segment < count; segment += 1) {
+      const falloff = 1 - segment * .22;
+      this.voxel(base, [offsetX, 0, -length * (.75 + segment * .82)], [width * falloff, width * falloff, length * .48], color, .84 - segment * .13);
+    }
   }
 
   drawProjectile(bullet, enemy = false) {
@@ -737,13 +844,20 @@ class SpaceRenderer3D {
       if (bullet.weaponModule === "sniper") {
         this.voxel(base, [0, 0, 0], [size * .72, size * .72, size * 4.2], color, 1);
         this.voxel(base, [0, 0, size * 2.5], [size * .28, size * .28, size * 2.2], bullet.payloadColor || "#ffd454", .76);
+        this.projectileTrail(base, bullet.payloadColor || color, size * .24, size * 2.1, 3);
       } else if (bullet.weaponModule === "orbit") {
         this.voxel(base, [0, 0, 0], [size * 2.4, size, size], color, 1, [0, bullet.age * 5, 0]);
         this.voxel(base, [0, 0, 0], [size, size, size * 2.4], color, 1, [0, bullet.age * 5, 0]);
+        this.projectileTrail(base, bullet.payloadColor || color, size * .48, size * 1.55, 2);
       } else if (bullet.weaponModule === "twin") {
         this.voxel(base, [-size, 0, 0], [size * .75, size, size * 1.8], color, 1);
         this.voxel(base, [size, 0, 0], [size * .75, size, size * 1.8], color, 1);
-      } else this.voxel(base, [0, 0, 0], [size, size, size * 1.55], color, 1);
+        this.projectileTrail(base, color, size * .38, size * 1.35, 2, -size);
+        this.projectileTrail(base, color, size * .38, size * 1.35, 2, size);
+      } else {
+        this.voxel(base, [0, 0, 0], [size, size, size * 1.55], color, 1);
+        this.projectileTrail(base, color, size * .42, size * 1.3, 2);
+      }
       if (bullet.payloadModule !== "clean") {
         const payloadColor = bullet.payloadColor || color;
         this.voxel(base, [0, 0, size * 1.35], [size * .7, size * .7, size * .7], payloadColor, .82);
@@ -753,15 +867,19 @@ class SpaceRenderer3D {
       if (bullet.phaseBarrier) {
         this.voxel(base, [0, 0, 0], [.11, .08, .72], "#58dfff", 1);
         this.voxel(base, [0, .01, -.34], [.18, .06, .18], bullet.color, .85);
+        this.projectileTrail(base, "#58dfff", .075, .42, 3);
       } else if ((bullet.seeker || 0) > 0) {
         this.voxel(base, [0, 0, -.04], [.08, .08, .46], bullet.color, 1);
         this.voxel(base, [0, 0, .2], [.24, .05, .16], "#a96cff", .82);
+        this.projectileTrail(base, "#a96cff", .065, .32, 2);
       } else if ((bullet.r || 0) > 2.35) {
         this.voxel(base, [0, 0, 0], [.11, .11, .52], bullet.color, 1);
         this.voxel(base, [0, .01, -.32], [.065, .065, .2], "#ffd454", .82);
+        this.projectileTrail(base, "#ffd454", .075, .38, 3);
       } else {
         this.voxel(base, [0, 0, 0], [.07, .07, .42], bullet.color, 1);
         this.voxel(base, [0, 0, .26], [.12, .04, .13], "#8d70ff", .7);
+        this.projectileTrail(base, bullet.color, .05, .3, 2);
       }
     }
   }
@@ -791,7 +909,14 @@ class SpaceRenderer3D {
     const position = this.toWorld(particle.x, particle.y, .25 + particle.size * .08);
     const alpha = clamp(particle.life / particle.maxLife, 0, 1);
     const size = .035 + particle.size * .025;
-    this.pushVoxel(compose(position, [particle.life * 4, 0, 0], [size, size, size]), particle.color, alpha > .55 ? .65 : .15);
+    const speed = Math.hypot(particle.vx || 0, particle.vy || 0);
+    const angle = Math.atan2(particle.vx || 0, particle.vy || 1);
+    const length = size * (1.35 + Math.min(2.4, speed * .012)) * (.72 + alpha * .42);
+    const base = compose(position, [0, angle, particle.life * 3.2]);
+    this.voxel(base, [0, 0, 0], [size, size, length], particle.color, alpha > .42 ? .82 : .24);
+    if (particle.size >= 2.4 && this.quality !== "low") {
+      this.voxel(base, [0, 0, -length * .68], [size * .55, size * .55, length * .52], "#fff4b5", .72);
+    }
   }
 
   drawBeam(playerA, playerB) {

@@ -70,6 +70,24 @@ http://127.0.0.1:4173/?qa-voxel&qa-buffs&qa-status=chill&qa-path=1&qa-hull=carri
 
 视觉验收必须同时检查：玩家尖鼻朝屏幕上方、敌军绕 Y 轴 180° 朝屏幕下方；玩家具有细长机身、纵向座舱、连续阶梯薄翼、倾斜尾翼与独立推进焰，不得呈现甲虫/装甲车式粗短截面；敌军不得调用玩家的机鼻/机翼/尾翼构造器，必须以弯月骨翼、分叉颚、甲壳、触须和非对称眼阵形成异形剪影；Buff/Debuff 贴合主体结构。玩家与敌军主体必须保持蓝、青、紫、粉、橙等饱和颜色，不得使用近黑色结构块，也不得因曝光过高变成粉白；表面应可见三阶 Toon 明暗，Glow 只形成略大于实体的同色边缘。单个机鼻不超过四块、单侧翼不超过四块、单侧尾翼不超过两块、单侧弯月不超过三块；彩色体素弹幕、体素星球/生态、3D 网格和远近雾有纵深；静止截图和连续运行中均无共面闪烁。`npm run verify` 会拒绝近黑舰体色、超预算核心构造器、敌方复用人类战机构造器、原生 shader/buffer/draw call、手写面片以及 Plane/Sphere/Torus/Octahedron/Cone 几何回退。
 
+### 九生态微缩世界与弹体特效矩阵
+
+`qa-biome` 只在 localhost/127.0.0.1 生效，可把任意生态强制到第一章，方便在相同战斗节奏下比较场景：
+
+```text
+http://127.0.0.1:4173/?qa-biome=eclipseCarnival&seed=2
+```
+
+稳定 ID 为 `sugarBloom`、`crystalOrchard`、`cometTide`、`auroraFoundry`、`thunderWorks`、`cloudReef`、`eclipseCarnival`、`prismGrave` 和 `voidGarden`。逐项检查近景航标、中景生态件、远景地标是否形成三层纵深并向镜头推进；生态必须具有不同剪影，第三章不得出现黑色巨墙或黑色蚀月。玩家/敌军弹体应沿速度方向拥有渐缩拖尾，命中与爆炸应表现为拉伸体积光屑；低画质允许拖尾缩为一节。
+
+运行真实 Electron/WebGL 九项矩阵：
+
+```bash
+npm run smoke:biomes
+```
+
+每项必须返回正确 `biome`、`worldDepthLayers: "3"`、`biomeDioramas: "9"`、`projectileVfx: "segmented-toon-trails"`、WebGL true、不低于 45 FPS 和零控制台错误。截图写入系统临时目录 `spacescraft-biome-matrix`，仍需人工检查剪影、纵深、遮挡、色彩和运动方向。
+
 ### 星门分支测试
 
 每章开场的三座星门通过实际移动选取：双机驶入同一门并保持 0.68 秒自动锁定；单人 AI 跟随 P1，5.8 秒超时按双机平均位置所在航道自动选择。用固定种子复现三章候选，并用 `qa-path` 强制快速冒烟选择左、中或右门：
@@ -144,7 +162,8 @@ npm start
 18. 在自然充能和 `qa-rush` 两条路径检查自动触发、火力倍率、拾取牵引、光链消弹、击破延时、3D 能量环、动态音乐、结算与七项诊断。
 19. 逐项覆盖七种遗物协议，检查第二次构筑配套注入、方向确认、自动触发、SVG/HUD/3D、协议音乐、结果摘要与 CSP 控制台。
 20. 用有/无状态两种 `qa-voxel` 画面检查玩家/敌军相反朝向、尖鼻/连续承力翼/尾焰、六维模块对主体轮廓的改变、饱和 Toon 色块、轻微 Glow、体素弹幕/背景和 60 FPS；确认没有近黑舰体、过曝粉白、悬浮微方块、面片堆砌或共面闪烁。
-21. 更新 `CHANGELOG.md`、[当前项目状态](./PROJECT-STATE.md)、发行说明和相关设计文档。
+21. 运行 `npm run smoke:biomes`，逐项人工检查九生态截图的近/中/远纵深、独立剪影、饱和 Toon+Glow、分段弹体拖尾与无黑色地标。
+22. 更新 `CHANGELOG.md`、[当前项目状态](./PROJECT-STATE.md)、发行说明和相关设计文档。
 
 ## 架构
 
@@ -169,6 +188,7 @@ npm start
 - `scripts/verify-renderer3d.mjs`：验证 Three.js 精确依赖、实例化方块、分层深度、相反机头和禁止原生面片/光滑几何回退。
 - `scripts/verify-status.mjs`：验证四 Buff、三 Debuff、双语、自动规则与玩法/音频/HUD/3D 接线。
 - `scripts/smoke-electron.cjs`：启动隔离的真实 Electron/WebGL 会话，验证方向交互并生成截图。
+- `scripts/smoke-biomes.cjs`：逐一强制九个生态，验证 WebGL/视觉诊断/帧率/控制台并生成九张截图。
 - `scripts/verify-docs.mjs`：检查必需文档、Codex 指令大小和仓库内 Markdown 链接。
 
 完整模块边界与数据流见[系统架构](./ARCHITECTURE.md)。

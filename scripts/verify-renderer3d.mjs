@@ -4,14 +4,16 @@ import fs from "node:fs";
 const renderer = fs.readFileSync(new URL("../src/renderer3d.js", import.meta.url), "utf8");
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const smoke = fs.readFileSync(new URL("./smoke-electron.cjs", import.meta.url), "utf8");
+const biomeSmoke = fs.readFileSync(new URL("./smoke-biomes.cjs", import.meta.url), "utf8");
+const game = fs.readFileSync(new URL("../src/game.js", import.meta.url), "utf8");
 const forge = fs.readFileSync(new URL("../forge.config.cjs", import.meta.url), "utf8");
 const packageJson = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
 assert.equal(packageJson.dependencies?.three, "0.185.1", "Three.js must be an exact production dependency");
-assert.equal(packageJson.version, "0.17.0", "package metadata must match the Toon Light Forge release");
-assert.match(html, /<script type="module" src="\.\/src\/renderer3d\.js\?v=15"><\/script>/);
-assert.match(html, /<script type="module" src="\.\/src\/game\.js\?v=23"><\/script>/);
-assert.match(html, /TOON LIGHT FORGE 0\.17\.0/);
+assert.equal(packageJson.version, "0.18.0", "package metadata must match the Neon Diorama Worlds release");
+assert.match(html, /<script type="module" src="\.\/src\/renderer3d\.js\?v=16"><\/script>/);
+assert.match(html, /<script type="module" src="\.\/src\/game\.js\?v=24"><\/script>/);
+assert.match(html, /NEON DIORAMA WORLDS 0\.18\.0/);
 assert.match(renderer, /import \* as THREE from "\.\.\/node_modules\/three\/build\/three\.module\.min\.js"/);
 assert.match(renderer, /new THREE\.WebGLRenderer/);
 assert.match(renderer, /new THREE\.InstancedMesh/);
@@ -27,6 +29,9 @@ assert.match(renderer, /new THREE\.PointLight/);
 assert.match(renderer, /three-r185-instanced-voxel/);
 assert.match(renderer, /toon-glow-light-blocks/);
 assert.match(renderer, /saturated-no-black/);
+assert.match(renderer, /worldDepthLayers = "3"/);
+assert.match(renderer, /biomeDioramas = "9"/);
+assert.match(renderer, /projectileVfx = "segmented-toon-trails"/);
 assert.match(renderer, /fighterNose\(base, palette/);
 assert.match(renderer, /sweptWing\(base, side, palette/);
 assert.match(renderer, /tailFins\(base, palette/);
@@ -57,10 +62,23 @@ assert.ok(voxelCallCount(methodBody("alienCrescent", "alienTendril")) <= 3, "eac
 assert.ok(voxelCallCount(methodBody("alienTendril", "alienEye")) <= 1, "alien tendril segments must share one organic block rule");
 assert.match(renderer, /drawProjectile\(bullet, enemy = false\)/);
 assert.match(renderer, /drawLandmark\(stageIndex, biome\)/);
+assert.match(renderer, /drawFlightCorridor\(biome\)/);
+assert.match(renderer, /streamZ\(slot, spacing/);
+assert.match(renderer, /projectileTrail\(base, color/);
+assert.match(renderer, /Math\.hypot\(particle\.vx/);
 assert.match(renderer, /emissiveBatchFor\(color\)/);
+for (const biome of ["sugarBloom", "crystalOrchard", "cometTide", "auroraFoundry", "thunderWorks", "cloudReef", "eclipseCarnival", "prismGrave", "voidGarden"]) {
+  assert.match(renderer, new RegExp(`biome\\.id === "${biome}"`), `missing dedicated ${biome} diorama`);
+  assert.ok(biomeSmoke.includes(`"${biome}"`), `biome matrix smoke is missing ${biome}`);
+}
+assert.match(game, /URL_PARAMS\.get\("qa-biome"\)/);
+assert.match(game, /world\.biomes\[0\] = SpaceExpedition\.BIOMES\.find/);
 assert.match(smoke, /three-r185-instanced-voxel/);
 assert.match(smoke, /toon-glow-light-blocks/);
 assert.match(smoke, /saturated-no-black/);
+assert.match(smoke, /segmented-toon-trails/);
+assert.match(biomeSmoke, /state\.fps < 45/);
+assert.match(biomeSmoke, /consoleErrors/);
 assert.match(smoke, /getContext\('webgl2'\)/);
 assert.match(smoke, /spacescraft-airframe-showcase\.png/);
 assert.match(forge, /node_modules\\\/three/, "packaging must exclude unused Three.js sources");
@@ -78,4 +96,4 @@ for (const forbidden of [
   /ConeGeometry/,
 ]) assert.doesNotMatch(renderer, forbidden, `renderer must not regress to raw face assembly or smooth primitive: ${forbidden}`);
 
-console.log("Three.js renderer verified: saturated Toon+Glow color batches, no near-black hull colors, strict Occam block budgets, slim aviation profiles, independent alien anatomy, seven organic chassis families, stable depth layers, opposing headings, and no raw face assembly.");
+console.log("Three.js renderer verified: nine moving neon dioramas, three depth layers, segmented projectile trails, volumetric particle shards, saturated Toon+Glow color batches, strict Occam block budgets, slim aviation profiles, seven organic alien chassis, and no raw face assembly.");

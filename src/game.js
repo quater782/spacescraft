@@ -90,6 +90,8 @@ const QA_PROTOCOL_ID = SpaceRelics.PROTOCOLS.some((protocol) => protocol.id === 
   : null;
 const REQUESTED_QA_PATH = LOCAL_QA_HOST ? Number.parseInt(URL_PARAMS.get("qa-path") || "", 10) : Number.NaN;
 const QA_PATH_INDEX = [0, 1, 2].includes(REQUESTED_QA_PATH) ? REQUESTED_QA_PATH : null;
+const REQUESTED_QA_BIOME = LOCAL_QA_HOST ? URL_PARAMS.get("qa-biome") : null;
+const QA_BIOME_ID = SpaceExpedition.BIOMES.some((biome) => biome.id === REQUESTED_QA_BIOME) ? REQUESTED_QA_BIOME : null;
 const REQUESTED_QA_ENCOUNTER = LOCAL_QA_HOST ? URL_PARAMS.get("qa-encounter") : null;
 const QA_ENCOUNTER_ID = SpaceExpedition.ENCOUNTER_PROTOCOLS.some((encounter) => encounter.id === REQUESTED_QA_ENCOUNTER)
   ? REQUESTED_QA_ENCOUNTER
@@ -107,7 +109,7 @@ const QA_ENEMY_BUILD = (() => {
   return SpaceExpedition.build(...parts, 2, QA_HULL_ID || "scout");
 })();
 const REQUESTED_RUN_SEED = Number.parseInt(URL_PARAMS.get("seed") || "", 10);
-const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_RUSH_MODE && "rush", QA_BUFFS_MODE && "buffs", QA_VOXEL_MODE && "voxel", QA_STATUS_ID && `status-${QA_STATUS_ID}`, QA_PROTOCOL_ID && `protocol-${QA_PROTOCOL_ID}`, QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`, QA_HULL_ID && `hull-${QA_HULL_ID}`, QA_ENEMY_BUILD && `enemy-${QA_ENEMY_BUILD.moduleSignature}`].filter(Boolean).join("+") || "off";
+const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_RUSH_MODE && "rush", QA_BUFFS_MODE && "buffs", QA_VOXEL_MODE && "voxel", QA_STATUS_ID && `status-${QA_STATUS_ID}`, QA_PROTOCOL_ID && `protocol-${QA_PROTOCOL_ID}`, QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_BIOME_ID && `biome-${QA_BIOME_ID}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`, QA_HULL_ID && `hull-${QA_HULL_ID}`, QA_ENEMY_BUILD && `enemy-${QA_ENEMY_BUILD.moduleSignature}`].filter(Boolean).join("+") || "off";
 const t = (key, variables) => SpaceI18n.t(key, variables);
 const UPGRADE_DEFS = SpaceRoguelike.UPGRADE_DEFS;
 const TALENT_NODES = SpaceConstellation.TALENT_NODES;
@@ -1736,6 +1738,7 @@ function resetWorld() {
   world.runSeed = createRunSeed();
   setRunRandomSeed(world.runSeed);
   world.biomes = [...SpaceExpedition.generateRoute(world.runSeed)];
+  if (QA_BIOME_ID) world.biomes[0] = SpaceExpedition.BIOMES.find((biome) => biome.id === QA_BIOME_ID);
   world.branchSets = [...SpaceExpedition.generateBranchSets(world.runSeed)];
   world.branchPlanSignature = world.branchSets.map((set) => set.map((path) => path.id).join("|")).join(">");
   world.branchHistory = [];
