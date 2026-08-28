@@ -83,6 +83,9 @@ const QA_RUSH_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-rush");
 const QA_BUFFS_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-buffs");
 const QA_VOXEL_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-voxel");
 const QA_MODEL_GALLERY = LOCAL_QA_HOST && URL_PARAMS.has("qa-model-gallery");
+const QA_BOSS_GALLERY = LOCAL_QA_HOST && URL_PARAMS.has("qa-boss-gallery");
+const REQUESTED_QA_BOSS_PHASE = Number.parseInt(URL_PARAMS.get("qa-boss-phase") || "", 10);
+const QA_BOSS_PHASE = [1, 2, 3].includes(REQUESTED_QA_BOSS_PHASE) ? REQUESTED_QA_BOSS_PHASE : 3;
 const REQUESTED_QA_STATUS = LOCAL_QA_HOST ? URL_PARAMS.get("qa-status") : null;
 const QA_STATUS_ID = SpaceStatus.DEBUFF_MODULES.some((debuff) => debuff.id === REQUESTED_QA_STATUS) ? REQUESTED_QA_STATUS : null;
 const REQUESTED_QA_PROTOCOL = LOCAL_QA_HOST ? URL_PARAMS.get("qa-protocol") : null;
@@ -110,7 +113,7 @@ const QA_ENEMY_BUILD = (() => {
   return SpaceExpedition.build(...parts, 2, QA_HULL_ID || "scout");
 })();
 const REQUESTED_RUN_SEED = Number.parseInt(URL_PARAMS.get("seed") || "", 10);
-const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_RUSH_MODE && "rush", QA_BUFFS_MODE && "buffs", QA_VOXEL_MODE && "voxel", QA_MODEL_GALLERY && "model-gallery", QA_STATUS_ID && `status-${QA_STATUS_ID}`, QA_PROTOCOL_ID && `protocol-${QA_PROTOCOL_ID}`, QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_BIOME_ID && `biome-${QA_BIOME_ID}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`, QA_HULL_ID && `hull-${QA_HULL_ID}`, QA_ENEMY_BUILD && `enemy-${QA_ENEMY_BUILD.moduleSignature}`].filter(Boolean).join("+") || "off";
+const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_RUSH_MODE && "rush", QA_BUFFS_MODE && "buffs", QA_VOXEL_MODE && "voxel", QA_MODEL_GALLERY && "model-gallery", QA_BOSS_GALLERY && "boss-gallery", QA_BOSS_GALLERY && `boss-phase${QA_BOSS_PHASE}`, QA_STATUS_ID && `status-${QA_STATUS_ID}`, QA_PROTOCOL_ID && `protocol-${QA_PROTOCOL_ID}`, QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_BIOME_ID && `biome-${QA_BIOME_ID}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`, QA_HULL_ID && `hull-${QA_HULL_ID}`, QA_ENEMY_BUILD && `enemy-${QA_ENEMY_BUILD.moduleSignature}`].filter(Boolean).join("+") || "off";
 const t = (key, variables) => SpaceI18n.t(key, variables);
 const UPGRADE_DEFS = SpaceRoguelike.UPGRADE_DEFS;
 const TALENT_NODES = SpaceConstellation.TALENT_NODES;
@@ -1040,6 +1043,8 @@ const world = {
   protocolFlashTimer: 0,
   protocolSoundTimer: 0,
   modelGallery: QA_MODEL_GALLERY,
+  bossGallery: QA_BOSS_GALLERY,
+  bossGalleryPhase: QA_BOSS_PHASE,
 };
 
 const activeStage = (index = world.stageIndex) => world.routeStages[index] || STAGES[index] || STAGES[0];
@@ -2327,6 +2332,8 @@ function enemyBullet(x, y, vx, vy, color = "#ff7d8b", size = 3, source = null) {
     debuffDuration: source?.debuffDuration || 0,
     debuffIntensity: source?.debuffIntensity || 0,
     payloadColor: source?.payloadColor || color,
+    bossStage: source?.boss ? world.stageIndex : null,
+    bossPhase: source?.boss ? source.phaseLevel : 0,
   });
 }
 

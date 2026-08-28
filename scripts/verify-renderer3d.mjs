@@ -6,15 +6,16 @@ const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const smoke = fs.readFileSync(new URL("./smoke-electron.cjs", import.meta.url), "utf8");
 const biomeSmoke = fs.readFileSync(new URL("./smoke-biomes.cjs", import.meta.url), "utf8");
 const modelSmoke = fs.readFileSync(new URL("./smoke-models.cjs", import.meta.url), "utf8");
+const bossSmoke = fs.readFileSync(new URL("./smoke-bosses.cjs", import.meta.url), "utf8");
 const game = fs.readFileSync(new URL("../src/game.js", import.meta.url), "utf8");
 const forge = fs.readFileSync(new URL("../forge.config.cjs", import.meta.url), "utf8");
 const packageJson = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
 assert.equal(packageJson.dependencies?.three, "0.185.1", "Three.js must be an exact production dependency");
-assert.equal(packageJson.version, "0.19.0", "package metadata must match the Organic Silhouette Forge release");
-assert.match(html, /<script type="module" src="\.\/src\/renderer3d\.js\?v=17"><\/script>/);
-assert.match(html, /<script type="module" src="\.\/src\/game\.js\?v=25"><\/script>/);
-assert.match(html, /ORGANIC SILHOUETTE FORGE 0\.19\.0/);
+assert.equal(packageJson.version, "0.20.0", "package metadata must match the Boss Organism Forge release");
+assert.match(html, /<script type="module" src="\.\/src\/renderer3d\.js\?v=18"><\/script>/);
+assert.match(html, /<script type="module" src="\.\/src\/game\.js\?v=26"><\/script>/);
+assert.match(html, /BOSS ORGANISM FORGE 0\.20\.0/);
 assert.match(renderer, /import \* as THREE from "\.\.\/node_modules\/three\/build\/three\.module\.min\.js"/);
 assert.match(renderer, /new THREE\.WebGLRenderer/);
 assert.match(renderer, /new THREE\.InstancedMesh/);
@@ -35,6 +36,7 @@ assert.match(renderer, /biomeDioramas = "9"/);
 assert.match(renderer, /projectileVfx = "segmented-toon-trails"/);
 assert.match(renderer, /modelFamilies = "3-player-7-alien"/);
 assert.match(renderer, /moduleAnatomy = "integrated-large-form"/);
+assert.match(renderer, /bossFamilies = "3-organic-phase-forms"/);
 assert.match(renderer, /fighterNose\(base, palette/);
 assert.match(renderer, /sweptWing\(base, side, palette/);
 assert.match(renderer, /tailFins\(base, palette/);
@@ -69,7 +71,16 @@ const moduleSection = methodBody("drawIntegratedEnemyModules", "drawEnemy");
 for (const oldThinModule of ["[.05, .045, 1.2]", "[.055, .045, .24]", "[.07, .045, .66]", "[.08, .045, .5]"]) {
   assert.ok(!moduleSection.includes(oldThinModule), `enemy modules must not regress to detached thin rods: ${oldThinModule}`);
 }
+for (const bossBuilder of ["drawBossBloom", "drawBossForge", "drawBossVoid"]) assert.match(renderer, new RegExp(`${bossBuilder}\\(enemy, base, palette\\)`), `missing independent boss builder ${bossBuilder}`);
+const bossSection = methodBody("drawBossBloom", "drawModelGallery");
+assert.doesNotMatch(bossSection, /alienCrescent\(|alienTendril\(/, "bosses must not reuse ordinary alien appendages");
+assert.match(bossSection, /phase >= 2/);
+assert.match(bossSection, /phase >= 3/);
+for (const oldThinBossPart of ["[.09, .38, 1.12]", "[.7, .07, .16]", "[.16, .42, 1.52]"]) {
+  assert.ok(!bossSection.includes(oldThinBossPart), `bosses must not regress to thin rods: ${oldThinBossPart}`);
+}
 assert.match(renderer, /drawProjectile\(bullet, enemy = false\)/);
+for (const stage of [0, 1, 2]) assert.match(renderer, new RegExp(`bullet\\.bossStage === ${stage}`), `missing stage ${stage + 1} boss projectile form`);
 assert.match(renderer, /drawLandmark\(stageIndex, biome\)/);
 assert.match(renderer, /drawFlightCorridor\(biome\)/);
 assert.match(renderer, /streamZ\(slot, spacing/);
@@ -81,6 +92,8 @@ for (const biome of ["sugarBloom", "crystalOrchard", "cometTide", "auroraFoundry
   assert.ok(biomeSmoke.includes(`"${biome}"`), `biome matrix smoke is missing ${biome}`);
 }
 assert.match(game, /URL_PARAMS\.get\("qa-biome"\)/);
+assert.match(game, /URL_PARAMS\.has\("qa-boss-gallery"\)/);
+assert.match(game, /bossStage: source\?\.boss \? world\.stageIndex : null/);
 assert.match(game, /world\.biomes\[0\] = SpaceExpedition\.BIOMES\.find/);
 assert.match(smoke, /three-r185-instanced-voxel/);
 assert.match(smoke, /toon-glow-light-blocks/);
@@ -91,6 +104,10 @@ assert.match(biomeSmoke, /consoleErrors/);
 assert.match(modelSmoke, /model gallery performance below 50 FPS/);
 assert.match(modelSmoke, /moduleAnatomy/);
 assert.match(modelSmoke, /errors\.length/);
+assert.match(bossSmoke, /for \(const phase of \[1, 2, 3\]\)/);
+assert.match(bossSmoke, /boss gallery performance below 50 FPS/);
+assert.match(bossSmoke, /3-organic-phase-forms/);
+assert.match(bossSmoke, /errors\.length/);
 assert.match(smoke, /getContext\('webgl2'\)/);
 assert.match(smoke, /spacescraft-airframe-showcase\.png/);
 assert.match(forge, /node_modules\\\/three/, "packaging must exclude unused Three.js sources");
@@ -108,4 +125,4 @@ for (const forbidden of [
   /ConeGeometry/,
 ]) assert.doesNotMatch(renderer, forbidden, `renderer must not regress to raw face assembly or smooth primitive: ${forbidden}`);
 
-console.log("Three.js renderer verified: nine moving neon dioramas, three depth layers, segmented projectile trails, volumetric particle shards, saturated Toon+Glow color batches, strict Occam block budgets, slim aviation profiles, seven organic alien chassis, and no raw face assembly.");
+console.log("Three.js renderer verified: three phase-growing organic bosses with dedicated projectile forms, nine moving neon dioramas, segmented trails, saturated Toon+Glow batches, strict Occam block budgets, slim aviation profiles, seven organic alien chassis, and no raw face assembly.");

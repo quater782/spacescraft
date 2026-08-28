@@ -80,6 +80,7 @@ npm start
 - [开发与验证](./docs/DEVELOPMENT.md)
 - [桌面和 EXE 打包](./docs/PACKAGING.md)
 - [Steam 上架路线图](./docs/STEAM-ROADMAP.md)
+- [0.20.0 发行说明](./docs/RELEASE-0.20.0.md)
 - [0.19.0 发行说明](./docs/RELEASE-0.19.0.md)
 - [0.18.0 发行说明](./docs/RELEASE-0.18.0.md)
 - [0.17.0 发行说明](./docs/RELEASE-0.17.0.md)

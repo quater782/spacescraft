@@ -80,6 +80,16 @@ http://127.0.0.1:4173/?qa-model-gallery&seed=2
 
 运行 `npm run smoke:models` 会真实启动 Electron/WebGL，检查 `data-model-families="3-player-7-alien"`、`data-module-anatomy="integrated-large-form"`、Toon+Glow、饱和无黑色、50 FPS 下限和零应用控制台错误，并把近景截图写入系统临时目录。人工验收重点是玩家三机体长宽比例、敌军七种独立剪影、敌我相反机头，以及推进/武器/核心/AI/载荷是否表现为大型主体器官而非细杆或悬浮小方块。
 
+### 三章 Boss 阶段矩阵
+
+`qa-boss-gallery` 会在干净场景同屏排列三章 Boss；使用 `qa-boss-phase=1|2|3` 选择同一阶段，方便逐帧比较大型器官生长：
+
+```text
+http://127.0.0.1:4173/?qa-boss-gallery&qa-boss-phase=3&seed=2
+```
+
+运行 `npm run smoke:bosses` 会依次验证三个阶段的 `data-boss-families="3-organic-phase-forms"`、Toon+Glow、无黑色、大型有机模块、WebGL、50 FPS 下限和零应用控制台错误，并输出 `boss-phase-1.png` 到 `boss-phase-3.png`。人工验收必须确认花瓣魟翼、雷枪熔炉、双体虚空冠三套剪影互不复用普通敌舰附肢，第二/三阶段器官确实改变主体轮廓，且下方三种章别弹体分别是花瓣、雷枪和旋转棱体。
+
 ### 九生态微缩世界与弹体特效矩阵
 
 `qa-biome` 只在 localhost/127.0.0.1 生效，可把任意生态强制到第一章，方便在相同战斗节奏下比较场景：

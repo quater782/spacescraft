@@ -91,6 +91,7 @@ class SpaceRenderer3D {
     this.canvas.dataset.projectileVfx = "segmented-toon-trails";
     this.canvas.dataset.modelFamilies = "3-player-7-alien";
     this.canvas.dataset.moduleAnatomy = "integrated-large-form";
+    this.canvas.dataset.bossFamilies = "3-organic-phase-forms";
   }
 
   createStars(count, size, seed) {
@@ -615,43 +616,88 @@ class SpaceRenderer3D {
     }
   }
 
-  drawBoss(enemy, base) {
-    const stage = this.stageIndex;
-    const pulse = .5 + Math.sin(this.time * 6) * .5;
-    const palettes = enemy.hitFlash > 0 ? ["#72eaff", "#ff73bd", "#ffe15d"] : [["#824fcf", "#f261aa", "#ffbd58"], ["#327fd0", "#52d9b8", "#f3cf4f"], ["#7540c8", "#d94d9a", "#ff596f"]][stage];
-    const scale = [1.12, 1.24, 1.36][stage];
-    const bossBase = multiply(base, compose([0, 0, 0], [0, 0, 0], [scale, scale, scale]));
-    const handed = Math.sin(Number(enemy.seed) || 1) >= 0 ? 1 : -1;
-    if (stage === 0) {
-      this.voxel(bossBase, [0, .08, .02], [.7, .3, 2.1], palettes[0]);
-      this.voxel(bossBase, [0, .27, -.34], [.48, .12, 1.05], palettes[1]);
-      this.alienCrescent(bossBase, palettes, 1.48, 1.12);
-      for (const side of [-1, 1]) {
-        this.voxel(bossBase, [side * .5, .08, -1.18], [.15, .15, 1.08], palettes[1], 0, [0, side * .09, 0]);
-        this.alienTendril(bossBase, side, palettes, .8, .7, side === handed ? 1.2 : .85, palettes[2]);
-      }
-    } else if (stage === 1) {
-      this.voxel(bossBase, [0, .06, -.08], [.46, .22, 2.5], palettes[0]);
-      this.alienCrescent(bossBase, palettes, 1.72, 1.34);
-      for (const side of [-1, 1]) {
-        this.voxel(bossBase, [side * .34, .08, -1.32], [.13, .13, 1.16], palettes[1], 0, [0, side * .12, 0]);
-        this.voxel(bossBase, [side * 1.35, .2, .05], [.09, .38, 1.12], palettes[2], .58, [side * -.2, side * .18, 0]);
-        this.alienTendril(bossBase, side, palettes, .62, .78, side === handed ? 1.35 : .72, palettes[2]);
-      }
-    } else {
-      for (const side of [-1, 1]) {
-        this.voxel(bossBase, [side * .48, .08, -.22], [.52, .28, 2.18], palettes[0], 0, [0, side * .1, 0]);
-        this.voxel(bossBase, [side * .3, .14, -1.22], [.17, .14, 1.18], palettes[1], 0, [0, side * .08, 0]);
-        this.voxel(bossBase, [side * 1.2, .02, .12], [1.12, .09, .24], palettes[1], 0, [0, side * .54, 0]);
-        this.voxel(bossBase, [side * 1.86, .1, .52], [.7, .07, .16], palettes[2], .64, [0, side * .76, 0]);
-        this.alienTendril(bossBase, side, palettes, .82, .7, side === handed ? 1.4 : .92, "#c183ff");
-      }
-      this.voxel(bossBase, [0, .32, -.15], [.16, .42, 1.52], "#c183ff", .72);
+  drawBossBloom(enemy, base, palette) {
+    const phase = enemy.phaseLevel || 1;
+    const pulse = 1 + Math.sin(this.time * 6) * .08;
+    this.voxel(base, [0, .1, -.05], [.68, .3, 2.35], palette[0], .18);
+    this.voxel(base, [0, .27, -.55], [.48, .16, 1.08], palette[1], .28);
+    for (const side of [-1, 1]) {
+      this.voxel(base, [side * .72, .06, -.08], [1.08, .18, .88], palette[1], .18, [0, side * .32, 0]);
+      this.voxel(base, [side * 1.52, .04, .42], [.86, .14, .68], palette[0], .2, [0, side * .58, 0]);
+      this.voxel(base, [side * 2.05, .07, .86], [.56, .12, .5], palette[2], .52, [0, side * .76, 0]);
+      if (phase >= 2) this.voxel(base, [side * .94, .25, .42], [.64, .18, .92], palette[2], .42, [0, side * .34, side * -.08]);
+      if (phase >= 3) this.voxel(base, [side * 1.58, .22, -.38], [.72, .16, .46], "#ff6fd4", .68, [0, side * .48, 0]);
+      this.voxelThruster(base, side * .42, 1.32, palette[2], .72 + pulse * .18, .88);
     }
-    this.alienEye(bossBase, handed * .16, -.72, palettes[2], 1.35 + pulse * .08);
-    this.voxel(bossBase, [0, .44, -.18], [.76 + pulse * .08, .055, .64], palettes[2], .85);
-    for (const side of [-1, 1]) this.voxelThruster(bossBase, side * .42, 1.24, palettes[2], .72 + pulse * .2, .72);
-    if (enemy.phaseShield > 0) this.voxelCage(bossBase, 2.3 + Math.sin(this.time * 12) * .04, palettes[2], 1.15);
+    this.voxel(base, [0, .42, -.26], [.72 * pulse, .22, .72], palette[2], .72);
+    this.alienEye(base, 0, -.86, "#fff08a", 1.34);
+  }
+
+  drawBossForge(enemy, base, palette) {
+    const phase = enemy.phaseLevel || 1;
+    const pulse = 1 + Math.sin(this.time * 7.5) * .07;
+    this.voxel(base, [0, .08, -.16], [.5, .28, 2.82], palette[0], .18);
+    this.voxel(base, [0, .2, -1.28], [.28, .18, 1.24], palette[2], .5);
+    for (const side of [-1, 1]) {
+      this.voxel(base, [side * .62, .08, .08], [.78, .26, 2.06], palette[1], .2, [0, side * .16, 0]);
+      this.voxel(base, [side * 1.16, .1, .48], [.62, .2, 1.36], palette[0], .18, [0, side * .34, 0]);
+      this.voxel(base, [side * 1.62, .15, -.34], [.68, .18, .7], palette[2], .58, [0, side * .48, 0]);
+      if (phase >= 2) this.voxel(base, [side * 1.18, .48, .14], [.32, .7, .86], "#ffe45c", .58, [side * -.16, side * .12, 0]);
+      if (phase >= 3) this.voxel(base, [side * 1.84, .28, .5], [.54, .38, .78], "#ff6a70", .64, [side * -.12, side * .42, 0]);
+      this.voxelThruster(base, side * .7, 1.35, palette[2], .75 + pulse * .18, .94);
+    }
+    this.voxel(base, [0, .45, -.34], [.68 * pulse, .24, .82], "#ffe45c", .78);
+    this.alienEye(base, 0, -.98, "#fff7c2", 1.42);
+  }
+
+  drawBossVoid(enemy, base, palette) {
+    const phase = enemy.phaseLevel || 1;
+    const pulse = 1 + Math.sin(this.time * 8.5) * .09;
+    for (const side of [-1, 1]) {
+      this.voxel(base, [side * .54, .1, -.18], [.58, .3, 2.5], palette[0], .2, [0, side * .1, 0]);
+      this.voxel(base, [side * .38, .2, -1.3], [.28, .2, 1.02], palette[1], .28, [0, side * .08, 0]);
+      this.voxel(base, [side * 1.15, .07, .02], [1.18, .2, .48], palette[1], .22, [0, side * .52, 0]);
+      this.voxel(base, [side * 1.92, .1, .52], [.76, .16, .42], palette[2], .6, [0, side * .72, 0]);
+      if (phase >= 2) this.voxel(base, [side * .92, .43, -.34], [.46, .62, .78], "#c98aff", .62, [side * -.18, side * .18, 0]);
+      if (phase >= 3) this.voxel(base, [side * 1.62, .34, -.46], [.72, .22, .62], "#ff5f86", .72, [0, side * .58, side * -.08]);
+      this.voxelThruster(base, side * .5, 1.46, palette[2], .78 + pulse * .2, .98);
+    }
+    this.voxel(base, [0, .34, -.22], [.38, .52, 1.62], "#c98aff", .62);
+    this.voxel(base, [0, .56, -.54], [.68 * pulse, .22, .7], palette[2], .82);
+    this.alienEye(base, 0, -.98, "#ffd3f2", 1.48);
+  }
+
+  drawBoss(enemy, base, stageOverride = this.stageIndex) {
+    const stage = clamp(stageOverride, 0, 2);
+    const palettes = enemy.hitFlash > 0 ? ["#72eaff", "#ff73bd", "#ffe15d"] : [["#7b58d7", "#f05aa9", "#ffca58"], ["#357bd8", "#48d8c6", "#ffe45c"], ["#754ed0", "#d950a6", "#ff6680"]][stage];
+    const scale = [1.08, 1.15, 1.22][stage];
+    const bossBase = multiply(base, compose([0, 0, 0], [0, 0, 0], [scale, scale, scale]));
+    if (stage === 0) this.drawBossBloom(enemy, bossBase, palettes);
+    else if (stage === 1) this.drawBossForge(enemy, bossBase, palettes);
+    else this.drawBossVoid(enemy, bossBase, palettes);
+    if (enemy.phaseShield > 0) this.voxelCage(bossBase, 2.45 + Math.sin(this.time * 12) * .04, palettes[2], 1.15);
+  }
+
+  drawBossGallery(world) {
+    const phaseLevel = world.bossGalleryPhase || 3;
+    const layout = [[100, 106, -.12], [240, 99, 0], [380, 106, .12]];
+    layout.forEach(([x, y, yaw], stage) => {
+      const base = compose(this.toWorld(x, y, .34), [0, Math.PI + yaw, 0], [1.18, 1.18, 1.18]);
+      this.drawBoss({ phaseLevel, phaseShield: phaseLevel === 2 ? 1 : 0, hitFlash: 0, seed: stage + 1 }, base, stage);
+      this.drawProjectile({
+        x,
+        y: 181,
+        vx: 0,
+        vy: 42,
+        r: 3.2,
+        age: this.time,
+        color: ["#ff72ac", "#70eaff", "#c183ff"][stage],
+        payloadColor: ["#ffca58", "#ffe45c", "#ff6680"][stage],
+        bossStage: stage,
+        bossPhase: phaseLevel,
+      }, true);
+    });
+    this.canvas.dataset.bossGallery = `phase-${phaseLevel}`;
   }
 
   drawModelGallery(world, playerConfigs) {
@@ -899,7 +945,20 @@ class SpaceRenderer3D {
       const size = .08 + bullet.r * .023;
       const color = this.highContrastBullets ? "#fff06a" : bullet.color;
       const base = compose(position, rotation);
-      if (bullet.weaponModule === "sniper") {
+      if (bullet.bossStage === 0) {
+        const opening = 1 + (bullet.bossPhase || 1) * .12;
+        this.voxel(base, [0, 0, 0], [size * 2.4 * opening, size * .78, size * 1.25], color, 1, [0, .38, 0]);
+        this.voxel(base, [0, 0, 0], [size * 2.4 * opening, size * .78, size * 1.25], bullet.payloadColor || "#ffca58", .84, [0, -.38, 0]);
+        this.projectileTrail(base, color, size * .55, size * 1.7, 3);
+      } else if (bullet.bossStage === 1) {
+        this.voxel(base, [0, 0, 0], [size * 1.3, size * 1.05, size * 4.4], color, 1);
+        for (const side of [-1, 1]) this.voxel(base, [side * size * 1.25, 0, size * .25], [size * 1.1, size * .62, size * 1.8], "#ffe45c", .78, [0, side * .32, 0]);
+        this.projectileTrail(base, color, size * .48, size * 2.4, 3);
+      } else if (bullet.bossStage === 2) {
+        const spin = bullet.age * 4.6;
+        for (let arm = 0; arm < 3; arm += 1) this.voxel(base, [0, 0, 0], [size * 2.7, size * .8, size * 1.25], arm === 1 ? "#ff6680" : color, 1, [0, spin + arm * TAU / 3, 0]);
+        this.projectileTrail(base, bullet.payloadColor || color, size * .6, size * 1.7, 3);
+      } else if (bullet.weaponModule === "sniper") {
         this.voxel(base, [0, 0, 0], [size * .72, size * .72, size * 4.2], color, 1);
         this.voxel(base, [0, 0, size * 2.5], [size * .28, size * .28, size * 2.2], bullet.payloadColor || "#ffd454", .76);
         this.projectileTrail(base, bullet.payloadColor || color, size * .24, size * 2.1, 3);
@@ -1077,6 +1136,13 @@ class SpaceRenderer3D {
     }
     this.camera.position.fromArray(eye);
     this.camera.lookAt(...target);
+    if (world.bossGallery) {
+      this.drawBossGallery(world);
+      this.canvas.dataset.modelGallery = "off";
+      this.endFrame();
+      return true;
+    }
+    this.canvas.dataset.bossGallery = "off";
     if (world.modelGallery) {
       this.drawModelGallery(world, playerConfigs);
       this.endFrame();

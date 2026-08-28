@@ -1,7 +1,7 @@
 {
   "name": "spacescraft",
   "productName": "SPACECRAFT 星航双子",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "description": "双人合作 WebGL 3D 太空射击游戏 / Local co-op WebGL 3D space shooter",
   "main": "electron/main.cjs",
   "type": "module",
@@ -9,11 +9,12 @@
   "license": "UNLICENSED",
   "scripts": {
     "icons": "node scripts/build-icons.mjs",
-    "verify": "node scripts/verify-docs.mjs && node --check src/i18n.js && node --check src/roguelike.js && node --check src/constellation.js && node --check src/rush.js && node --check src/relics.js && node --check src/status.js && node --check src/expedition.js && node --check src/game.js && node --check src/renderer3d.js && node --check scripts/smoke-electron.cjs && node --check scripts/smoke-biomes.cjs && node --check scripts/smoke-models.cjs && node scripts/verify-localization.mjs && node scripts/verify-roguelike.mjs && node scripts/verify-constellation.mjs && node scripts/verify-rush.mjs && node scripts/verify-relics.mjs && node scripts/verify-status.mjs && node scripts/verify-expedition.mjs && node scripts/verify-renderer3d.mjs && npm audit --omit=dev",
+    "verify": "node scripts/verify-docs.mjs && node --check src/i18n.js && node --check src/roguelike.js && node --check src/constellation.js && node --check src/rush.js && node --check src/relics.js && node --check src/status.js && node --check src/expedition.js && node --check src/game.js && node --check src/renderer3d.js && node --check scripts/smoke-electron.cjs && node --check scripts/smoke-biomes.cjs && node --check scripts/smoke-models.cjs && node --check scripts/smoke-bosses.cjs && node scripts/verify-localization.mjs && node scripts/verify-roguelike.mjs && node scripts/verify-constellation.mjs && node scripts/verify-rush.mjs && node scripts/verify-relics.mjs && node scripts/verify-status.mjs && node scripts/verify-expedition.mjs && node scripts/verify-renderer3d.mjs && npm audit --omit=dev",
     "start": "electron-forge start",
     "smoke:electron": "electron scripts/smoke-electron.cjs",
     "smoke:biomes": "electron scripts/smoke-biomes.cjs",
     "smoke:models": "electron scripts/smoke-models.cjs",
+    "smoke:bosses": "electron scripts/smoke-bosses.cjs",
     "package": "electron-forge package",
     "package:win": "electron-forge package --platform=win32 --arch=x64",
     "make": "electron-forge make",
