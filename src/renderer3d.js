@@ -89,6 +89,8 @@ class SpaceRenderer3D {
     this.canvas.dataset.worldDepthLayers = "3";
     this.canvas.dataset.biomeDioramas = "9";
     this.canvas.dataset.projectileVfx = "segmented-toon-trails";
+    this.canvas.dataset.modelFamilies = "3-player-7-alien";
+    this.canvas.dataset.moduleAnatomy = "integrated-large-form";
   }
 
   createStars(count, size, seed) {
@@ -346,8 +348,8 @@ class SpaceRenderer3D {
     const span = profile.span;
     if ((player.buffs?.arsenal || 0) > 0) {
       for (const side of [-1, 1]) {
-        this.voxel(base, [side * span * .4, .11, -.48], [.1, .08, .86], "#ffd94a", .38);
-        this.voxel(base, [side * span * .4, .13, -.95], [.055 * flash, .055 * flash, .15], "#ff8a4c", .88);
+        this.voxel(base, [side * span * .34, .105, -.32], [.18, .09, .72], "#ffd94a", .38, [0, side * .06, 0]);
+        this.voxel(base, [side * span * .34, .115, -.72], [.09 * flash, .06 * flash, .22], "#ff8a4c", .88, [0, side * .06, 0]);
       }
     }
     if ((player.buffs?.nanobloom || 0) > 0) {
@@ -357,7 +359,7 @@ class SpaceRenderer3D {
     if ((player.buffs?.aegis || 0) > 0) {
       const pulse = 1 + Math.sin(this.time * 8) * .05;
       for (const side of [-1, 1]) {
-        this.voxel(base, [side * span * .63, .09, .08], [.05 * pulse, .04, 1.06], "#4edcff", .62, [0, side * .12, 0]);
+        this.voxel(base, [side * span * .57, .075, .18], [.14 * pulse, .055, .82], "#4edcff", .62, [0, side * .18, 0]);
       }
     }
     if ((player.buffs?.flux || 0) > 0) {
@@ -379,12 +381,12 @@ class SpaceRenderer3D {
     const pitch = demo ? -.08 : clamp(player.vy * .0018, -.11, .11);
     const frameId = player.frameId || "comet";
     const profiles = {
-      comet: { scale: 1.14, bodyWidth: .46, bodyLength: 1.56, nose: 1.2, span: 1.38, wing: 1.04, armored: false, engines: [-.29, .29], tail: .31 },
-      bulwark: { scale: 1.12, bodyWidth: .58, bodyLength: 1.72, nose: 1.16, span: 1.62, wing: 1.2, armored: true, engines: [-.46, .46], tail: .48 },
-      pulse: { scale: 1.1, bodyWidth: .34, bodyLength: 1.86, nose: 1.34, span: 1.16, wing: .88, armored: false, engines: [0], tail: .18 },
+      comet: { scale: 1.13, bodyWidth: .42, bodyLength: 1.72, nose: 1.27, span: 1.4, wing: 1.06, armored: false, engines: [-.27, .27], tail: .29 },
+      bulwark: { scale: 1.1, bodyWidth: .49, bodyLength: 1.94, nose: 1.29, span: 1.58, wing: 1.18, armored: true, engines: [-.4, .4], tail: .42 },
+      pulse: { scale: 1.08, bodyWidth: .3, bodyLength: 2.04, nose: 1.44, span: 1.14, wing: .86, armored: false, engines: [0], tail: .17 },
     };
     const profile = profiles[frameId] || profiles.comet;
-    const base = compose(position, [pitch, 0, roll], [profile.scale, profile.scale, profile.scale]);
+    const base = compose(position, [pitch, player.galleryYaw || 0, roll], [profile.scale, profile.scale, profile.scale]);
     const pilotPalettes = [
       ["#3974e8", "#32d9c7", "#a66cff"],
       ["#b348c7", "#ff617d", "#ffb347"],
@@ -398,7 +400,7 @@ class SpaceRenderer3D {
     for (const side of [-1, 1]) this.sweptWing(base, side, palette, profile.wing, frameId === "pulse" ? .96 : .78, profile.armored);
     if (frameId === "bulwark") {
       for (const side of [-1, 1]) {
-        this.voxel(base, [side * .47, .075, .28], [.2, .18, 1.2], palette[2], .2);
+        this.voxel(base, [side * .42, .07, .32], [.18, .15, 1.32], palette[2], .2);
       }
     } else if (frameId === "pulse") {
       for (const side of [-1, 1]) {
@@ -430,7 +432,7 @@ class SpaceRenderer3D {
     for (let segment = 0; segment < 3; segment += 1) {
       const taper = 1 - segment * .22;
       const color = glow && segment === 2 ? glow : palette[segment % palette.length];
-      this.voxel(base, [handed * (x + segment * .19 * curl), .02 + segment * .02, z + segment * .39], [.14 * taper, .105 * taper, .54], color, segment === 2 ? .34 : .17, [0, handed * -.2 * curl, 0]);
+      this.voxel(base, [handed * (x + segment * .22 * curl), .03 + segment * .025, z + segment * .36], [.2 * taper, .13 * taper, .62], color, segment === 2 ? .4 : .18, [0, handed * -.2 * curl, 0]);
     }
   }
 
@@ -451,12 +453,12 @@ class SpaceRenderer3D {
       }
       this.alienEye(base, handed * .09, -.7, palette[2], .72);
     } else if (type === "tank") {
-      this.voxel(base, [0, .07, .04], [.66, .27, 1.16], palette[0]);
-      this.voxel(base, [0, .21, -.08], [.48, .13, .76], palette[1]);
+      this.voxel(base, [0, .07, .02], [.52, .24, 1.46], palette[0]);
+      this.voxel(base, [0, .2, -.18], [.4, .13, .88], palette[1]);
       for (const side of [-1, 1]) {
-        this.voxel(base, [side * .55, .08, .08], [.48, .2, .82], palette[0], 0, [0, side * .18, 0]);
-        this.voxel(base, [side * .92, .035, .28], [.4, .13, .58], palette[1], 0, [0, side * .32, 0]);
-        this.voxel(base, [side * .48, .16, -.44], [.34, .09, .42], palette[2], .18, [0, side * .16, 0]);
+        this.voxel(base, [side * .48, .075, .1], [.38, .18, 1.02], palette[0], 0, [0, side * .15, 0]);
+        this.voxel(base, [side * .82, .035, .32], [.34, .12, .72], palette[1], 0, [0, side * .28, 0]);
+        this.voxel(base, [side * .43, .15, -.52], [.3, .1, .5], palette[2], .2, [0, side * .14, 0]);
       }
       this.alienEye(base, handed * .22, -.47, palette[2], .9);
     } else if (type === "spinner") {
@@ -506,39 +508,45 @@ class SpaceRenderer3D {
     const flame = .38 + Math.sin(this.time * 18 + enemy.seed) * .1;
     const handed = Math.sin(Number(enemy.seed) || 1) >= 0 ? 1 : -1;
     if (enemy.movementModule === "weave") {
-      for (const side of [-1, 1]) this.alienTendril(base, side, palette, .42, .48, side === handed ? 1.08 : .78, moduleColor);
+      for (const side of [-1, 1]) {
+        this.voxel(base, [side * .64, .055, .58], [.76, .15, .72], side === handed ? palette[2] : palette[0], .2, [0, side * .48, 0]);
+        this.voxel(base, [side * 1.04, .07, .86], [.5, .11, .44], moduleColor, .56, [0, side * .66, 0]);
+      }
     } else if (enemy.movementModule === "rush") {
-      this.voxel(base, [0, .08, .72], [.25, .13, .88], palette[2], .2);
-      for (const side of [-1, 1]) this.voxelThruster(base, side * .2, 1.12, moduleColor, .7 + flame, .46);
+      this.voxel(base, [0, .11, .66], [.46, .22, 1.02], palette[2], .22);
+      for (const side of [-1, 1]) this.voxelThruster(base, side * .27, 1.08, moduleColor, .7 + flame, .7);
     } else if (enemy.movementModule === "drift") {
-      this.alienTendril(base, handed, palette, .52, .45, 1.28, moduleColor);
-      this.voxelThruster(base, handed * .56, 1.2, moduleColor, flame, .5);
+      this.voxel(base, [handed * .62, .08, .48], [.9, .17, .82], palette[2], .22, [0, handed * .5, 0]);
+      this.voxel(base, [handed * 1.05, .09, .76], [.48, .12, .5], moduleColor, .56, [0, handed * .66, 0]);
+      this.voxelThruster(base, handed * .64, 1.06, moduleColor, flame, .68);
     } else {
-      for (const side of [-1, 1]) this.voxelThruster(base, side * .24, .94, moduleColor, flame, .48);
+      this.voxel(base, [0, .06, .58], [.56, .16, .62], palette[0], .16);
+      for (const side of [-1, 1]) this.voxelThruster(base, side * .28, .96, moduleColor, flame, .62);
     }
 
     if (enemy.weaponModule === "twin") {
       for (const side of [-1, 1]) {
-        this.voxel(base, [side * .3, .08, -.82], [.11, .11, 1.12], palette[1], .18, [0, side * .06, 0]);
-        this.voxel(base, [side * .3, .11, -1.4], [.055, .045, .24], moduleColor, .86);
+        this.voxel(base, [side * .34, .1, -.74], [.22, .16, 1.18], palette[1], .2, [0, side * .07, 0]);
+        this.voxel(base, [side * .35, .13, -1.38], [.12, .09, .28], moduleColor, .88);
       }
     } else if (enemy.weaponModule === "sniper") {
-      this.voxel(base, [0, .09, -1], [.14, .12, 1.58], palette[2], .22);
-      this.voxel(base, [0, .12, -1.84], [.055, .045, .3], moduleColor, .9);
+      this.voxel(base, [0, .1, -1], [.25, .17, 1.64], palette[2], .24);
+      this.voxel(base, [0, .14, -1.88], [.13, .09, .34], moduleColor, .92);
     } else if (enemy.weaponModule === "orbit") {
-      for (const side of [-1, 1]) this.voxel(base, [side * .7, .1, -.24], [.88, .075, .17], side === handed ? moduleColor : palette[2], .34, [0, side * .35, 0]);
+      for (const side of [-1, 1]) this.voxel(base, [side * .7, .1, -.26], [.9, .14, .28], side === handed ? moduleColor : palette[2], .38, [0, side * .36, 0]);
     } else {
-      this.voxel(base, [0, .08, -.92], [.12, .1, .8], palette[1], .18);
-      this.voxel(base, [0, .11, -1.36], [.055, .045, .16], moduleColor, .88);
+      this.voxel(base, [0, .1, -.88], [.24, .16, .88], palette[1], .2);
+      this.voxel(base, [0, .14, -1.37], [.13, .09, .22], moduleColor, .9);
     }
 
     if (enemy.coreModule === "plated") {
-      for (const side of [-1, 1]) this.voxel(base, [side * .28, .2, .08], [.36, .11, .82], side === handed ? palette[2] : palette[0], .2, [0, side * .12, 0]);
+      for (const side of [-1, 1]) this.voxel(base, [side * .3, .22, .08], [.42, .18, .94], side === handed ? palette[2] : palette[0], .22, [0, side * .12, 0]);
+      this.voxel(base, [0, .31, -.18], [.34, .12, .72], palette[1], .28);
     } else if (enemy.coreModule === "barrier") {
-      for (const side of [-1, 1]) this.voxel(base, [side * .44, .17, .02], [.05, .045, 1.2], moduleColor, .68, [0, side * .13, 0]);
+      for (const side of [-1, 1]) this.voxel(base, [side * .46, .19, .02], [.18, .13, 1.16], moduleColor, .68, [0, side * .13, 0]);
       if (enemy.moduleBarrier > 0) {
         const pulse = 1 + Math.sin(this.time * 9 + enemy.seed) * .04;
-        this.voxel(base, [0, .44, -.26], [1.3 * pulse, .035, .07], moduleColor, 1);
+        this.voxel(base, [0, .43, -.24], [1.18 * pulse, .09, .16], moduleColor, 1);
       }
     } else if (enemy.coreModule === "volatile") {
       const pulse = 1 + Math.sin(this.time * 10 + enemy.seed) * .12;
@@ -549,32 +557,34 @@ class SpaceRenderer3D {
     }
 
     if (enemy.aiModule === "hunter") {
-      for (const side of [-1, 1]) this.alienEye(base, side * .16, -.5, "#ff4f70", .58);
+      for (const side of [-1, 1]) this.alienEye(base, side * .2, -.5, "#ff4f70", .68);
     } else if (enemy.aiModule === "flanker") {
       this.alienEye(base, handed * .38, -.38, "#ffcf6e", .75);
-      this.voxel(base, [handed * .72, .13, -.14], [.5, .04, .42], "#ffcf6e", .72, [0, handed * .3, 0]);
+      this.voxel(base, [handed * .7, .15, -.12], [.56, .13, .48], "#ffcf6e", .72, [0, handed * .3, 0]);
     } else if (enemy.aiModule === "oracle") {
-      this.voxel(base, [0, .35, -.14], [.46, .07, .56], palette[2], .24);
-      this.voxel(base, [0, .4, -.35], [.3, .035, .22], moduleColor, .9);
+      this.voxel(base, [0, .36, -.14], [.54, .15, .62], palette[2], .26);
+      this.voxel(base, [0, .45, -.36], [.32, .08, .24], moduleColor, .9);
     } else {
       this.alienEye(base, handed * .07, -.42, "#fff5b5", .62);
     }
 
     if (enemy.payloadModule === "cryo") {
-      for (const side of [-1, 1]) this.voxel(base, [side * .42, .13, .57], [.07, .045, .66], "#70eaff", .74, [0, side * .14, 0]);
+      for (const side of [-1, 1]) this.voxel(base, [side * .48, .14, .56], [.22, .13, .72], "#70eaff", .74, [0, side * .16, 0]);
     } else if (enemy.payloadModule === "glitch") {
       const color = Math.floor(this.time * 14 + enemy.seed) % 2 ? "#ff83d7" : "#7f8cff";
-      this.voxel(base, [handed * .14, .18, .55], [.82, .04, .08], color, .82, [0, handed * .14, 0]);
+      this.voxel(base, [handed * .18, .19, .54], [.84, .13, .2], color, .82, [0, handed * .14, 0]);
     } else if (enemy.payloadModule === "fracture") {
-      for (const side of [-1, 1]) this.voxel(base, [side * .5, .15, .44], [.08, .045, .5], "#ff9d4f", .8, [0, side * .2, 0]);
+      for (const side of [-1, 1]) this.voxel(base, [side * .52, .16, .42], [.24, .14, .56], "#ff9d4f", .8, [0, side * .22, 0]);
     }
   }
 
   drawEnemy(enemy) {
     const position = this.toWorld(enemy.x, enemy.y, .32);
-    const enemyScale = (enemy.elite ? 1.3 : 1.06) * (enemy.moduleScale || 1);
+    const perspectiveBoost = 1 + clamp((this.height * .48 - enemy.y) / this.height, 0, .14);
+    const enemyScale = (enemy.elite ? 1.34 : 1.12) * perspectiveBoost * (enemy.moduleScale || 1);
     const spin = enemy.type === "spinner" ? Math.sin(enemy.age * 2) * .08 : 0;
-    const base = compose(position, [0, Math.PI + spin, Math.sin(enemy.age * 2 + enemy.seed) * .04], [enemyScale, enemyScale, enemyScale]);
+    const galleryScale = enemy.galleryScale || 1;
+    const base = compose(position, [0, Math.PI + spin + (enemy.galleryYaw || 0), Math.sin(enemy.age * 2 + enemy.seed) * .04], [enemyScale * galleryScale, enemyScale * galleryScale, enemyScale * galleryScale]);
     if (enemy.boss) {
       this.drawBoss(enemy, base);
       return;
@@ -642,6 +652,54 @@ class SpaceRenderer3D {
     this.voxel(bossBase, [0, .44, -.18], [.76 + pulse * .08, .055, .64], palettes[2], .85);
     for (const side of [-1, 1]) this.voxelThruster(bossBase, side * .42, 1.24, palettes[2], .72 + pulse * .2, .72);
     if (enemy.phaseShield > 0) this.voxelCage(bossBase, 2.3 + Math.sin(this.time * 12) * .04, palettes[2], 1.15);
+  }
+
+  drawModelGallery(world, playerConfigs) {
+    const frames = ["comet", "bulwark", "pulse"];
+    frames.forEach((frameId, index) => {
+      this.drawShip({
+        index: index % 2,
+        frameId,
+        x: -4.8 + index * 4.8,
+        z: 3.25 + Math.abs(index - 1) * .25,
+        galleryYaw: (index - 1) * .13,
+      }, playerConfigs[index % 2], true);
+    });
+    const moduleSets = [
+      ["scout", "standard", "pulse", "light", "sentry", "clean"],
+      ["dart", "rush", "twin", "volatile", "hunter", "fracture"],
+      ["tank", "drift", "pulse", "plated", "flanker", "cryo"],
+      ["spinner", "weave", "orbit", "barrier", "oracle", "glitch"],
+      ["mine", "drift", "orbit", "volatile", "flanker", "cryo"],
+      ["lancer", "rush", "sniper", "light", "hunter", "fracture"],
+      ["carrier", "weave", "twin", "plated", "oracle", "glitch"],
+    ];
+    const moduleColors = ["#ffd454", "#ff6b60", "#70eaff", "#a96cff", "#ff83d7", "#ffb45f", "#63e6a8"];
+    const layout = [[76, 68], [185, 68], [295, 68], [404, 68], [130, 116], [240, 116], [350, 116]];
+    moduleSets.forEach(([type, movementModule, weaponModule, coreModule, aiModule, payloadModule], index) => {
+      const [x, y] = layout[index];
+      this.drawEnemy({
+        x,
+        y,
+        type,
+        movementModule,
+        weaponModule,
+        coreModule,
+        aiModule,
+        payloadModule,
+        moduleColor: moduleColors[index],
+        moduleBarrier: coreModule === "barrier" ? 4 : 0,
+        seed: index + 1,
+        age: this.time * .25,
+        moduleScale: 1,
+        galleryScale: 1.24,
+        galleryYaw: (index % 4 - 1.5) * .1,
+        hitFlash: 0,
+        elite: false,
+        boss: false,
+      });
+    });
+    this.canvas.dataset.modelGallery = "active";
   }
 
   drawRouteGates(choice) {
@@ -1019,6 +1077,12 @@ class SpaceRenderer3D {
     }
     this.camera.position.fromArray(eye);
     this.camera.lookAt(...target);
+    if (world.modelGallery) {
+      this.drawModelGallery(world, playerConfigs);
+      this.endFrame();
+      return true;
+    }
+    this.canvas.dataset.modelGallery = "off";
     this.drawLandmark(this.stageIndex, stage.biome);
     if (world.mode === "menu") {
       this.drawShip({ index: 0, frameId: world.loadoutFrame, x: 4.8 + Math.sin(this.time * .6) * .4, z: -.5 + Math.cos(this.time) * .25 }, playerConfigs[0], true);

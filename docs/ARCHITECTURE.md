@@ -39,7 +39,7 @@
 
 ## 观察与测试接口
 
-`#game` Canvas 的 `data-*` 属性公开模式、语言、章节、事件、Boss 阶段、敌人数、玩家耐久、FPS、QA 状态、装备、合约、天赋 ID/数量、倍率、构筑、协议、临时 Buff/Debuff、六槽/7,168 构筑目录、生态、星门、遭遇、狂潮、敌军变体、HUD 分辨率和奖励等稳定摘要。3D Canvas 额外公开 `data-renderer="three-r185-instanced-voxel"`、`data-art-style="toon-glow-light-blocks"` 与 `data-model-palette="saturated-no-black"`。本地参数包含 `qa-hull`、`qa-enemy`、`qa-buffs`、`qa-status` 与 `qa-voxel`；`qa-hull` 强制七个船体家族之一，`qa-voxel` 冻结事件/Boss 推进但保持正常敌军生成，用于无遮挡机体建模截图。全部开关只在 localhost/127.0.0.1 生效。`scripts/smoke-electron.cjs` 通过隔离临时 profile 和本机随机端口启动隐藏真实窗口，先验证完整自动战斗，再分别输出指挥舰状态特效和无 Buff 枪骑机构筑截图。
+`#game` Canvas 的 `data-*` 属性公开模式、语言、章节、事件、Boss 阶段、敌人数、玩家耐久、FPS、QA 状态、装备、合约、天赋 ID/数量、倍率、构筑、协议、临时 Buff/Debuff、六槽/7,168 构筑目录、生态、星门、遭遇、狂潮、敌军变体、HUD 分辨率和奖励等稳定摘要。3D Canvas 额外公开 `data-renderer="three-r185-instanced-voxel"`、`data-art-style="toon-glow-light-blocks"`、`data-model-palette="saturated-no-black"`、`data-model-families="3-player-7-alien"` 与 `data-module-anatomy="integrated-large-form"`。本地参数包含 `qa-hull`、`qa-enemy`、`qa-buffs`、`qa-status`、`qa-voxel` 与 `qa-model-gallery`；最后一项在干净场景同屏排列三架玩家战机和七类敌舰。全部开关只在 localhost/127.0.0.1 生效。`scripts/smoke-electron.cjs` 验证完整自动战斗，`scripts/smoke-models.cjs` 验证 3+7 近景矩阵、50 FPS 下限与零控制台错误。
 
 3D Canvas 还公开 `data-world-depth-layers="3"`、`data-biome-dioramas="9"` 与 `data-projectile-vfx="segmented-toon-trails"`。仅本机有效的 `qa-biome=<id>` 可以强制九个生态之一；`scripts/smoke-biomes.cjs` 逐项启动真实 Electron/WebGL、断言 45 FPS 下限与零控制台错误并生成截图。
 

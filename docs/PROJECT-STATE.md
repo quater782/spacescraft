@@ -6,12 +6,12 @@
 
 | 层级 | 当前事实 | 结论 |
 | --- | --- | --- |
-| 已记录发行 | 0.18.0 Neon Diorama Worlds | 九生态场景/体积特效源码、界面、package、发行说明和 Windows x64 哈希一致 |
-| package 元数据 | 0.18.0 | 与界面 `NEON DIORAMA WORLDS 0.18.0` 一致 |
-| Windows 产物 | `dist/SPACECRAFT-0.18.0-windows-x64.zip` | 已完成 76 条目归档、ASAR/Three.js 内容与 SHA-256 核验 |
+| 已记录发行 | 0.19.0 Organic Silhouette Forge | 大型有机模块、3+7 近景矩阵、源码、界面、package 与发行说明一致 |
+| package 元数据 | 0.19.0 | 与界面 `ORGANIC SILHOUETTE FORGE 0.19.0` 一致 |
+| Windows 产物 | `dist/SPACECRAFT-0.19.0-windows-x64.zip` | Windows x64 免安装归档与 SHA-256 核验已完成 |
 | Steam 候选状态 | 非候选版 | 尚缺正常时长、Windows 实机、手柄与长时间回归，以及签名和 Steamworks |
 
-0.18.0 是可追溯的 Alpha 发行，但不是 Steam 发布候选版。Windows 归档仍未签名，也没有安装器或 Steamworks 集成。
+0.19.0 是可追溯的 Alpha 发行，但不是 Steam 发布候选版。Windows 归档仍未签名，也没有安装器或 Steamworks 集成。
 
 ## 已建立能力
 
@@ -38,20 +38,21 @@
 - 第一章生态安全包络、前段标准构筑与侦察机保护，继续保留并发上限、慢弹和开局禁火。
 - 玩法 RNG 与视觉/音色随机源隔离；同种子候选、敌人、弹幕与掉落不会被粒子表现扰动。
 - 3D 与 HUD Canvas 均使用与显示尺寸匹配的高清缓冲；HUD 保留 480×270 逻辑布局并提供分辨率诊断属性。
-- Electron 桌面壳、可复现隐藏窗口冒烟、九生态逐项 WebGL 截图矩阵、Windows CI、多分辨率应用图标与 0.18.0 Windows x64 免安装归档。
+- Electron 桌面壳、可复现隐藏窗口冒烟、九生态逐项 WebGL 截图矩阵、三机体 × 七敌舰近景矩阵、Windows CI、多分辨率应用图标与 0.19.0 Windows x64 免安装归档。
 
 ## 当前验证证据
 
-- 0.18.0：九套独立动态生态、三层飞行纵深、四类玩家/四类敌军分段拖尾、速度体积光屑、Toon/Glow/按色批次、无近黑舰体、五项奥卡姆块数预算、Three.js 精确生产依赖、相反机头和禁用手搓面片门禁均通过。
+- 0.19.0：三架玩家战机细长比例、七类异形敌舰、大型有机模块、远景剪影补偿、Toon/Glow/按色批次、无近黑舰体、奥卡姆预算、相反机头和禁用手搓面片门禁均通过。
+- `npm run smoke:models` 在真实 Electron/WebGL 同屏验证三机体与七敌舰，记录 53 FPS、WebGL true、`integrated-large-form` 和 0 应用控制台错误；近景截图已人工复核。
 - `npm run smoke:biomes` 以隔离真实 Electron/WebGL 会话逐一强制九个生态；九项均记录 60 FPS、WebGL true、正确生态 ID、三层/九景/拖尾诊断和 0 应用控制台错误，并输出九张独立截图。
 - `npm run smoke:electron` 用隔离存档实际购买一级天赋，预置彗星驱动与四 Buff；同一会话只用方向输入完成信标并自动结算狂潮，再分别强制生成 `carrier.drift.orbit.barrier.oracle.cryo` 和 `lancer.rush.sniper.volatile.hunter.fracture`。Three.js WebGL2、60 FPS、2142×1203 HUD、Toon+Glow/饱和无黑色诊断、6 槽/7,168 目录和 0 应用控制台/CSP 错误成立。
 - 干净双颚枪骑体、完整状态深渊母巢舰与战斗实际截图已人工检查；玩家细长尖鼻、纵向座舱、连续薄翼、尾焰、贴体 Buff/状态带、反向异形敌军、三阶 Toon 明暗、克制 Glow、彩色弹幕、体素星球/科技塔和 3D 网格可见；舰体未发黑且没有过曝成粉白。
-- 内置浏览器连接因当前宿主初始化冲突没有列为通过；真实 Electron/WebGL 视觉回归已完成。0.18.0 Windows ZIP/EXE/ASAR 和内置 Three.js 运行模块的 SHA-256、字节数、条目与完整性已核验，见[打包指南](./PACKAGING.md)。
+- 内置浏览器连接因当前宿主初始化冲突没有列为通过；真实 Electron/WebGL 视觉回归已完成。0.19.0 Windows ZIP/EXE/ASAR 的 SHA-256、字节数与完整性见[打包指南](./PACKAGING.md)。
 - 0.7.0 曾完成英文过载快速三章和结算页即时切换语言；历史证据不能代替 0.18.0 正常时长、全部视觉组合与完整兼容回归。
 
 ## Steam 发行阻断项
 
-- 0.18.0 其余 7,166 个敌型组合、三机体 × 九生态 × 七航线代表组合、三阶段 Boss 与全弹幕长时间稳定性，以及正常速度三章、九天赋组合、五类遭遇、双模式、双语言、手柄和长时间回归。
+- 0.19.0 其余敌型组合、三机体 × 九生态 × 七航线代表组合、三阶段 Boss 与全弹幕长时间稳定性，以及正常速度三章、九天赋组合、五类遭遇、双模式、双语言、手柄和长时间回归。
 - Windows 10/11 多 GPU/分辨率/双手柄兼容矩阵和性能预算。
 - Windows 代码签名、正式安装器、Steamworks/SteamPipe、成就、云存档与 Overlay。
 - Steam Input 图标、完整色觉方案、商店 Capsule、截图、预告片、双语商店文案和隐私/支持资料。
