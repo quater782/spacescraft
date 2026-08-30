@@ -42,7 +42,7 @@ assert.match(gameSource, /beginUpgradeDraft\("mid-stage"\)/);
 assert.match(gameSource, /nextEvent\.at \* stage\.duration/);
 assert.match(gameSource, /DIRECTOR\.timeScale/);
 assert.match(gameSource, /DIRECTOR\.intensityFor/);
-assert.match(gameSource, /audio\.sfx\("sectorShift"\)/);
+assert.match(gameSource, /audio\.sfx\("anomalyShift"\)/, "sector transitions must retain a distinct audio cue through the active anomaly field");
 assert.match(gameSource, /dataset\.runTargetSeconds/);
 assert.match(expeditionSource, /SpaceDirector\.ENCOUNTER_POINTS/);
 assert.match(rendererSource, /drawSectorArchitecture\(world, stage\)/);

@@ -106,12 +106,16 @@ async function run() {
   if (errors.length) throw new Error(`renderer console errors: ${errors.join(" | ")}`);
   const rendererState = await window.webContents.executeJavaScript(`(() => {
     const scene = document.querySelector('#scene');
-    return { backend: scene.dataset.renderer, artStyle: scene.dataset.artStyle, modelPalette: scene.dataset.modelPalette, worldDepthLayers: scene.dataset.worldDepthLayers, biomeDioramas: scene.dataset.biomeDioramas, projectileVfx: scene.dataset.projectileVfx, webgl: Boolean(scene.getContext('webgl2') || scene.getContext('webgl')) };
+    return { backend: scene.dataset.renderer, artStyle: scene.dataset.artStyle, modelPalette: scene.dataset.modelPalette, worldDepthLayers: scene.dataset.worldDepthLayers, biomeDioramas: scene.dataset.biomeDioramas, projectileVfx: scene.dataset.projectileVfx, pixelGrammar: scene.dataset.pixelGrammar, spaceComposition: scene.dataset.spaceComposition, ecosystemComposition: scene.dataset.ecosystemComposition, combatNegativeSpace: scene.dataset.combatNegativeSpace, nebulaParallax: scene.dataset.nebulaParallax, skyAtmosphere: scene.dataset.skyAtmosphere, factionLanguage: scene.dataset.factionLanguage, playerModules: scene.dataset.playerModules, energyBloom: scene.dataset.energyBloom, edgeAA: scene.dataset.edgeAA, enemyModuleLanguage: scene.dataset.enemyModuleLanguage, playerMaterialSeparation: scene.dataset.playerMaterialSeparation, projectileReadability: scene.dataset.projectileReadability, ringGrammar: scene.dataset.ringGrammar, hullExposure: scene.dataset.hullExposure, groundPlane: scene.dataset.groundPlane, depthScaffolding: scene.dataset.depthScaffolding, shieldLanguage: scene.dataset.shieldLanguage, macroLayout: scene.dataset.macroLayout, celestialScaffolding: scene.dataset.celestialScaffolding, webgl: Boolean(scene.getContext('webgl2') || scene.getContext('webgl')) };
   })()`);
   const webgl = rendererState.webgl;
   if (!webgl || rendererState.backend !== "three-r185-instanced-voxel") throw new Error(`Three.js WebGL renderer unavailable: ${JSON.stringify(rendererState)}`);
   if (rendererState.artStyle !== "toon-glow-light-blocks" || rendererState.modelPalette !== "saturated-no-black") throw new Error(`Toon+Glow art contract unavailable: ${JSON.stringify(rendererState)}`);
   if (rendererState.worldDepthLayers !== "3" || rendererState.biomeDioramas !== "9" || rendererState.projectileVfx !== "segmented-toon-trails") throw new Error(`Neon Diorama Worlds art contract unavailable: ${JSON.stringify(rendererState)}`);
+  if (rendererState.pixelGrammar !== "coarse-emissive-012" || rendererState.spaceComposition !== "open-celestial-parallax" || rendererState.factionLanguage !== "human-kites-vs-void-organisms" || rendererState.playerModules !== "4-integrated-silhouette-parts") throw new Error(`visual rebuild contract unavailable: ${JSON.stringify(rendererState)}`);
+  if (rendererState.energyBloom !== "unreal-selective-5mip" || rendererState.edgeAA !== "native-smaa" || rendererState.enemyModuleLanguage !== "surface-organs" || rendererState.playerMaterialSeparation !== "ceramic-core-engine" || rendererState.projectileReadability !== "dim-friendly-hot-hostile" || rendererState.ringGrammar !== "continuous-segmented-arcs") throw new Error(`professional visual contract unavailable: ${JSON.stringify(rendererState)}`);
+  if (rendererState.hullExposure !== "matte-ceramic-no-bloom" || rendererState.groundPlane !== "none-open-space" || rendererState.depthScaffolding !== "macro-mid-distant" || rendererState.shieldLanguage !== "four-hugging-plates" || rendererState.macroLayout !== "alternating-edge-anchors" || rendererState.celestialScaffolding !== "opposed-biome-horizon-bodies") throw new Error(`second-pass art polish contract unavailable: ${JSON.stringify(rendererState)}`);
+  if (rendererState.ecosystemComposition !== "9-macro-mid-sparse" || rendererState.combatNegativeSpace !== "center-55-clear" || rendererState.nebulaParallax !== "3d-additive-dust" || rendererState.skyAtmosphere !== "layered-soft-voxel-nebula") throw new Error(`deep-space ecosystem composition unavailable: ${JSON.stringify(rendererState)}`);
   const rushState = await window.webContents.executeJavaScript(`(() => {
     const game = document.querySelector('#game');
     return Object.fromEntries(['rushActive', 'rushCharge', 'rushTimer', 'rushChain', 'rushBestChain', 'rushCount', 'rushLastBonus'].map((key) => [key, game.dataset[key]]));
@@ -119,8 +123,10 @@ async function run() {
   const image = await window.webContents.capturePage();
   fs.writeFileSync(screenshotPath, image.toPNG());
   let settledRush = rushState;
-  for (let attempt = 0; attempt < 220; attempt += 1) {
+  let rushSettleAttempts = 0;
+  for (let attempt = 0; attempt < 280; attempt += 1) {
     await delay(100);
+    rushSettleAttempts = attempt + 1;
     settledRush = await window.webContents.executeJavaScript(`(() => {
       const game = document.querySelector('#game');
       return Object.fromEntries(['rushActive', 'rushCharge', 'rushTimer', 'rushChain', 'rushBestChain', 'rushCount', 'rushLastBonus'].map((key) => [key, game.dataset[key]]));
@@ -160,7 +166,7 @@ async function run() {
   const airframeImage = await window.webContents.capturePage();
   fs.writeFileSync(airframeShowcaseScreenshotPath, airframeImage.toPNG());
   if (errors.length) throw new Error(`renderer console errors after clean airframe showcase: ${errors.join(" | ")}`);
-  process.stdout.write(`${JSON.stringify({ ...state, protocolState, rushState, settledRush, voxelState, cleanVoxelState, talentPurchase: talentState, encounterHistory, rendererState, webgl, consoleErrors: errors.length, screenshot: screenshotPath, voxelShowcaseScreenshot: voxelShowcaseScreenshotPath, airframeShowcaseScreenshot: airframeShowcaseScreenshotPath, talentScreenshot: talentScreenshotPath })}\n`);
+  process.stdout.write(`${JSON.stringify({ ...state, protocolState, rushState, settledRush, rushSettleSeconds: Number((rushSettleAttempts / 10).toFixed(1)), voxelState, cleanVoxelState, talentPurchase: talentState, encounterHistory, rendererState, webgl, consoleErrors: errors.length, screenshot: screenshotPath, voxelShowcaseScreenshot: voxelShowcaseScreenshotPath, airframeShowcaseScreenshot: airframeShowcaseScreenshotPath, talentScreenshot: talentScreenshotPath })}\n`);
   window.destroy();
   server.close();
   app.quit();

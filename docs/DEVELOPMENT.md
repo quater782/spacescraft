@@ -20,7 +20,7 @@ http://127.0.0.1:4173/?qa-fast
 
 此模式仅在 `localhost` 或 `127.0.0.1` 生效，会把远征章节时间加速到 90 倍并降低 Boss 测试耐久，用于快速检查九战区、27 个事件、12 次遭遇、八个构筑节点、三场 Boss 和完整通关路径。测试结果不会写入出航、通关、最高分等生涯统计，也不会在正式域名或 Electron 文件协议下启用；`qa-voxel` 保持 1 倍速度，避免建模验收场被跳过。
 
-自动化或人工检查可以读取 `#game` 上的 `data-mode`、`data-language`、`data-stage`、`data-stage-time`、`data-events`、`data-enemies`、`data-boss-phase`、`data-player-hp`、`data-fps` 与 `data-qa` 诊断属性。机库、合约、构筑与远征还提供 `data-frame`、`data-module`、`data-contract`、`data-talents`、`data-talent-count`、`data-score-multiplier`、`data-player-shield`、`data-player-speed`、`data-player-fire-rate`、`data-player-damage`、`data-player-energy-gain`、`data-achievement-count`、`data-stardust-reward`、`data-run-seed`、`data-upgrade-count`、`data-upgrades`、`data-draft-options`、`data-protocols`、`data-protocol-count`、`data-protocol-procs`、`data-player-buffs`、`data-player-debuffs`、`data-enemy-module-slots`、`data-enemy-build-catalog`、`data-qa-enemy-build`、`data-route-signature`、`data-biome`、`data-enemy-variants`、`data-active-builds`、`data-path-plan`、`data-active-path`、`data-path-options`、`data-path-selection`、`data-path-history`、`data-encounter-plan`、`data-active-encounter`、`data-encounter-progress`、`data-encounter-objects`、`data-encounter-history` 及七项 `data-rush-*` 狂潮状态。3D Canvas 还应为 `data-renderer="three-r185-instanced-voxel"`、`data-art-style="toon-glow-light-blocks"` 和 `data-model-palette="saturated-no-black"`。
+自动化或人工检查可以读取 `#game` 上的 `data-mode`、`data-language`、`data-stage`、`data-stage-time`、`data-events`、`data-enemies`、`data-boss-phase`、`data-player-hp`、`data-fps` 与 `data-qa` 诊断属性。机库、合约、构筑与远征还提供 `data-frame`、`data-module`、`data-contract`、`data-talents`、`data-talent-count`、`data-score-multiplier`、`data-player-shield`、`data-player-speed`、`data-player-fire-rate`、`data-player-damage`、`data-player-energy-gain`、`data-achievement-count`、`data-stardust-reward`、`data-run-seed`、`data-upgrade-count`、`data-upgrades`、`data-draft-options`、`data-protocols`、`data-protocol-count`、`data-protocol-procs`、`data-player-buffs`、`data-player-debuffs`、`data-enemy-module-slots`、`data-enemy-build-catalog`、`data-qa-enemy-build`、`data-route-signature`、`data-biome`、`data-enemy-variants`、`data-active-builds`、`data-path-plan`、`data-active-path`、`data-path-options`、`data-path-selection`、`data-path-history`、`data-encounter-plan`、`data-active-encounter`、`data-encounter-progress`、`data-encounter-objects`、`data-encounter-history` 及七项 `data-rush-*` 狂潮状态。3D Canvas 还应为 `data-renderer="three-r185-instanced-voxel"`、`data-art-style="toon-glow-light-blocks"`、`data-pixel-grammar="coarse-emissive-012"`、`data-space-composition="open-celestial-parallax"`、`data-ecosystem-composition="9-macro-mid-sparse"`、`data-combat-negative-space="center-55-clear"`、`data-nebula-parallax="3d-additive-dust"`、`data-faction-language="human-kites-vs-void-organisms"` 和 `data-player-modules="4-integrated-silhouette-parts"`。
 
 ### 本地机库经济测试
 
@@ -68,7 +68,7 @@ http://127.0.0.1:4173/?qa-voxel&qa-buffs&qa-status=chill&qa-path=1&qa-hull=carri
 
 `qa-hull=scout|dart|tank|spinner|mine|lancer|carrier` 强制基础机体，`qa-enemy` 必须是五段功能模块稳定 ID；七个船体与每槽四种模块形成 7,168 个完整构筑。`qa-buffs` 自动给双机上线军械超频、纳米花簇、神盾矩阵和磁通核心；`qa-status=chill|jam|fracture` 只给 P1 施加对应异常。全部开关仅在 localhost 生效，不增加战斗键。
 
-视觉验收必须同时检查：玩家尖鼻朝屏幕上方、敌军绕 Y 轴 180° 朝屏幕下方；玩家具有细长机身、纵向座舱、连续阶梯薄翼、倾斜尾翼与独立推进焰，不得呈现甲虫/装甲车式粗短截面；敌军不得调用玩家的机鼻/机翼/尾翼构造器，必须以弯月骨翼、分叉颚、甲壳、触须和非对称眼阵形成异形剪影；Buff/Debuff 贴合主体结构。玩家与敌军主体必须保持蓝、青、紫、粉、橙等饱和颜色，不得使用近黑色结构块，也不得因曝光过高变成粉白；表面应可见三阶 Toon 明暗，Glow 只形成略大于实体的同色边缘。单个机鼻不超过四块、单侧翼不超过四块、单侧尾翼不超过两块、单侧弯月不超过三块；彩色体素弹幕、体素星球/生态、3D 网格和远近雾有纵深；静止截图和连续运行中均无共面闪烁。`npm run verify` 会拒绝近黑舰体色、超预算核心构造器、敌方复用人类战机构造器、原生 shader/buffer/draw call、手写面片以及 Plane/Sphere/Torus/Octahedron/Cone 几何回退。
+视觉验收必须同时检查：玩家尖鼻朝屏幕上方、敌军绕 Y 轴 180° 朝屏幕下方；玩家主体是大面积暖白陶瓷连续面，P1/P2 只用青蓝/珊瑚作为识别色，并具有长鼻、纵向座舱、薄翼、倾斜尾翼与独立推进焰；敌军不得调用玩家构造器，必须以深紫甲壳、血红结构、少量酸性眼核以及弯月骨翼、分叉颚、触须和非对称眼阵形成异形剪影。四模组与 Buff/Debuff 贴合主体结构，敌军五维模块必须改写表面脉络、口器、尾器官、甲壳缝或眼阵，酸性颜色不得铺满大翼面。表面应可见三阶 Toon 明暗，每块体素有克制同色 Glow；只有座舱、引擎、眼核、口器和裂缝触发 HDR Bloom，白色装甲不得泛光。原生分辨率和 SMAA 负责平滑屏幕边缘，世界尺寸不低于 0.12 的粗几何负责像素感。场景至少保留大面积深空负空间，连续地板、成对护栏、中央门架和横贯画面的力场光轨均视为隧道回归；导航网格只能低透明度跟随玩家。玩家普通弹是低亮短矢，敌弹是珊瑚/紫色倒刺生物体；只有狙击职责允许长轴。完整色彩、构图和粒度规则见[3D 像素视觉方向](./VISUAL-DIRECTION.md)。
 
 ### 三机体 × 七敌舰近景模型矩阵
 
@@ -78,7 +78,7 @@ http://127.0.0.1:4173/?qa-voxel&qa-buffs&qa-status=chill&qa-path=1&qa-hull=carri
 http://127.0.0.1:4173/?qa-model-gallery&seed=2
 ```
 
-运行 `npm run smoke:models` 会真实启动 Electron/WebGL，检查 `data-model-families="3-player-7-alien"`、`data-module-anatomy="integrated-large-form"`、Toon+Glow、饱和无黑色、50 FPS 下限和零应用控制台错误，并把近景截图写入系统临时目录。人工验收重点是玩家三机体长宽比例、敌军七种独立剪影、敌我相反机头，以及推进/武器/核心/AI/载荷是否表现为大型主体器官而非细杆或悬浮小方块。
+运行 `npm run smoke:models` 会真实启动 Electron/WebGL，检查 `data-model-families="3-player-7-alien"`、`data-enemy-module-language="surface-organs"`、`data-player-material-separation="ceramic-core-engine"`、`data-hull-exposure="matte-ceramic-no-bloom"`、`data-shield-language="four-hugging-plates"`、选择性 Bloom/SMAA、50 FPS 下限和零应用控制台错误，并把近景截图写入系统临时目录。人工验收重点是哑光陶瓷玩家与紫红敌军的一眼区分、玩家三机体长宽比例、敌军七种独立剪影、敌我相反机头，以及推进/武器/核心/AI/载荷是否表现为表面器官而非细杆、悬浮小方块或人类外挂件。
 
 ### 三章 Boss 阶段矩阵
 
@@ -88,7 +88,7 @@ http://127.0.0.1:4173/?qa-model-gallery&seed=2
 http://127.0.0.1:4173/?qa-boss-gallery&qa-boss-phase=3&seed=2
 ```
 
-运行 `npm run smoke:bosses` 会依次验证三个阶段的 `data-boss-families="3-organic-phase-forms"`、Toon+Glow、无黑色、大型有机模块、WebGL、50 FPS 下限和零应用控制台错误，并输出 `boss-phase-1.png` 到 `boss-phase-3.png`。人工验收必须确认花瓣魟翼、雷枪熔炉、双体虚空冠三套剪影互不复用普通敌舰附肢，第二/三阶段器官确实改变主体轮廓，且下方三种章别弹体分别是花瓣、雷枪和旋转棱体。
+运行 `npm run smoke:bosses` 会依次验证三个阶段的 `data-boss-families="3-organic-phase-forms"`、深色异形甲壳、选择性 Bloom/SMAA、表面器官语言、WebGL、50 FPS 下限和零应用控制台错误，并输出 `boss-phase-1.png` 到 `boss-phase-3.png`。人工验收必须确认花瓣魟翼、磁炉脊兽、双镰虚空体三套剪影互不复用普通敌舰附肢或玩家推进器，第二/三阶段器官确实改变主体轮廓，且下方三种章别弹体分别是花瓣、雷枪和旋转棱体。
 
 ### Boss 攻击状态机实战
 
@@ -108,7 +108,7 @@ http://127.0.0.1:4173/?qa-fast&qa-boss-state&qa-path=1&seed=7
 http://127.0.0.1:4173/?qa-biome=eclipseCarnival&seed=2
 ```
 
-稳定 ID 为 `sugarBloom`、`crystalOrchard`、`cometTide`、`auroraFoundry`、`thunderWorks`、`cloudReef`、`eclipseCarnival`、`prismGrave` 和 `voidGarden`。逐项检查近景航标、中景生态件、远景地标是否形成三层纵深并向镜头推进；生态必须具有不同剪影，第三章不得出现黑色巨墙或黑色蚀月。玩家/敌军弹体应沿速度方向拥有渐缩拖尾，命中与爆炸应表现为拉伸体积光屑；低画质允许拖尾缩为一节。
+稳定 ID 为 `sugarBloom`、`crystalOrchard`、`cometTide`、`auroraFoundry`、`thunderWorks`、`cloudReef`、`eclipseCarnival`、`prismGrave` 和 `voidGarden`。逐项检查左侧三分线的巨型远景、中景生态群、两层星云尘带和稀疏航标是否形成不同速度的真实 3D 纵深；九区应分别读成种荚、水晶冠、彗星巨兽、极光环锻炉、电磁线圈、云胞礁、蚀月、三碑墓园和奇点花园。中心 55% 必须保持战斗负空间，敌机不能与巨型地标重叠；第三章不得出现黑色巨墙。玩家/敌军弹体应沿速度方向拥有渐缩拖尾，命中与爆炸应表现为拉伸体积光屑；低画质允许拖尾缩为一节。
 
 运行真实 Electron/WebGL 九项矩阵：
 
@@ -116,7 +116,7 @@ http://127.0.0.1:4173/?qa-biome=eclipseCarnival&seed=2
 npm run smoke:biomes
 ```
 
-每项必须返回正确 `biome`、`worldDepthLayers: "3"`、`biomeDioramas: "9"`、`projectileVfx: "segmented-toon-trails"`、WebGL true、不低于 45 FPS 和零控制台错误。截图写入系统临时目录 `spacescraft-biome-matrix`，仍需人工检查剪影、纵深、遮挡、色彩和运动方向。
+每项必须返回正确 `biome`、`worldDepthLayers: "3"`、`biomeDioramas: "9"`、`energyBloom: "unreal-selective-5mip"`、`edgeAA: "native-smaa"`、`ringGrammar: "continuous-segmented-arcs"`、`projectileReadability: "dim-friendly-hot-hostile"`、`groundPlane: "none-open-space"`、`depthScaffolding: "macro-mid-distant"`、WebGL true、不低于 45 FPS 和零控制台错误。截图写入系统临时目录 `spacescraft-biome-matrix`，仍需人工检查剪影、纵深、遮挡、色彩、运动方向、环境是否进入玩家层和 Bloom 污染。
 
 ### 星门分支测试
 
@@ -220,7 +220,7 @@ npm start
 18. 在自然充能和 `qa-rush` 两条路径检查自动触发、火力倍率、拾取牵引、光链消弹、击破延时、3D 能量环、动态音乐、结算与七项诊断。
 19. 逐项覆盖七种遗物协议，检查第二次构筑配套注入、方向确认、自动触发、SVG/HUD/3D、协议音乐、结果摘要与 CSP 控制台。
 20. 用有/无状态两种 `qa-voxel` 画面检查玩家/敌军相反朝向、尖鼻/连续承力翼/尾焰、六维模块对主体轮廓的改变、饱和 Toon 色块、轻微 Glow、体素弹幕/背景和 60 FPS；确认没有近黑舰体、过曝粉白、悬浮微方块、面片堆砌或共面闪烁。
-21. 运行 `npm run smoke:biomes`，逐项人工检查九生态截图的近/中/远纵深、独立剪影、饱和 Toon+Glow、分段弹体拖尾与无黑色地标。
+21. 运行 `npm run smoke:biomes`，逐项人工检查九生态截图的三层纵深、偏轴天体、深空负空间、低饱和环境、短弹体拖尾，并确认没有连续地板、成对护栏、中央门架或伪隧道光轨。
 22. 运行 `npm run smoke:director`，确认第一章三战区、九事件、四遭遇、两次章中构筑、Boss 接续、60 FPS 目标和零控制台错误。
 23. 运行 `npm run smoke:threat`，复核缓冲/极限倍率、HUD、3D 信标、WebGL、帧率和零错误；正常速度抽样观察自然升降档与残血/倒地保护。
 24. 更新 `CHANGELOG.md`、[当前项目状态](./PROJECT-STATE.md)、发行说明和相关设计文档。

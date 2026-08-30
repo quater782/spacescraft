@@ -53,12 +53,21 @@ async function run() {
         bossFamilies: scene.dataset.bossFamilies,
         bossChoreography: scene.dataset.bossChoreography,
         bossGallery: scene.dataset.bossGallery,
+        energyBloom: scene.dataset.energyBloom,
+        edgeAA: scene.dataset.edgeAA,
+        enemyModuleLanguage: scene.dataset.enemyModuleLanguage,
+        groundPlane: scene.dataset.groundPlane,
+        depthScaffolding: scene.dataset.depthScaffolding,
+        bossGalleryView: scene.dataset.bossGalleryView,
         webgl: Boolean(scene.getContext('webgl2') || scene.getContext('webgl')),
       };
     })()`);
     if (!state.qa.includes(`boss-phase${phase}`) || state.bossGallery !== `phase-${phase}`) throw new Error(`boss phase gallery unavailable: ${JSON.stringify(state)}`);
     if (!state.webgl || state.backend !== "three-r185-instanced-voxel") throw new Error(`WebGL renderer unavailable: ${JSON.stringify(state)}`);
     if (state.artStyle !== "toon-glow-light-blocks" || state.modelPalette !== "saturated-no-black" || state.moduleAnatomy !== "integrated-large-form" || state.bossFamilies !== "3-organic-phase-forms" || state.bossChoreography !== "telegraph-state-arena") throw new Error(`boss art contract unavailable: ${JSON.stringify(state)}`);
+    if (state.energyBloom !== "unreal-selective-5mip" || state.edgeAA !== "native-smaa" || state.enemyModuleLanguage !== "surface-organs") throw new Error(`boss post-process contract unavailable: ${JSON.stringify(state)}`);
+    if (state.groundPlane !== "none-open-space" || state.depthScaffolding !== "macro-mid-distant") throw new Error(`boss open-space depth contract unavailable: ${JSON.stringify(state)}`);
+    if (state.bossGalleryView !== "neutral-silhouette") throw new Error(`boss silhouette gallery contract unavailable: ${JSON.stringify(state)}`);
     if (state.fps < 50) throw new Error(`boss gallery performance below 50 FPS: ${JSON.stringify(state)}`);
     if (errors.length) throw new Error(`renderer console errors: ${errors.join(" | ")}`);
     await window.webContents.executeJavaScript(`

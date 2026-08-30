@@ -49,6 +49,7 @@ async function run() {
   `);
 
   const sectors = new Set();
+  const anomalies = new Set();
   const draftContexts = new Set();
   let maxEvents = 0;
   let maxEncounters = 0;
@@ -77,13 +78,19 @@ async function run() {
         drafts: game.dataset.drafts,
         draftContext: game.dataset.draftContext,
         bossState: game.dataset.bossAttackState,
+        anomalyId: game.dataset.anomalyId,
+        anomalyHistory: game.dataset.anomalyHistory,
+        anomalyPlan: game.dataset.anomalyPlan,
         runTargetSeconds: game.dataset.runTargetSeconds,
         fps: game.dataset.fps,
         renderer: scene.dataset.renderer,
         expeditionSectors: scene.dataset.expeditionSectors,
+        sectorAnomalies: scene.dataset.sectorAnomalies,
+        sceneAnomaly: scene.dataset.anomalyId,
       };
     })()`);
     sectors.add(latest.sector);
+    if (latest.anomalyId) anomalies.add(latest.anomalyId);
     if (latest.mode === "draft") draftContexts.add(latest.draftContext);
     maxEvents = Math.max(maxEvents, Number(latest.events || 0));
     maxEncounters = Math.max(maxEncounters, Number(latest.encounters || 0));
@@ -97,15 +104,18 @@ async function run() {
 
   if (latest?.runTargetSeconds !== "1800") throw new Error(`normal run target missing: ${JSON.stringify(latest)}`);
   if (!["1", "2", "3"].every((sector) => sectors.has(sector))) throw new Error(`chapter-one sector progression incomplete: ${JSON.stringify([...sectors])}`);
+  if (anomalies.size !== 3) throw new Error(`chapter-one anomaly progression incomplete: ${JSON.stringify([...anomalies])}`);
+  if (latest.anomalyPlan.split(/[>|]/).length !== 9 || latest.anomalyHistory.split(",").length < 3) throw new Error(`nine-sector anomaly route/history missing: ${JSON.stringify(latest)}`);
+  if (latest.sceneAnomaly !== latest.anomalyId) throw new Error(`gameplay/render anomaly mismatch: ${JSON.stringify(latest)}`);
   if (maxEvents !== 9) throw new Error(`formation timeline incomplete: ${maxEvents}/9`);
   if (maxEncounters !== 4) throw new Error(`encounter timeline incomplete: ${maxEncounters}/4`);
   if (maxDrafts < 2 || !draftContexts.has("mid-stage")) throw new Error(`mid-stage drafts missing: ${maxDrafts}, ${JSON.stringify([...draftContexts])}`);
   if (!sawBoss) throw new Error(`chapter boss was not reached: ${JSON.stringify(latest)}`);
-  if (latest.renderer !== "three-r185-instanced-voxel" || latest.expeditionSectors !== "9-progressive-voxel-gates") throw new Error(`sector renderer contract missing: ${JSON.stringify(latest)}`);
+  if (latest.renderer !== "three-r185-instanced-voxel" || latest.expeditionSectors !== "9-progressive-voxel-gates" || latest.sectorAnomalies !== "9-seeded-gameplay-fields") throw new Error(`sector renderer contract missing: ${JSON.stringify(latest)}`);
   if (Number(latest.fps) < 40) throw new Error(`director smoke performance too low: ${latest.fps} FPS`);
   if (errors.length) throw new Error(`console errors: ${errors.join(" | ")}`);
 
-  process.stdout.write(`${JSON.stringify({ latest, sectors: [...sectors], maxEvents, maxEncounters, maxDrafts, draftContexts: [...draftContexts], sawBoss, consoleErrors: errors.length })}\n`);
+  process.stdout.write(`${JSON.stringify({ latest, sectors: [...sectors], anomalies: [...anomalies], maxEvents, maxEncounters, maxDrafts, draftContexts: [...draftContexts], sawBoss, consoleErrors: errors.length })}\n`);
   window.destroy();
   server.close();
   app.quit();

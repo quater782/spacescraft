@@ -46,6 +46,8 @@ ZIP 为 157,798,943 字节，EXE 为 244,440,576 字节，共 76 个归档条目
 
 `app.asar` 为 1,189,915 字节，含 72 个文件条目，已读取核对 package 0.23.0、`ADAPTIVE THREAT MATRIX 0.23.0` 页脚、`src/threat.js`、五个等级配置、紧急减压接线、localhost QA 隔离与 1× 开局安全回归。它还包含 Three.js `three.module.min.js`、三阶 Toon+Glow、三种玩家战机、七类异形舰、三套阶段生长 Boss、12 种攻击状态、体素蓄力器官、竞技场光路与阶段 8-bit 编曲；以及 `SpaceDirector`、570/600/630 秒时长、九战区体素门架、27 编队、12 遭遇、八构筑节点、90× QA 压缩模拟、九生态、4 Buff/3 Debuff、六维 7,168 构筑、15 项升级、9 项天赋、7 项遗物协议、星链狂潮和 7 种星门协议。
 
+0.24.0 当前 macOS arm64 开发快照已执行 `npm run package` 并从包内可执行文件实际启动。其 ASAR 已逐项读取确认包含 v25 `renderer3d.js` 入口、`three.module.min.js`、EffectComposer、RenderPass、UnrealBloomPass、SMAAPass、OutputPass、SMAAShader 与 LuminosityHighPassShader。`forge.config.cjs` 必须同时放行 `examples`、`examples/jsm` 父目录及 `postprocessing`/`shaders` 子树；只放行叶子目录会被 Forge 在遍历父目录时提前排除。该本机快照仅作为 0.24.0 视觉发行链证据，不替代 Windows x64 签名归档。
+
 Windows EXE 使用 `assets/icon.ico`，其中包含从 `favicon.svg` 直接渲染的 16、24、32、48、64、128 和 256px 图像。macOS 上可运行 `npm run icons` 重新生成 ICO、PNG 与 ICNS。
 
 注意：Windows 免安装版必须保留同目录的 DLL、resources 和 locales，不能只复制单独的 EXE。

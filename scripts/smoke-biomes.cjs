@@ -78,6 +78,22 @@ async function run() {
         worldDepthLayers: scene.dataset.worldDepthLayers,
         biomeDioramas: scene.dataset.biomeDioramas,
         projectileVfx: scene.dataset.projectileVfx,
+        pixelGrammar: scene.dataset.pixelGrammar,
+        spaceComposition: scene.dataset.spaceComposition,
+        ecosystemComposition: scene.dataset.ecosystemComposition,
+        combatNegativeSpace: scene.dataset.combatNegativeSpace,
+        nebulaParallax: scene.dataset.nebulaParallax,
+        skyAtmosphere: scene.dataset.skyAtmosphere,
+        energyBloom: scene.dataset.energyBloom,
+        edgeAA: scene.dataset.edgeAA,
+        ringGrammar: scene.dataset.ringGrammar,
+        projectileReadability: scene.dataset.projectileReadability,
+        hullExposure: scene.dataset.hullExposure,
+        groundPlane: scene.dataset.groundPlane,
+        depthScaffolding: scene.dataset.depthScaffolding,
+        shieldLanguage: scene.dataset.shieldLanguage,
+        macroLayout: scene.dataset.macroLayout,
+        celestialScaffolding: scene.dataset.celestialScaffolding,
         webgl: Boolean(scene.getContext('webgl2') || scene.getContext('webgl')),
       };
     })()`);
@@ -85,6 +101,10 @@ async function run() {
     if (!state.webgl || state.backend !== "three-r185-instanced-voxel") throw new Error(`WebGL renderer unavailable in ${biomeId}: ${JSON.stringify(state)}`);
     if (state.artStyle !== "toon-glow-light-blocks" || state.modelPalette !== "saturated-no-black") throw new Error(`Toon+Glow contract missing in ${biomeId}: ${JSON.stringify(state)}`);
     if (state.worldDepthLayers !== "3" || state.biomeDioramas !== "9" || state.projectileVfx !== "segmented-toon-trails") throw new Error(`v0.18 visual diagnostics missing in ${biomeId}: ${JSON.stringify(state)}`);
+    if (state.pixelGrammar !== "coarse-emissive-012" || state.spaceComposition !== "open-celestial-parallax") throw new Error(`open-space visual contract missing in ${biomeId}: ${JSON.stringify(state)}`);
+    if (state.ecosystemComposition !== "9-macro-mid-sparse" || state.combatNegativeSpace !== "center-55-clear" || state.nebulaParallax !== "3d-additive-dust" || state.skyAtmosphere !== "layered-soft-voxel-nebula") throw new Error(`deep-space ecosystem composition missing in ${biomeId}: ${JSON.stringify(state)}`);
+    if (state.energyBloom !== "unreal-selective-5mip" || state.edgeAA !== "native-smaa" || state.ringGrammar !== "continuous-segmented-arcs" || state.projectileReadability !== "dim-friendly-hot-hostile") throw new Error(`professional post-process contract missing in ${biomeId}: ${JSON.stringify(state)}`);
+    if (state.hullExposure !== "matte-ceramic-no-bloom" || state.groundPlane !== "none-open-space" || state.depthScaffolding !== "macro-mid-distant" || state.shieldLanguage !== "four-hugging-plates" || state.macroLayout !== "alternating-edge-anchors" || state.celestialScaffolding !== "opposed-biome-horizon-bodies") throw new Error(`second-pass art polish contract missing in ${biomeId}: ${JSON.stringify(state)}`);
     if (state.fps < 45) throw new Error(`biome performance below 45 FPS in ${biomeId}: ${JSON.stringify(state)}`);
     await window.webContents.executeJavaScript("document.querySelector('#game').style.visibility = 'hidden'; true");
     await delay(80);

@@ -44,4 +44,4 @@ assert.match(gameSource, /result\.threatSummary/);
 assert.match(rendererSource, /drawThreatMatrix\(world\)/);
 assert.match(rendererSource, /adaptiveThreat = "5-tier-telegraphed"/);
 
-console.log("Adaptive Threat Matrix verified: five monotonic tiers, opening and distress protection, one-step hysteresis, combat/reward/music coupling, telemetry, HUD/results, and voxel corridor telegraphs.");
+console.log("Adaptive Threat Matrix verified: five monotonic tiers, opening and distress protection, one-step hysteresis, combat/reward/music coupling, telemetry, HUD/results, and a localized voxel pressure buoy.");

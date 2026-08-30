@@ -89,6 +89,10 @@ const REQUESTED_QA_BOSS_PHASE = Number.parseInt(URL_PARAMS.get("qa-boss-phase") 
 const QA_BOSS_PHASE = [1, 2, 3].includes(REQUESTED_QA_BOSS_PHASE) ? REQUESTED_QA_BOSS_PHASE : 3;
 const REQUESTED_QA_THREAT = LOCAL_QA_HOST ? Number.parseInt(URL_PARAMS.get("qa-threat") || "", 10) : Number.NaN;
 const QA_THREAT_TIER = [0, 1, 2, 3, 4].includes(REQUESTED_QA_THREAT) ? REQUESTED_QA_THREAT : null;
+const REQUESTED_QA_ANOMALY = LOCAL_QA_HOST ? URL_PARAMS.get("qa-anomaly") : null;
+const QA_ANOMALY_ID = SpaceAnomalies.ANOMALIES.some((anomaly) => anomaly.id === REQUESTED_QA_ANOMALY)
+  ? REQUESTED_QA_ANOMALY
+  : null;
 const REQUESTED_QA_STATUS = LOCAL_QA_HOST ? URL_PARAMS.get("qa-status") : null;
 const QA_STATUS_ID = SpaceStatus.DEBUFF_MODULES.some((debuff) => debuff.id === REQUESTED_QA_STATUS) ? REQUESTED_QA_STATUS : null;
 const REQUESTED_QA_PROTOCOL = LOCAL_QA_HOST ? URL_PARAMS.get("qa-protocol") : null;
@@ -116,7 +120,7 @@ const QA_ENEMY_BUILD = (() => {
   return SpaceExpedition.build(...parts, 2, QA_HULL_ID || "scout");
 })();
 const REQUESTED_RUN_SEED = Number.parseInt(URL_PARAMS.get("seed") || "", 10);
-const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_RUSH_MODE && "rush", QA_BUFFS_MODE && "buffs", QA_VOXEL_MODE && "voxel", QA_MODEL_GALLERY && "model-gallery", QA_BOSS_GALLERY && "boss-gallery", QA_BOSS_GALLERY && `boss-phase${QA_BOSS_PHASE}`, QA_BOSS_STATE_MODE && "boss-state", QA_THREAT_TIER !== null && `threat${QA_THREAT_TIER}`, QA_STATUS_ID && `status-${QA_STATUS_ID}`, QA_PROTOCOL_ID && `protocol-${QA_PROTOCOL_ID}`, QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_BIOME_ID && `biome-${QA_BIOME_ID}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`, QA_HULL_ID && `hull-${QA_HULL_ID}`, QA_ENEMY_BUILD && `enemy-${QA_ENEMY_BUILD.moduleSignature}`].filter(Boolean).join("+") || "off";
+const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_RUSH_MODE && "rush", QA_BUFFS_MODE && "buffs", QA_VOXEL_MODE && "voxel", QA_MODEL_GALLERY && "model-gallery", QA_BOSS_GALLERY && "boss-gallery", QA_BOSS_GALLERY && `boss-phase${QA_BOSS_PHASE}`, QA_BOSS_STATE_MODE && "boss-state", QA_THREAT_TIER !== null && `threat${QA_THREAT_TIER}`, QA_ANOMALY_ID && `anomaly-${QA_ANOMALY_ID}`, QA_STATUS_ID && `status-${QA_STATUS_ID}`, QA_PROTOCOL_ID && `protocol-${QA_PROTOCOL_ID}`, QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_BIOME_ID && `biome-${QA_BIOME_ID}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`, QA_HULL_ID && `hull-${QA_HULL_ID}`, QA_ENEMY_BUILD && `enemy-${QA_ENEMY_BUILD.moduleSignature}`].filter(Boolean).join("+") || "off";
 const t = (key, variables) => SpaceI18n.t(key, variables);
 const UPGRADE_DEFS = SpaceRoguelike.UPGRADE_DEFS;
 const TALENT_NODES = SpaceConstellation.TALENT_NODES;
@@ -126,6 +130,7 @@ const BUFF_MODULES = SpaceStatus.BUFF_MODULES;
 const DEBUFF_MODULES = SpaceStatus.DEBUFF_MODULES;
 const DIRECTOR = SpaceDirector;
 const THREAT_TIERS = SpaceThreat.TIERS;
+const ANOMALIES = SpaceAnomalies.ANOMALIES;
 
 ctx.imageSmoothingEnabled = false;
 
@@ -549,6 +554,7 @@ const stageText = (stage, field) => t(stage[`${field}Key`]);
 const biomeText = (biome, field) => t(biome[`${field}Key`]);
 const pathText = (path, field) => t(path[`${field}Key`]);
 const encounterText = (encounter, field) => t(encounter[`${field}Key`]);
+const anomalyText = (anomaly, field) => t(anomaly[`${field}Key`]);
 const eventText = (event, field) => t(event[`${field}Key`]);
 const bossPhaseText = (stageIndex, phase) => t(BOSS_PHASE_KEYS[stageIndex][phase - 1]);
 
@@ -779,6 +785,7 @@ class AudioEngine {
       const bpm = (world.routeStages?.[this.stage]?.bpm || STAGES[this.stage]?.bpm || 132)
         + (world.activeBranch?.bpmOffset || 0)
         + (world.activeEncounter?.bpmOffset || 0)
+        + anomalyConfig().bpm
         + threatConfig().bpm
         + (rushActive() ? 18 : 0);
       this.nextStep += 60 / bpm / 4;
@@ -794,6 +801,7 @@ class AudioEngine {
       + (world.routeStages?.[this.stage]?.musicShift || 0)
       + (world.activeBranch?.musicShift || 0)
       + (world.activeEncounter?.musicShift || 0)
+      + anomalyConfig().musicShift
       + sectorLift;
     const leads = [
       [12, 15, 19, 22, 19, 15, 17, 15, 12, 15, 20, 22, 20, 19, 15, 10],
@@ -860,6 +868,27 @@ class AudioEngine {
       this.noise(.026, .018 * adaptiveMusic, when, 4600, this.musicBus);
     }
     if (!this.boss && world.threatTier === 4 && (s === 6 || s === 14)) this.kick(when + .02);
+    if (!this.boss && world.activeAnomaly) {
+      const anomaly = world.activeAnomaly;
+      const anomalyInterval = {
+        crystal: 12,
+        bloom: 16,
+        draft: 19,
+        aurora: 17,
+        gravity: 7,
+        prism: 22,
+        magnetar: 10,
+        chrono: 13,
+        surge: 5,
+      }[anomaly.kind] || 12;
+      if (s === 3 || s === 11) {
+        const direction = anomaly.polarity > 0 ? 1 : -1;
+        this.tone(root + anomalyInterval + (s === 11 ? 7 : 0), .09, s === 11 ? "triangle" : "square", .014 + anomaly.intensity * .008, when, this.musicBus, direction * 3);
+      }
+      if ((anomaly.kind === "chrono" || anomaly.kind === "surge") && s % 4 === 1) {
+        this.tone(root + anomalyInterval + 24, .045, "square", .012, when + .018, this.musicBus, anomaly.polarity * 5);
+      }
+    }
     if (rush) {
       this.tone(root + 24 + arpeggios[this.stage][(s + bar) % 8], .055, s % 2 ? "square" : "triangle", .027, when, this.musicBus, s % 4 === 3 ? 7 : 0);
       if (s % 2 === 0) this.kick(when + .025);
@@ -934,6 +963,13 @@ class AudioEngine {
       [48, 55, 60, 67, 72].forEach((note, index) => this.tone(note + lift, .24, index % 2 ? "square" : "triangle", .045 + index * .003, now + index * .045, this.sfxBus, 7));
       this.tone(36 + lift, .38, "triangle", .065, now, this.sfxBus, 14);
       this.noise(.22, .04, now + .06, 3600);
+    } else if (name === "anomalyShift") {
+      const anomaly = world.activeAnomaly;
+      const direction = anomaly?.polarity > 0 ? 1 : -1;
+      const root = 48 + (anomaly?.tier || 0) * 4;
+      [0, 7, 12, 19, 24].forEach((interval, index) => this.tone(root + interval, .25, index % 2 ? "triangle" : "square", .042 + index * .004, now + index * .04, this.sfxBus, direction * 5));
+      this.tone(root - 12, .46, "sine", .06, now, this.sfxBus, direction * 12);
+      this.noise(.24, .045, now + .05, 3200 + (anomaly?.tier || 0) * 700);
     } else if (name === "threatRise") {
       [55, 62, 67, 74].forEach((note, index) => this.tone(note, .15, index % 2 ? "triangle" : "square", .038 + index * .003, now + index * .042, this.sfxBus, 5));
       this.tone(43, .3, "triangle", .045, now, this.sfxBus, 12);
@@ -1044,6 +1080,14 @@ const world = {
   sectorIndex: 0,
   globalSector: 1,
   sectorFlashTimer: 0,
+  anomalyPlan: [],
+  anomalyPlanSignature: "",
+  activeAnomaly: null,
+  anomalyHistory: [],
+  anomalyElapsed: 0,
+  anomalyTransitions: 0,
+  anomalyForceX: 0,
+  anomalyForceY: 0,
   midDraftIndex: 0,
   threatTier: 1,
   threatScore: 0,
@@ -1140,6 +1184,27 @@ const world = {
 
 const activeStage = (index = world.stageIndex) => world.routeStages[index] || STAGES[index] || STAGES[0];
 const threatConfig = () => THREAT_TIERS[world.threatTier] || THREAT_TIERS[1];
+const anomalyConfig = () => world.activeAnomaly?.multipliers || SpaceAnomalies.multipliers(world.activeAnomaly);
+
+function activateAnomaly(sectorIndex, { announce = false, record = true } = {}) {
+  const anomaly = SpaceAnomalies.entryFor(world.anomalyPlan, world.stageIndex, sectorIndex);
+  world.activeAnomaly = anomaly;
+  world.anomalyElapsed = 0;
+  world.anomalyForceX = 0;
+  world.anomalyForceY = 0;
+  if (record && world.anomalyHistory.at(-1)?.globalSector !== anomaly.globalSector) world.anomalyHistory.push(anomaly);
+  if (announce) {
+    world.anomalyTransitions += 1;
+    audio.sfx("anomalyShift");
+    showToast(t("toast.anomalyShift", {
+      current: anomaly.globalSector,
+      total: DIRECTOR.TOTAL_SECTORS,
+      anomaly: anomalyText(anomaly, "name"),
+      effect: anomalyText(anomaly, "effect"),
+    }));
+  }
+  return anomaly;
+}
 
 function updateAdaptiveThreat(dt) {
   world.threatRecentDamage = Math.max(0, world.threatRecentDamage - dt / 6);
@@ -1401,6 +1466,8 @@ function renderResultBuild() {
   const seedChip = `<span>${t("result.runSeed", { seed: String(world.runSeed).padStart(8, "0") })}</span>`;
   const route = world.biomes.map((biome) => biomeText(biome, "name")).join(t("result.routeSeparator"));
   const routeChip = route ? `<span>${t("result.ecosystems", { route })}</span>` : "";
+  const anomalyRoute = world.anomalyPlan.flat().map((anomaly) => anomalyText(anomaly, "name")).join(t("result.routeSeparator"));
+  const anomalyChip = anomalyRoute ? `<span>${t("result.anomalies", { anomalies: anomalyRoute })}</span>` : "";
   const paths = world.branchHistory.map((path) => pathText(path, "name")).join(t("result.routeSeparator"));
   const pathChip = paths ? `<span>${t("result.paths", { paths })}</span>` : "";
   const encounters = world.encounterHistory
@@ -1418,7 +1485,7 @@ function renderResultBuild() {
     const upgrade = UPGRADE_DEFS.find((entry) => entry.id === id);
     return upgrade ? `<span>${upgradeIcon(id)}${localizedName(upgrade)} <b>Lv.${upgradeLevel(id)}</b></span>` : "";
   }).join("");
-  resultBuild.innerHTML = seedChip + talentChip + rushChip + threatChip + protocolChip + routeChip + pathChip + encounterChip + (upgradeChips || `<span>${t("result.buildEmpty")}</span>`);
+  resultBuild.innerHTML = seedChip + talentChip + rushChip + threatChip + protocolChip + routeChip + anomalyChip + pathChip + encounterChip + (upgradeChips || `<span>${t("result.buildEmpty")}</span>`);
 }
 
 function renderUpgradeDraft(focusSelected = false) {
@@ -1908,6 +1975,15 @@ function updateRouteChoice(dt) {
 function resetWorld() {
   world.runSeed = createRunSeed();
   setRunRandomSeed(world.runSeed);
+  world.anomalyPlan = [...SpaceAnomalies.generatePlan(world.runSeed)].map((stage) => [...stage]);
+  if (QA_ANOMALY_ID) world.anomalyPlan = [...SpaceAnomalies.forceFirst(world.anomalyPlan, QA_ANOMALY_ID, world.runSeed)].map((stage) => [...stage]);
+  world.anomalyPlanSignature = world.anomalyPlan.map((stage) => stage.map((anomaly) => anomaly.signature).join("|")).join(">");
+  world.activeAnomaly = SpaceAnomalies.entryFor(world.anomalyPlan, 0, 0);
+  world.anomalyHistory = [world.activeAnomaly];
+  world.anomalyElapsed = 0;
+  world.anomalyTransitions = 0;
+  world.anomalyForceX = 0;
+  world.anomalyForceY = 0;
   world.biomes = [...SpaceExpedition.generateRoute(world.runSeed)];
   if (QA_BIOME_ID) world.biomes[0] = SpaceExpedition.BIOMES.find((biome) => biome.id === QA_BIOME_ID);
   world.branchSets = [...SpaceExpedition.generateBranchSets(world.runSeed)];
@@ -2309,6 +2385,7 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     : world.activeBranch?.enemyHp || 1;
   const contractHealth = (world.contract?.enemyHp || 1) * (stage.biome?.enemyHp || 1) * branchHealth;
   const adaptiveThreat = threatConfig();
+  const anomaly = anomalyConfig();
   const maxHp = stats.hp * (elite ? 3.1 : 1) * contractHealth * build.hp * adaptiveThreat.enemyHp;
   const enemy = {
     id: ++world.enemySerial,
@@ -2343,7 +2420,7 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     payloadNameKey: build.payloadNameKey,
     buildSignature: build.signature,
     moduleScale: build.scale,
-    moveSpeed: build.speed * adaptiveThreat.moveSpeed,
+    moveSpeed: build.speed * adaptiveThreat.moveSpeed * anomaly.enemyMoveSpeed,
     moveSway: build.sway,
     moveDrift: build.drift,
     weaponBulletSpeed: build.bulletSpeed,
@@ -2365,6 +2442,7 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     payloadColor: build.payloadColor,
     moduleColor: world.activeBranch?.color || stage.biome?.secondary || stage.accent,
     threatReward: adaptiveThreat.score,
+    anomalyReward: anomaly.score,
   };
   if (build.signature !== "standard.pulse.light.sentry.clean" && !world.discoveredVariants.has(build.signature)) {
     world.discoveredVariants.add(build.signature);
@@ -2431,12 +2509,11 @@ function spawnStageEvent(event) {
 function enterSector(sectorIndex) {
   world.sectorIndex = sectorIndex;
   world.globalSector = DIRECTOR.globalSector(world.stageIndex, sectorIndex);
+  activateAnomaly(sectorIndex, { announce: true });
   world.sectorFlashTimer = 1.45;
   world.flash = Math.max(world.flash, .24);
   world.shake = Math.max(world.shake, .2);
   world.spawnTimer = Math.max(world.spawnTimer, 1.15);
-  audio.sfx("sectorShift");
-  showToast(t("toast.sectorShift", { current: world.globalSector, total: DIRECTOR.TOTAL_SECTORS }));
 }
 
 function spawnEnemy() {
@@ -2527,7 +2604,7 @@ function enemyBullet(x, y, vx, vy, color = "#ff7d8b", size = 3, source = null) {
   const branchSpeed = world.stageIndex === 0 && progress < .4
     ? Math.min(1, world.activeBranch?.bulletSpeed || 1)
     : world.activeBranch?.bulletSpeed || 1;
-  const speedMultiplier = (world.contract?.bulletSpeed || 1) * (stage.biome?.bulletSpeed || 1) * branchSpeed * threatConfig().bulletSpeed;
+  const speedMultiplier = (world.contract?.bulletSpeed || 1) * (stage.biome?.bulletSpeed || 1) * branchSpeed * threatConfig().bulletSpeed * anomalyConfig().enemyBulletSpeed;
   world.enemyBullets.push({
     x,
     y,
@@ -2640,7 +2717,7 @@ function updateEnemyIntelligence(enemy, dt) {
 
 function updateEnemy(enemy, dt) {
   enemy.age += dt;
-  enemy.shootTimer -= dt * (enemy.boss ? 1 : threatConfig().fireRate);
+  enemy.shootTimer -= dt * (enemy.boss ? 1 : threatConfig().fireRate * anomalyConfig().enemyFireRate);
   enemy.hitFlash = Math.max(0, (enemy.hitFlash || 0) - dt);
   const canFire = world.stageTime > 6;
 
@@ -2650,7 +2727,7 @@ function updateEnemy(enemy, dt) {
   }
 
   if (enemy.elite) {
-    enemy.eliteTimer -= dt * threatConfig().fireRate;
+    enemy.eliteTimer -= dt * threatConfig().fireRate * anomalyConfig().enemyFireRate;
     if (enemy.y < 58) enemy.y += 22 * (enemy.moveSpeed || 1) * dt;
     else {
       enemy.y = lerp(enemy.y, 58, 1 - Math.exp(-dt * 3));
@@ -2813,7 +2890,7 @@ function playerShoot(player) {
     addShot({ x: 9, vx: 54, damage: .62, color: "#69f7e4" });
     markProtocolProc("cometDrive", player.x, player.y);
   }
-  player.fireTimer = Math.max(0.06, (0.2 - player.weapon * 0.016) / (player.fireRate * rush.fireRate * status.fireRate * (movingFast ? relic.movingFireRate : 1)));
+  player.fireTimer = Math.max(0.06, (0.2 - player.weapon * 0.016) / (player.fireRate * rush.fireRate * status.fireRate * anomalyConfig().playerFireRate * (movingFast ? relic.movingFireRate : 1)));
   player.shots += 1;
   audio.sfx("shoot", player.index);
 }
@@ -2923,6 +3000,9 @@ function revivePlayer(player) {
 }
 
 function updatePlayers(dt) {
+  const anomaly = anomalyConfig();
+  let forceTotalX = 0;
+  let forceTotalY = 0;
   for (const player of world.players) {
     const controls = input.player(player.index);
     player.controls = controls;
@@ -2957,15 +3037,24 @@ function updatePlayers(dt) {
     }
 
     const status = statusBonuses(player);
-    const speed = player.speed * status.speed;
-    player.vx = lerp(player.vx, controls.x * speed, 1 - Math.exp(-dt * player.handling));
-    player.vy = lerp(player.vy, controls.y * speed, 1 - Math.exp(-dt * player.handling));
+    const speed = player.speed * status.speed * anomaly.playerSpeed;
+    const field = SpaceAnomalies.playerForce(world.activeAnomaly, world.anomalyElapsed, player.x, player.y, W, H);
+    forceTotalX += field.x;
+    forceTotalY += field.y;
+    player.vx = lerp(player.vx, controls.x * speed + field.x, 1 - Math.exp(-dt * player.handling));
+    player.vy = lerp(player.vy, controls.y * speed + field.y, 1 - Math.exp(-dt * player.handling));
     player.x = clamp(player.x + player.vx * dt, 13, W - 13);
     player.y = clamp(player.y + player.vy * dt, 32, H - 14);
+
+    if (anomaly.energyRate > 0) player.energy = Math.min(100, player.energy + anomaly.energyRate * player.energyGain * status.energyGain * dt);
 
     if (player.fireTimer <= 0) playerShoot(player);
     if (player.energy >= 100) useNova(player);
   }
+
+  const livePilots = Math.max(1, world.players.filter((player) => !player.downed).length);
+  world.anomalyForceX = forceTotalX / livePilots;
+  world.anomalyForceY = forceTotalY / livePilots;
 
   for (const downed of world.players.filter((player) => player.downed)) {
     const rescuer = world.players.find((player) => !player.downed);
@@ -3015,7 +3104,7 @@ function killEnemy(enemy, owner = 0) {
   world.bestCombo = Math.max(world.bestCombo, world.combo);
   const multiplier = 1 + Math.floor(world.combo / 8) * 0.5;
   const rush = SpaceRush.combatMultipliers(rushActive());
-  world.score += Math.round(enemy.score * multiplier * rush.score * (world.contract?.score || 1) * (world.activeBranch?.score || 1) * (enemy.threatReward || 1));
+  world.score += Math.round(enemy.score * multiplier * rush.score * (world.contract?.score || 1) * (world.activeBranch?.score || 1) * (enemy.threatReward || 1) * (enemy.anomalyReward || 1));
   const player = world.players[owner];
   if (player) player.energy = clamp(player.energy + (enemy.boss ? 35 : 4.5) * player.energyGain * statusBonuses(player).energyGain, 0, 100);
   burst(enemy.x, enemy.y, enemy.boss ? "#fff2a6" : activeStage().accent, enemy.boss ? 80 : 12, enemy.boss ? 150 : 65);
@@ -3064,7 +3153,7 @@ function killEnemy(enemy, owner = 0) {
     handleBossDefeat(enemy);
   } else {
     audio.sfx(Math.random() < 0.28 ? "explode" : "hit");
-    const dropChance = enemy.elite ? 1 : enemy.type === "tank" ? 0.32 : 0.105;
+    const dropChance = (enemy.elite ? 1 : enemy.type === "tank" ? 0.32 : 0.105) * anomalyConfig().dropRate;
     if (random() < dropChance) spawnPickup(enemy.x, enemy.y);
     if (enemy.elite) {
       spawnPickup(enemy.x + 12, enemy.y - 4);
@@ -3118,7 +3207,7 @@ function applyPickup(player, pickup) {
 }
 
 function handleBossDefeat() {
-  world.score += Math.round(2500 * (world.stageIndex + 1) * (world.contract?.score || 1) * (world.activeBranch?.score || 1));
+  world.score += Math.round(2500 * (world.stageIndex + 1) * (world.contract?.score || 1) * (world.activeBranch?.score || 1) * anomalyConfig().score);
   world.clearTimer = QA_FAST_MODE ? 1.1 : 4.2;
   world.enemyBullets = [];
   world.boss = null;
@@ -3140,6 +3229,7 @@ function advanceStage() {
   world.stageTime = 0;
   world.sectorIndex = 0;
   world.globalSector = DIRECTOR.globalSector(world.stageIndex, 0);
+  activateAnomaly(0, { announce: false });
   world.sectorFlashTimer = 0;
   world.midDraftIndex = 0;
   world.introTimer = 0;
@@ -3234,7 +3324,7 @@ function finishEncounter(success) {
       player.hp = Math.min(player.maxHp, player.hp + (reward.repair || 0));
       player.shield = Math.min(player.maxShield, player.shield + (reward.shield || 0));
     }
-    world.score += Math.round((reward.score || 0) * (world.contract?.score || 1) * (world.activeBranch?.score || 1));
+    world.score += Math.round((reward.score || 0) * (world.contract?.score || 1) * (world.activeBranch?.score || 1) * anomalyConfig().score);
     addRushCharge("encounter");
     burst(encounter.x, encounter.y, encounter.color, 34, 110);
     world.flash = Math.max(world.flash, .36);
@@ -3361,7 +3451,7 @@ function updateStage(dt) {
     const encounterRate = world.stageIndex === 0 && progress < .4
       ? Math.min(1, world.activeEncounter?.spawnRate || 1)
       : world.activeEncounter?.spawnRate || 1;
-    world.spawnTimer = Math.max(0.62, (1.72 - world.stageIndex * 0.13 - progress * 0.55) / ((world.contract?.spawnRate || 1) * ecologyRate * routeRate * encounterRate * intensity.spawnCadence * adaptiveThreat.spawnRate));
+    world.spawnTimer = Math.max(0.62, (1.72 - world.stageIndex * 0.13 - progress * 0.55) / ((world.contract?.spawnRate || 1) * ecologyRate * routeRate * encounterRate * intensity.spawnCadence * adaptiveThreat.spawnRate * anomalyConfig().spawnRate));
   }
   if (!QA_VOXEL_MODE && world.stageTime >= stage.duration) spawnBoss();
 }
@@ -3382,15 +3472,17 @@ function updateObjects(dt) {
         bullet.vy = lerp(bullet.vy, dy / range * speed, turn);
       }
     }
-    bullet.x += bullet.vx * dt;
-    bullet.y += bullet.vy * dt;
+    const anomalyFlow = SpaceAnomalies.bulletFlow(world.activeAnomaly, world.anomalyElapsed, bullet, W, H, false);
+    bullet.x += (bullet.vx + anomalyFlow.x) * dt;
+    bullet.y += (bullet.vy + anomalyFlow.y) * dt;
     if (bullet.y < -12 || bullet.y > H + 12 || bullet.x < -12 || bullet.x > W + 12) bullet.dead = true;
   }
 
   for (const bullet of world.enemyBullets) {
     bullet.age += dt;
-    bullet.x += bullet.vx * dt;
-    bullet.y += bullet.vy * dt;
+    const anomalyFlow = SpaceAnomalies.bulletFlow(world.activeAnomaly, world.anomalyElapsed, bullet, W, H, true);
+    bullet.x += (bullet.vx + anomalyFlow.x) * dt;
+    bullet.y += (bullet.vy + anomalyFlow.y) * dt;
     if (bullet.y < -25 || bullet.y > H + 25 || bullet.x < -25 || bullet.x > W + 25 || bullet.age > 10) bullet.dead = true;
   }
 
@@ -3399,16 +3491,17 @@ function updateObjects(dt) {
     pickup.age += dt;
     pickup.y += pickup.vy * dt;
     const rushMagnet = SpaceRush.combatMultipliers(rushActive()).pickupMagnet;
+    const anomaly = anomalyConfig();
     const magnetTarget = world.players
-      .filter((player) => !player.downed && player.pickupMagnetRadius + rushMagnet + statusBonuses(player).pickupMagnet > 0)
-      .map((player) => ({ player, range: distance(pickup, player), radius: player.pickupMagnetRadius + rushMagnet + statusBonuses(player).pickupMagnet }))
+      .filter((player) => !player.downed && player.pickupMagnetRadius + rushMagnet + statusBonuses(player).pickupMagnet + anomaly.pickupMagnet > 0)
+      .map((player) => ({ player, range: distance(pickup, player), radius: player.pickupMagnetRadius + rushMagnet + statusBonuses(player).pickupMagnet + anomaly.pickupMagnet }))
       .filter(({ range, radius }) => range <= radius)
       .sort((a, b) => a.range - b.range)[0];
     if (magnetTarget) {
       const dx = magnetTarget.player.x - pickup.x;
       const dy = magnetTarget.player.y - pickup.y;
       const range = Math.max(1, magnetTarget.range);
-      const pull = 70 + 145 * (1 - range / magnetTarget.radius);
+      const pull = (70 + 145 * (1 - range / magnetTarget.radius)) * anomaly.pickupPull;
       pickup.x += dx / range * pull * dt;
       pickup.y += dy / range * pull * dt;
     } else {
@@ -3595,6 +3688,7 @@ function update(dt) {
     input.endFrame();
     return;
   }
+  world.anomalyElapsed += dt;
   updateAdaptiveThreat(dt);
   world.variantNoticeCooldown = Math.max(0, world.variantNoticeCooldown - dt);
   if (world.variantNotice) {
@@ -4240,6 +4334,12 @@ function drawHud() {
   pixelText(t("hud.threatLevel", { level: world.threatTier + 1, name: t(threat.nameKey) }), W - 9, 53, threat.color, "right", 5.5);
   drawBar(W - 62, 57, 53, (world.threatTier + 1) / THREAT_TIERS.length, threat.color, true);
   ctx.globalAlpha = 1;
+  const anomaly = world.activeAnomaly;
+  if (anomaly) {
+    const direction = anomaly.polarity > 0 ? "+" : "−";
+    pixelText(t("hud.anomalyField", { anomaly: anomalyText(anomaly, "name"), direction }), 9, 53, anomaly.color, "left", 5.5);
+    drawBar(9, 57, 53, anomaly.intensity, anomaly.color);
+  }
   if (rushActive() || world.rushCharge > 0) {
     const active = rushActive();
     const ratio = active
@@ -4404,8 +4504,9 @@ function drawStageCard() {
   pixelText(stageText(stage, "name"), W / 2, 109, "#ffffff", "center", 15);
   pixelText(biomeText(stage.biome, "name"), W / 2, 126, stage.secondary, "center", 9);
   pixelText(biomeText(stage.biome, "description"), W / 2, 139, "#aaa8be", "center", 5.5);
-  pixelText(t("hud.pathActive", { path: pathText(world.activeBranch, "name") }), W / 2, 155, world.activeBranch.color, "center", 6);
-  pixelText(t("hud.pathRewardLine", { reward: pathText(world.activeBranch, "reward"), score: world.activeBranch.score.toFixed(2) }), W / 2, 168, "#ffe56d", "center", 5);
+  pixelText(t("hud.anomalyStageLine", { anomaly: anomalyText(world.activeAnomaly, "name"), effect: anomalyText(world.activeAnomaly, "effect") }), W / 2, 149, world.activeAnomaly.color, "center", 5.5);
+  pixelText(t("hud.pathActive", { path: pathText(world.activeBranch, "name") }), W / 2, 159, world.activeBranch.color, "center", 5.5);
+  pixelText(t("hud.pathRewardLine", { reward: pathText(world.activeBranch, "reward"), score: world.activeBranch.score.toFixed(2) }), W / 2, 169, "#ffe56d", "center", 5);
   ctx.globalAlpha = 1;
 }
 
@@ -4489,6 +4590,28 @@ function draw() {
   canvas.dataset.threatFireRate = String(adaptiveThreat.fireRate);
   canvas.dataset.threatEnemyHp = String(adaptiveThreat.enemyHp);
   canvas.dataset.threatAimSpread = String(adaptiveThreat.aimSpread);
+  const anomaly = world.activeAnomaly;
+  const anomalyMultipliers = anomalyConfig();
+  canvas.dataset.anomalyPlan = world.anomalyPlanSignature;
+  canvas.dataset.anomalyCount = String(ANOMALIES.length);
+  canvas.dataset.anomalyId = anomaly?.id || "";
+  canvas.dataset.anomalyKind = anomaly?.kind || "";
+  canvas.dataset.anomalyIntensity = (anomaly?.intensity || 0).toFixed(3);
+  canvas.dataset.anomalyPolarity = String(anomaly?.polarity || 0);
+  canvas.dataset.anomalyElapsed = world.anomalyElapsed.toFixed(2);
+  canvas.dataset.anomalyTransitions = String(world.anomalyTransitions);
+  canvas.dataset.anomalyHistory = world.anomalyHistory.map((entry) => entry.id).join(",");
+  canvas.dataset.anomalyForce = `${world.anomalyForceX.toFixed(2)},${world.anomalyForceY.toFixed(2)}`;
+  canvas.dataset.anomalySpawnRate = anomalyMultipliers.spawnRate.toFixed(3);
+  canvas.dataset.anomalyBulletSpeed = anomalyMultipliers.enemyBulletSpeed.toFixed(3);
+  canvas.dataset.anomalyMoveSpeed = anomalyMultipliers.enemyMoveSpeed.toFixed(3);
+  canvas.dataset.anomalyEnemyFireRate = anomalyMultipliers.enemyFireRate.toFixed(3);
+  canvas.dataset.anomalyDropRate = anomalyMultipliers.dropRate.toFixed(3);
+  canvas.dataset.anomalyPlayerSpeed = anomalyMultipliers.playerSpeed.toFixed(3);
+  canvas.dataset.anomalyFireRate = anomalyMultipliers.playerFireRate.toFixed(3);
+  canvas.dataset.anomalyEnergyRate = anomalyMultipliers.energyRate.toFixed(3);
+  canvas.dataset.anomalyPickupMagnet = anomalyMultipliers.pickupMagnet.toFixed(2);
+  canvas.dataset.anomalyScore = anomalyMultipliers.score.toFixed(3);
   canvas.dataset.bossPhase = world.boss ? String(world.boss.phaseLevel) : "0";
   canvas.dataset.bossAttackState = world.boss?.attackState || "off";
   canvas.dataset.bossAttack = world.boss?.attackId || "";

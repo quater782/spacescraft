@@ -13,7 +13,7 @@ module.exports = {
       /^\/CHANGELOG\.md$/,
       /^\/dist/,
       /^\/out/,
-      /^\/node_modules\/three\/(?!build(?:$|\/three\.module\.min\.js$))/
+      /^\/node_modules\/three\/(?!build(?:$|\/three\.module\.min\.js$)|examples(?:$|\/jsm(?:$|\/(?:postprocessing|shaders)(?:$|\/))))/
     ]
   },
   rebuildConfig: {},
