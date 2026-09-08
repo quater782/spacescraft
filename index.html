@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#070817" />
+    <meta name="description" content="SPACECRAFT：双人卡通像素太空射击游戏" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-mD8Apma8Uu0RkJppELk4UcYb7nc8LncdRfqb5GG1zpM='; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none';" />
+    <title>SPACECRAFT // 星航双子</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./style.css?v=12" />
+  </head>
+  <body>
+    <main class="game-shell" aria-label="SPACECRAFT 双人合作游戏" data-i18n-aria-label="app.label">
+      <header class="topbar">
+        <div class="brand" aria-label="SPACECRAFT">
+          <span class="brand-mark">SC</span>
+          <span>SPACECRAFT</span>
+          <small data-i18n="brand.subtitle">// 星航双子</small>
+        </div>
+        <div class="top-actions">
+          <button id="topSettingsButton" class="icon-button" type="button" aria-label="游戏设置" data-i18n-aria-label="top.settingsLabel">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/><path d="m4.9 7.2 1.4-2.4 2.2.6L10 3h4l1.5 2.4 2.2-.6 1.4 2.4-1.6 1.7.5 2.1 2 .7v2.7l-2 .7-.5 2.1 1.6 1.7-1.4 2.4-2.2-.6L14 21h-4l-1.5-2.4-2.2.6-1.4-2.4 1.6-1.7-.5-2.1-2-.7V9.7l2-.7.5-2.1-1.6-1.7Z"/></svg>
+            <span data-i18n="top.settings">设置</span>
+          </button>
+          <button id="soundButton" class="icon-button" type="button" aria-label="切换声音" data-i18n-aria-label="top.soundLabel">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path class="sound-wave" d="M16 9c1.2 1.6 1.2 4.4 0 6m3-9c3.1 3.3 3.1 8.7 0 12"/></svg>
+            <span data-i18n="sound.on">声音 ON</span>
+          </button>
+          <button id="fullscreenButton" class="icon-button" type="button" aria-label="全屏" data-i18n-aria-label="top.fullscreen">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg>
+            <span data-i18n="top.fullscreen">全屏</span>
+          </button>
+        </div>
+      </header>
+
+      <section class="viewport" id="viewport">
+        <canvas id="scene" width="1280" height="720" aria-hidden="true"></canvas>
+        <canvas id="game" width="480" height="270" aria-label="3D 游戏画面" data-i18n-aria-label="canvas.label" aria-describedby="combatGuide"></canvas>
+        <div class="crt" aria-hidden="true"></div>
+
+        <section id="menu" class="overlay menu-overlay">
+          <div class="menu-card">
+            <div class="eyebrow">CO-OP PIXEL ODYSSEY</div>
+            <h1><span class="title-primary" data-i18n="menu.title1">星航</span><br /><span data-i18n="menu.title2">双子</span></h1>
+            <p class="lede" data-i18n="menu.lede">点亮恒星天赋，驾驶两艘战机穿越持续分岔的动态星域，共振击穿终焉母舰。</p>
+
+            <div class="feature-row" aria-label="游戏特色" data-i18n-aria-label="menu.featuresLabel">
+              <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 2v6m8-6v6M7 12h4m2 0h4m-10 4h3"/></svg><i data-i18n="menu.feature3d">3D 战役</i></span>
+              <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-8-4.4-8-10a4.3 4.3 0 0 1 8-2.2A4.3 4.3 0 0 1 20 10c0 5.6-8 10-8 10Z"/></svg><i data-i18n="menu.featureRescue">自动救援</i></span>
+              <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15h3V8h3v10h3V5h3v13h4"/></svg><i data-i18n="menu.featureMusic">动态 8-BIT</i></span>
+            </div>
+
+            <div class="mode-selector" role="group" aria-label="游戏模式" data-i18n-aria-label="menu.modeLabel">
+              <button class="mode-button active" type="button" data-mode="solo" aria-pressed="true">
+                <span class="mode-title" data-i18n="menu.soloTitle">单人 + AI 僚机</span>
+                <small data-i18n="menu.soloDesc">P1 操作，P2 自动接管</small>
+              </button>
+              <button class="mode-button" type="button" data-mode="coop" aria-pressed="false">
+                <span class="mode-title" data-i18n="menu.coopTitle">本地双人</span>
+                <small data-i18n="menu.coopDesc">共享键盘或双手柄</small>
+              </button>
+            </div>
+
+            <div class="launch-row">
+              <button id="startButton" class="primary-button" type="button">
+                <span data-i18n="menu.launch">启动引擎</span><kbd>ENTER</kbd>
+              </button>
+              <button id="hangarButton" class="secondary-button hangar-launch" type="button">
+                <span data-i18n="menu.hangar">机库配置</span><b id="menuStardust">✦ 0</b>
+              </button>
+            </div>
+
+            <div class="control-grid">
+              <article>
+                <svg class="pilot-icon pilot-one" viewBox="0 0 32 32" aria-hidden="true"><path d="M13 3h6v7h4v5h6v8h-9v6h-8v-6H3v-8h6v-5h4z"/><path class="pilot-glass" d="M14 8h4v7h-4z"/></svg>
+                <strong data-i18n="menu.p1">P1 青色先锋</strong>
+                <span><kbd>WASD</kbd> <i data-i18n="menu.p1Controls">只需移动 · 火力与技能全自动</i></span>
+              </article>
+              <article>
+                <svg class="pilot-icon pilot-two" viewBox="0 0 32 32" aria-hidden="true"><path d="M13 3h6v7h4v5h6v8h-9v6h-8v-6H3v-8h6v-5h4z"/><path class="pilot-glass" d="M14 8h4v7h-4z"/></svg>
+                <strong><span data-i18n="menu.p2">P2 珊瑚游侠</span> <em id="p2ModeBadge">AI</em></strong>
+                <span id="p2ControlText" data-i18n="p2.ai">自动驾驶 · 可闪避、集火与救援</span>
+              </article>
+            </div>
+            <p class="gamepad-note" data-i18n="menu.gamepad">支持双手柄 · ESC 暂停 · 靠近坠毁队友即可自动救援</p>
+          </div>
+        </section>
+
+        <section id="hangarPanel" class="overlay dialog-overlay" hidden aria-labelledby="hangarTitle">
+          <div class="dialog-card hangar-card">
+            <div class="dialog-heading">
+              <div><div class="eyebrow">TWIN-STAR HANGAR</div><h2 id="hangarTitle" data-i18n="hangar.title">双子机库</h2></div>
+              <button id="closeHangarButton" class="close-button" type="button" aria-label="关闭机库" data-i18n-aria-label="hangar.close">×</button>
+            </div>
+            <div class="hangar-wallet" aria-live="polite">
+              <span data-i18n="hangar.wallet">可用星尘</span><strong id="hangarStardust">✦ 0</strong><small data-i18n="hangar.walletHint">完成航行与净化章节可获得</small>
+            </div>
+            <section class="hangar-section" aria-labelledby="frameHeading">
+              <div class="hangar-section-heading"><h3 id="frameHeading" data-i18n="hangar.frames">双子机体</h3><span data-i18n="hangar.framesHint">两名驾驶员同步装配</span></div>
+              <div id="shipOptions" class="loadout-grid frame-grid"></div>
+            </section>
+            <section class="hangar-section" aria-labelledby="moduleHeading">
+              <div class="hangar-section-heading"><h3 id="moduleHeading" data-i18n="hangar.modules">核心模组</h3><span data-i18n="hangar.modulesHint">一次只可激活一枚</span></div>
+              <div id="moduleOptions" class="loadout-grid module-grid"></div>
+            </section>
+            <section class="hangar-section" aria-labelledby="contractHeading">
+              <div class="hangar-section-heading"><h3 id="contractHeading" data-i18n="hangar.contracts">航线合约</h3><span data-i18n="hangar.contractsHint">改变战斗规则与结算倍率</span></div>
+              <div id="contractOptions" class="loadout-grid contract-grid"></div>
+            </section>
+            <section class="hangar-section" aria-labelledby="talentHeading">
+              <div class="hangar-section-heading"><h3 id="talentHeading" data-i18n="hangar.talents">恒星天赋网格</h3><span id="talentProgress">0 / 9</span></div>
+              <p class="talent-intro" data-i18n="hangar.talentsHint">使用星尘永久点亮机动、武装与共振星链；必须依次解锁。</p>
+              <div id="talentOptions" class="talent-grid"></div>
+            </section>
+            <section class="hangar-section" aria-labelledby="researchHeading">
+              <div class="hangar-section-heading"><h3 id="researchHeading" data-i18n="research.title">远征研究</h3></div>
+              <p class="hangar-note" data-i18n="research.hint">选择收益路线。有效航行带回随机蓝图，所有已解锁效果永久共存，也可用星尘定向强化。</p>
+              <p id="researchProgress" class="hangar-note" aria-live="polite"></p>
+              <div id="researchRoutes" class="research-routes"></div>
+              <div id="researchOptions" class="research-grid"></div>
+            </section>
+            <section class="hangar-section" aria-labelledby="achievementHeading">
+              <div class="hangar-section-heading"><h3 id="achievementHeading" data-i18n="hangar.achievements">星航勋章</h3><span id="achievementCount">0 / 8</span></div>
+              <div id="achievementOptions" class="achievement-grid"></div>
+            </section>
+            <p class="hangar-note" data-i18n="hangar.note">机体改变耐久、速度与武器节奏；模组提供战术专精。所有解锁与装备状态均保存在本机。</p>
+          </div>
+        </section>
+
+        <section id="tutorial" class="overlay dialog-overlay" hidden aria-labelledby="tutorialTitle">
+          <div class="dialog-card tutorial-card">
+            <div class="eyebrow">FIRST FLIGHT PROTOCOL</div>
+            <h2 id="tutorialTitle" data-i18n="tutorial.title">第一次出航</h2>
+            <div class="tutorial-steps">
+              <article><b>01</b><strong data-i18n="tutorial.moveTitle">只管移动</strong><span data-i18n="tutorial.moveText">P1 使用 WASD；双人模式下 P2 使用方向键。所有火力自动运行。</span></article>
+              <article><b>02</b><strong data-i18n="tutorial.formationTitle">保持队形</strong><span data-i18n="tutorial.formationText">靠近队友会形成共振光链；队友坠毁后，靠近即可自动救援。</span></article>
+              <article><b>03</b><strong data-i18n="tutorial.energyTitle">命中换取喘息</strong><span data-i18n="tutorial.energyText">命中为共享超新星充能，满槽且冷却结束时自动清除附近弹幕；不清激光。</span></article>
+              <article><b>04</b><strong data-i18n="tutorial.shieldTitle">护盾与机体</strong><span data-i18n="tutorial.shieldText">1 点护盾抵挡 1 点伤害，溢出扣血。机体受损会出现烟迹和灼红裂痕。</span></article>
+            </div>
+            <button id="tutorialContinueButton" class="primary-button wide-button" type="button"><span data-i18n="tutorial.continue">明白，开始出航</span><kbd>ENTER</kbd></button>
+          </div>
+        </section>
+
+        <section id="upgradePanel" class="overlay dialog-overlay upgrade-overlay" hidden aria-labelledby="upgradeTitle" aria-modal="true">
+          <div class="dialog-card upgrade-card">
+            <div class="eyebrow">ROGUELIKE STAR DRAFT</div>
+            <h2 id="upgradeTitle" data-i18n="draft.title">星航构筑三选一</h2>
+            <p data-i18n="draft.subtitle">航线已净化。为双子战机选择一项本局永久强化。</p>
+            <div class="draft-meta">
+              <span data-i18n="draft.seed">航行种子</span><strong id="runSeedLabel">#00000000</strong><span id="draftProgress">1 / 2</span>
+            </div>
+            <div id="upgradeOptions" class="upgrade-grid" role="list"></div>
+            <p class="draft-controls" data-i18n="draft.controls">仅用方向操作：← / → 选择，↑ / ↓ 确认 · P1 也可使用 WASD</p>
+          </div>
+        </section>
+
+        <section id="pauseMenu" class="overlay dialog-overlay" hidden aria-labelledby="pauseTitle">
+          <div class="dialog-card pause-card">
+            <div class="eyebrow">FLIGHT SUSPENDED</div>
+            <h2 id="pauseTitle" data-i18n="pause.title">航行暂停</h2>
+            <p data-i18n="pause.text">星域时间已冻结。</p>
+            <p id="combatGuide" data-i18n="hud.systemGuide">护盾先按 1:1 抵挡伤害，溢出扣血。命中为共享超新星充能，自动清除附近弹幕；激光仍需躲避。已选强化与遗物跨章保留。</p>
+            <div class="dialog-actions">
+              <button id="resumeButton" class="primary-button wide-button" type="button"><span data-i18n="pause.resume">继续航行</span><kbd>ESC</kbd></button>
+              <button id="pauseSettingsButton" class="secondary-button" type="button" data-i18n="pause.settings">设置</button>
+              <button id="exitToMenuButton" class="secondary-button danger-button" type="button" data-i18n="pause.menu">返回主菜单</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="settingsPanel" class="overlay dialog-overlay" hidden aria-labelledby="settingsTitle">
+          <div class="dialog-card settings-card">
+            <div class="dialog-heading">
+              <div><div class="eyebrow">SYSTEM CONFIGURATION</div><h2 id="settingsTitle" data-i18n="settings.title">游戏设置</h2></div>
+              <button id="closeSettingsButton" class="close-button" type="button" aria-label="关闭设置" data-i18n-aria-label="settings.close">×</button>
+            </div>
+            <div class="settings-list">
+              <label><span><i data-i18n="settings.music">音乐音量</i> <output id="musicVolumeValue">75%</output></span><input id="musicVolume" type="range" min="0" max="100" step="5" value="75" /></label>
+              <label><span><i data-i18n="settings.sfx">音效音量</i> <output id="sfxVolumeValue">80%</output></span><input id="sfxVolume" type="range" min="0" max="100" step="5" value="80" /></label>
+              <label><span data-i18n="settings.quality">3D 渲染质量</span><select id="qualitySetting"><option value="low" data-i18n="settings.qualityLow">性能</option><option value="balanced" data-i18n="settings.qualityBalanced">平衡</option><option value="high" data-i18n="settings.qualityHigh" selected>高清</option></select></label>
+              <label><span data-i18n="settings.shake">屏幕震动</span><select id="shakeSetting"><option value="0" data-i18n="settings.off">关闭</option><option value="0.5" data-i18n="settings.reduced">减弱</option><option value="1" data-i18n="settings.full" selected>完整</option></select></label>
+              <label><span data-i18n="settings.flashes">闪光强度</span><select id="flashSetting"><option value="0" data-i18n="settings.off">关闭</option><option value="0.3" data-i18n="settings.reduced">减弱</option><option value="0.7" data-i18n="settings.full" selected>完整</option></select></label>
+              <label><span data-i18n="settings.bullets">敌方弹幕配色</span><select id="bulletContrastSetting"><option value="standard" data-i18n="settings.bulletsStandard" selected>章节配色</option><option value="high" data-i18n="settings.bulletsHigh">高对比黄</option></select></label>
+              <label><span data-i18n="settings.language">界面语言</span><select id="languageSetting"><option value="zh" data-i18n="settings.chinese">简体中文</option><option value="en" data-i18n="settings.english">English</option></select></label>
+            </div>
+            <div class="settings-footer">
+              <div id="careerSummary" class="career-summary">尚无航行记录</div>
+              <button id="resetSaveButton" class="text-button" type="button" data-i18n="settings.reset">清除本地记录</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="result" class="overlay result-overlay" hidden>
+          <div class="result-card">
+            <div id="resultEyebrow" class="eyebrow">MISSION REPORT</div>
+            <h2 id="resultTitle" data-i18n="result.titleDefeat">航线中断</h2>
+            <p id="resultText"></p>
+            <div id="resultRewards" class="result-rewards" aria-live="polite"></div>
+            <div id="resultStats" class="result-stats"></div>
+            <details class="result-details"><summary data-i18n="result.buildDetails">构筑与航行详情</summary><div id="resultBuild" class="result-build"></div></details>
+            <div class="result-actions">
+              <button id="restartButton" class="primary-button" type="button"><span data-i18n="result.restart">再次出航</span><kbd>ENTER</kbd></button>
+              <button id="resultMenuButton" class="secondary-button" type="button" data-i18n="result.menu">返回主菜单</button>
+            </div>
+          </div>
+        </section>
+
+        <div id="buildTray" class="build-tray" aria-live="polite" hidden></div>
+        <div id="toast" class="toast" role="status" aria-live="polite"></div>
+      </section>
+
+      <footer class="statusbar">
+        <span><i class="status-light"></i> <i data-i18n="footer.ready">本地双人系统就绪</i></span>
+        <span>BUILD 3D.27 // <b>SHARED REACTOR 0.27.0</b></span>
+      </footer>
+    </main>
+    <script src="./src/i18n.js?v=10"></script>
+    <script src="./src/roguelike.js?v=4"></script>
+    <script src="./src/rng.js?v=1"></script>
+    <script src="./src/constellation.js?v=1"></script>
+    <script src="./src/research.js?v=1"></script>
+    <script src="./src/rush.js?v=3"></script>
+    <script src="./src/relics.js?v=2"></script>
+    <script src="./src/director.js?v=2"></script>
+    <script src="./src/threat.js?v=3"></script>
+    <script src="./src/combat.js?v=2"></script>
+    <script src="./src/collision.js?v=1"></script>
+    <script src="./src/loot.js?v=1"></script>
+    <script src="./src/anomalies.js?v=1"></script>
+    <script src="./src/expedition.js?v=6"></script>
+    <script src="./src/status.js?v=1"></script>
+  <script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.min.js"}}</script>
+    <script type="module" src="./src/renderer3d.js?v=30"></script>
+  <script type="module" src="./src/game.js?v=35"></script>
+  </body>
+</html>
