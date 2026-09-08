@@ -26,12 +26,20 @@ assert.equal(neutral.damage, 1);
 assert.equal(neutral.fireRate, 1);
 assert.equal(neutral.speed, 1);
 assert.equal(neutral.energyGain, 1);
+assert.equal(neutral.sharedCharge, 1);
 assert.equal(neutral.pickupMagnet, 0);
 assert.equal(neutral.statusResistance, 1);
 const active = status.combatBonuses({ arsenal: 1, nanobloom: 1, aegis: 1, flux: 1 }, { chill: 1, jam: 1, fracture: 1 });
-assert.ok(active.damage > 1 && active.pickupMagnet >= 70 && active.beamDamage > 1);
-assert.ok(active.fireRate < 1.24 && active.speed < 1.12 && active.energyGain < 1.3, "debuffs must counter matching buffs without disabling controls");
+assert.equal(active.damage, 1.06);
+assert.equal(active.sharedCharge, 1.15, "flux must strengthen the shared charge economy rather than duplicate per-pilot energy");
+assert.ok(active.pickupMagnet >= 70 && active.beamDamage > 1);
+assert.ok(active.fireRate < 1.12 && active.speed < 1.12 && active.energyGain === .72, "debuffs must counter matching buffs without disabling controls");
 assert.equal(active.statusResistance, .5);
+for (const buff of status.BUFF_MODULES) {
+  assert.equal(status.refreshBuffDuration(0, buff), buff.duration, `${buff.id} first pickup must use its base duration`);
+  assert.equal(status.refreshBuffDuration(1, buff), buff.duration + 1, `${buff.id} repeat must refresh with only one bonus second`);
+  assert.equal(status.refreshBuffDuration(999, buff), buff.duration + 1, `${buff.id} duration must never stack past base plus one second`);
+}
 
 assert.match(gameSource, /function grantBuff\(player, pickupType\)/);
 assert.match(gameSource, /function updatePlayerStatus\(player, dt\)/);

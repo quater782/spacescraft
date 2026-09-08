@@ -2,7 +2,7 @@
   const STAGE_DURATIONS = Object.freeze([570, 600, 630]);
   const EVENT_POINTS = Object.freeze([.08, .18, .28, .38, .48, .58, .68, .78, .88]);
   const ENCOUNTER_POINTS = Object.freeze([.14, .34, .58, .79]);
-  const MID_DRAFT_POINTS = Object.freeze([.25, .72]);
+  const MID_DRAFT_POINTS = Object.freeze([.10, .30, .52, .75]);
   const SECTORS_PER_STAGE = 3;
   const TOTAL_SECTORS = STAGE_DURATIONS.length * SECTORS_PER_STAGE;
   const TOTAL_FORMATION_EVENTS = STAGE_DURATIONS.length * EVENT_POINTS.length;

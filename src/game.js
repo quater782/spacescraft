@@ -80,8 +80,12 @@ const QA_WALLET_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-wallet");
 const QA_CONTRACTS_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-contracts");
 const QA_DRAFT_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-draft");
 const QA_RUSH_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-rush");
+const QA_NOVA_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-nova");
 const QA_BUFFS_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-buffs");
 const QA_VOXEL_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-voxel");
+const QA_FORCE_ELITE = LOCAL_QA_HOST && QA_VOXEL_MODE && URL_PARAMS.has("qa-elite");
+const REQUESTED_QA_GROWTH = LOCAL_QA_HOST && QA_VOXEL_MODE ? URL_PARAMS.get("qa-growth") : null;
+const QA_GROWTH_MODE = ["mid", "capstone"].includes(REQUESTED_QA_GROWTH) ? REQUESTED_QA_GROWTH : null;
 const QA_MODEL_GALLERY = LOCAL_QA_HOST && URL_PARAMS.has("qa-model-gallery");
 const QA_BOSS_GALLERY = LOCAL_QA_HOST && URL_PARAMS.has("qa-boss-gallery");
 const QA_BOSS_STATE_MODE = LOCAL_QA_HOST && URL_PARAMS.has("qa-boss-state");
@@ -89,6 +93,12 @@ const REQUESTED_QA_BOSS_PHASE = Number.parseInt(URL_PARAMS.get("qa-boss-phase") 
 const QA_BOSS_PHASE = [1, 2, 3].includes(REQUESTED_QA_BOSS_PHASE) ? REQUESTED_QA_BOSS_PHASE : 3;
 const REQUESTED_QA_THREAT = LOCAL_QA_HOST ? Number.parseInt(URL_PARAMS.get("qa-threat") || "", 10) : Number.NaN;
 const QA_THREAT_TIER = [0, 1, 2, 3, 4].includes(REQUESTED_QA_THREAT) ? REQUESTED_QA_THREAT : null;
+const REQUESTED_QA_COMBAT_STAGE = LOCAL_QA_HOST ? Number.parseInt(URL_PARAMS.get("qa-combat-stage") || "", 10) : Number.NaN;
+const QA_COMBAT_STAGE = [1, 2, 3].includes(REQUESTED_QA_COMBAT_STAGE) ? REQUESTED_QA_COMBAT_STAGE - 1 : null;
+const REQUESTED_QA_COMBAT_PROGRESS = LOCAL_QA_HOST ? Number.parseFloat(URL_PARAMS.get("qa-combat-progress") || "") : Number.NaN;
+const QA_COMBAT_PROGRESS = Number.isFinite(REQUESTED_QA_COMBAT_PROGRESS) && REQUESTED_QA_COMBAT_PROGRESS >= 0 && REQUESTED_QA_COMBAT_PROGRESS < .96
+  ? REQUESTED_QA_COMBAT_PROGRESS
+  : null;
 const REQUESTED_QA_ANOMALY = LOCAL_QA_HOST ? URL_PARAMS.get("qa-anomaly") : null;
 const QA_ANOMALY_ID = SpaceAnomalies.ANOMALIES.some((anomaly) => anomaly.id === REQUESTED_QA_ANOMALY)
   ? REQUESTED_QA_ANOMALY
@@ -120,30 +130,44 @@ const QA_ENEMY_BUILD = (() => {
   return SpaceExpedition.build(...parts, 2, QA_HULL_ID || "scout");
 })();
 const REQUESTED_RUN_SEED = Number.parseInt(URL_PARAMS.get("seed") || "", 10);
-const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_RUSH_MODE && "rush", QA_BUFFS_MODE && "buffs", QA_VOXEL_MODE && "voxel", QA_MODEL_GALLERY && "model-gallery", QA_BOSS_GALLERY && "boss-gallery", QA_BOSS_GALLERY && `boss-phase${QA_BOSS_PHASE}`, QA_BOSS_STATE_MODE && "boss-state", QA_THREAT_TIER !== null && `threat${QA_THREAT_TIER}`, QA_ANOMALY_ID && `anomaly-${QA_ANOMALY_ID}`, QA_STATUS_ID && `status-${QA_STATUS_ID}`, QA_PROTOCOL_ID && `protocol-${QA_PROTOCOL_ID}`, QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_BIOME_ID && `biome-${QA_BIOME_ID}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`, QA_HULL_ID && `hull-${QA_HULL_ID}`, QA_ENEMY_BUILD && `enemy-${QA_ENEMY_BUILD.moduleSignature}`].filter(Boolean).join("+") || "off";
+const QA_LABEL = [QA_FAST_MODE && "fast", QA_WALLET_MODE && "wallet", QA_CONTRACTS_MODE && "contracts", QA_DRAFT_MODE && "draft", QA_RUSH_MODE && "rush", QA_NOVA_MODE && "nova", QA_BUFFS_MODE && "buffs", QA_VOXEL_MODE && "voxel", QA_FORCE_ELITE && "elite", QA_GROWTH_MODE && `growth-${QA_GROWTH_MODE}`, QA_MODEL_GALLERY && "model-gallery", QA_BOSS_GALLERY && "boss-gallery", (QA_BOSS_GALLERY || QA_BOSS_STATE_MODE) && `boss-phase${QA_BOSS_PHASE}`, QA_BOSS_STATE_MODE && "boss-state", QA_THREAT_TIER !== null && `threat${QA_THREAT_TIER}`, QA_COMBAT_STAGE !== null && `combat-stage${QA_COMBAT_STAGE + 1}`, QA_COMBAT_PROGRESS !== null && `combat-progress${QA_COMBAT_PROGRESS}`, QA_ANOMALY_ID && `anomaly-${QA_ANOMALY_ID}`, QA_STATUS_ID && `status-${QA_STATUS_ID}`, QA_PROTOCOL_ID && `protocol-${QA_PROTOCOL_ID}`, QA_PATH_INDEX !== null && `path${QA_PATH_INDEX}`, QA_BIOME_ID && `biome-${QA_BIOME_ID}`, QA_ENCOUNTER_ID && `encounter-${QA_ENCOUNTER_ID}`, QA_HULL_ID && `hull-${QA_HULL_ID}`, QA_ENEMY_BUILD && `enemy-${QA_ENEMY_BUILD.moduleSignature}`].filter(Boolean).join("+") || "off";
 const t = (key, variables) => SpaceI18n.t(key, variables);
 const UPGRADE_DEFS = SpaceRoguelike.UPGRADE_DEFS;
 const TALENT_NODES = SpaceConstellation.TALENT_NODES;
 const RUSH_CONFIG = SpaceRush.RUSH_CONFIG;
+const NOVA_CONFIG = SpaceRush.NOVA_CONFIG;
 const PROTOCOLS = SpaceRelics.PROTOCOLS;
 const BUFF_MODULES = SpaceStatus.BUFF_MODULES;
 const DEBUFF_MODULES = SpaceStatus.DEBUFF_MODULES;
 const DIRECTOR = SpaceDirector;
 const THREAT_TIERS = SpaceThreat.TIERS;
+const COMBAT = SpaceCombat;
 const ANOMALIES = SpaceAnomalies.ANOMALIES;
+const QA_GROWTH_PLANS = Object.freeze({
+  mid: Object.freeze({ overclock: 2, prism: 1, drone: 1 }),
+  capstone: Object.freeze({ overclock: 3, prism: 3, drone: 2 }),
+});
 
 ctx.imageSmoothingEnabled = false;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const lerp = (a, b, t) => a + (b - a) * t;
-let runRandom = SpaceRoguelike.createRng(1);
-let visualRandom = SpaceRoguelike.createRng(0x9e3779b9);
+let rngStreams = SpaceRng.createStreams(1);
+let combatRandom = rngStreams.combat;
+let draftRandom = rngStreams.draft;
+let lootRandom = rngStreams.loot;
+let routeRandom = rngStreams.route;
+let visualRandom = rngStreams.cosmetic;
 const setRunRandomSeed = (seed) => {
   const normalized = (Number(seed) >>> 0) || 0x6d2b79f5;
-  runRandom = SpaceRoguelike.createRng(normalized);
-  visualRandom = SpaceRoguelike.createRng(normalized ^ 0x9e3779b9);
+  rngStreams = SpaceRng.createStreams(normalized);
+  combatRandom = rngStreams.combat;
+  draftRandom = rngStreams.draft;
+  lootRandom = rngStreams.loot;
+  routeRandom = rngStreams.route;
+  visualRandom = rngStreams.cosmetic;
 };
-const random = () => runRandom();
+const random = () => combatRandom();
 const visualRand = (min, max) => min + visualRandom() * (max - min);
 const createRunSeed = () => {
   if (Number.isFinite(REQUESTED_RUN_SEED)) return (REQUESTED_RUN_SEED >>> 0) || 1;
@@ -333,7 +357,7 @@ function grantEligibleAchievements(state) {
 }
 
 const DEFAULT_PROFILE = {
-  version: 5,
+  version: 6,
   highScore: 0,
   totalKills: 0,
   bestCombo: 0,
@@ -351,6 +375,7 @@ const DEFAULT_PROFILE = {
   unlockedFrames: ["comet"],
   unlockedModules: ["flux"],
   talents: [],
+  research: SpaceResearch.sanitize(),
   achievements: [],
   contractClears: { patrol: 0, storm: 0, overdrive: 0 },
   settings: {
@@ -370,6 +395,7 @@ function freshProfile() {
     unlockedFrames: [...DEFAULT_PROFILE.unlockedFrames],
     unlockedModules: [...DEFAULT_PROFILE.unlockedModules],
     talents: [...DEFAULT_PROFILE.talents],
+    research: SpaceResearch.sanitize(),
     achievements: [...DEFAULT_PROFILE.achievements],
     contractClears: { ...DEFAULT_PROFILE.contractClears },
     settings: { ...DEFAULT_PROFILE.settings },
@@ -393,7 +419,8 @@ function loadProfile() {
     loaded.settings.flashes = clamp(Number(loaded.settings.flashes) || 0, 0, 0.7);
     loaded.settings.bulletContrast = loaded.settings.bulletContrast === "high" ? "high" : "standard";
     loaded.settings.language = loaded.settings.language === "en" ? "en" : "zh";
-    loaded.version = 5;
+    loaded.version = 6;
+    loaded.research = SpaceResearch.sanitize(parsed.research);
     loaded.stardust = Math.max(0, Math.floor(Number(loaded.stardust) || 0));
     loaded.lifetimeStardust = Math.max(loaded.stardust, Math.floor(Number(loaded.lifetimeStardust) || 0));
     const validFrames = new Set(SHIP_FRAMES.map((frame) => frame.id));
@@ -526,8 +553,8 @@ const BOSS_ATTACK_SEQUENCES = [
 ];
 
 const BOSS_ATTACK_TELEGRAPH = Object.freeze({
-  petalBurst: .82, sunLance: .68, seedSpiral: .9, twinBloom: .76,
-  railWall: .72, thunderFan: .82, forgeCross: .88, doubleRail: .68,
+  petalBurst: .82, sunLance: 1.2, seedSpiral: .9, twinBloom: .88,
+  railWall: 1.24, thunderFan: .82, forgeCross: .88, doubleRail: 1.16,
   spiralCrown: .84, voidPincer: .72, eclipseTwin: .9, tripleEclipse: .96,
 });
 
@@ -980,6 +1007,10 @@ class AudioEngine {
     } else if (name === "elite") {
       [48, 55, 51, 60].forEach((note, i) => this.tone(note, .16, "square", .055, now + i * .07, this.sfxBus, i % 2 ? -5 : 4));
       this.noise(.18, .045, now, 1200);
+    } else if (name === "enemyCharge") {
+      if (now - this.lastEnemyShot < .16) return;
+      this.lastEnemyShot = now;
+      [50, 57, 65].forEach((note, index) => this.tone(note + this.stage * 2, .11, index === 1 ? "triangle" : "square", .018 + index * .003, now + index * .032, this.sfxBus, 8));
     } else if (name === "enemyShoot") {
       if (now - this.lastEnemyShot < .11) return;
       this.lastEnemyShot = now;
@@ -1001,6 +1032,12 @@ class AudioEngine {
     } else if (name === "shield") {
       this.tone(79, .16, "sine", .055, now, this.sfxBus, -12);
       this.tone(91, .1, "square", .025, now + .02, this.sfxBus, -19);
+    } else if (name === "shieldBlock") {
+      this.tone(86, .08, "triangle", .05, now, this.sfxBus, 5);
+      this.tone(93, .12, "square", .025, now + .025, this.sfxBus, -7);
+    } else if (name === "shieldBreak") {
+      [88, 74, 57].forEach((note, index) => this.tone(note, .13, "square", .035, now + index * .045, this.sfxBus, -14));
+      this.noise(.17, .035, now + .025, 2600);
     } else if (name === "barrierBreak") {
       [84, 79, 72].forEach((note, index) => this.tone(note, .11, index === 1 ? "triangle" : "square", .035, now + index * .028, this.sfxBus, -8));
       this.noise(.12, .035, now + .025, 2800);
@@ -1101,6 +1138,18 @@ const world = {
   threatReliefSeconds: 0,
   threatApexSeconds: 0,
   threatPulseTimer: 0,
+  combatBeatId: "breach",
+  combatPressure: 0,
+  combatPatternTier: 0,
+  combatBulletCap: 46,
+  combatStateTransitions: 0,
+  combatTelegraphs: 0,
+  combatPatterns: new Set(),
+  formationSerial: 0,
+  activeFormations: new Set(),
+  lastFormationId: "",
+  pendingFormation: null,
+  qaCombatApplied: false,
   introTimer: 0,
   clearTimer: 0,
   eventIndex: 0,
@@ -1121,8 +1170,14 @@ const world = {
   players: [],
   bullets: [],
   enemyBullets: [],
+  enemyBeams: [],
   enemies: [],
   pickups: [],
+  lootDropBudget: 0,
+  lootBag: [],
+  lootDrought: 0,
+  lootMaxDrought: 0,
+  lootDrops: 0,
   particles: [],
   stars: [],
   loadoutFrame: profile.selectedFrame,
@@ -1144,6 +1199,7 @@ const world = {
   draftContext: "stage-clear",
   draftTimer: 0,
   draftInputCooldown: 0,
+  draftOfferHistory: [],
   enemySerial: 0,
   chainResolving: false,
   biomes: [],
@@ -1153,6 +1209,15 @@ const world = {
   variantNotice: null,
   variantNoticeCooldown: 0,
   volatileResolving: false,
+  combatLaserHits: 0,
+  combatHomingHits: 0,
+  combatBlastHits: 0,
+  combatDeathrattles: 0,
+  combatBodyCollisions: 0,
+  combatFriendlyCollisions: 0,
+  combatInvalidProjectiles: 0,
+  combatBossFragments: 0,
+  ambientEliteSpawns: 0,
   branchSets: [],
   branchPlanSignature: "",
   branchHistory: [],
@@ -1165,6 +1230,25 @@ const world = {
   encounterObjects: [],
   encounterHistory: [],
   encounterSerial: 0,
+  novaCharge: 0,
+  novaCooldown: 0,
+  novaCount: 0,
+  novaHitChargeBudget: 0,
+  novaHitChargeEarned: 0,
+  novaBulletsCleared: 0,
+  novaLocalClears: 0,
+  novaFullClears: 0,
+  novaOutsideSurvivors: 0,
+  novaBeamsAtTrigger: 0,
+  novaBeamsCleared: 0,
+  novaLastRadius: 0,
+  novaSelfChargeBlocked: 0,
+  novaSuppressedDeathrattles: 0,
+  qaNovaHazardFragments: 0,
+  novaLastTriggerTime: -1,
+  novaMinimumInterval: 0,
+  novaReadyTimer: 0,
+  qaNovaPreparedForCount: -1,
   rushCharge: 0,
   rushTimer: 0,
   rushCooldown: 0,
@@ -1172,6 +1256,9 @@ const world = {
   rushBestChain: 0,
   rushCount: 0,
   rushPulseTimer: 0,
+  rushGuardClears: 0,
+  rushGuardClearsThisRush: 0,
+  rushStartClears: 0,
   rushLastBonus: 0,
   activeProtocols: [],
   protocolProcs: 0,
@@ -1215,6 +1302,7 @@ function updateAdaptiveThreat(dt) {
     ? world.players.reduce((sum, player) => sum + Math.max(0, player.hp) / Math.max(1, player.maxHp), 0) / world.players.length
     : 1;
   const downedCount = world.players.filter((player) => player.downed).length;
+  const criticalPilot = world.players.some((player) => !player.downed && player.hp / Math.max(1, player.maxHp) <= .29);
   const evaluation = SpaceThreat.evaluate({
     stageIndex: world.stageIndex,
     sectorIndex: world.sectorIndex,
@@ -1246,7 +1334,7 @@ function updateAdaptiveThreat(dt) {
     world.threatTier = QA_THREAT_TIER;
     world.threatCandidateTier = QA_THREAT_TIER;
     world.threatHoldTimer = 0;
-  } else if (downedCount > 0 || healthRatio < .34) {
+  } else if (downedCount > 0 || healthRatio < .34 || criticalPilot) {
     commitThreatTier(0);
     world.threatCandidateTier = 0;
     world.threatHoldTimer = 0;
@@ -1271,11 +1359,40 @@ function updateAdaptiveThreat(dt) {
 let settingsReturnContext = "menu";
 let resetSaveArmed = false;
 
+function telegraphedBeamSegments(enemy) {
+  if (!enemy || enemy.dead) return [];
+  const ray = (sourceX, sourceY, radius, targetX, targetY, angleOffset = 0) => {
+    const x1 = sourceX;
+    const y1 = sourceY + radius * .45;
+    const angle = Math.atan2(targetY - y1, targetX - x1) + angleOffset;
+    const reach = Math.hypot(W, H) * 1.45;
+    return { x1, y1, x2: x1 + Math.cos(angle) * reach, y2: y1 + Math.sin(angle) * reach };
+  };
+  if (enemy.boss) {
+    if (enemy.attackState !== "telegraph") return [];
+    if (enemy.attackId === "sunLance") {
+      const offsets = enemy.phaseLevel >= 3 ? [-.12, .12] : [0];
+      return offsets.map((offset) => ray(enemy.x, enemy.y, enemy.r, enemy.attackTargetX, enemy.attackTargetY, offset));
+    }
+    if (enemy.attackId === "railWall") {
+      return [-1, 0, 1].map((lane) => ray(enemy.x + lane * 28, enemy.y, enemy.r, enemy.attackTargetX + lane * 92, H + 20));
+    }
+    if (enemy.attackId === "doubleRail") {
+      return [-1, 1].map((side) => ray(enemy.x + side * 24, enemy.y, enemy.r, enemy.attackTargetX + side * 34, H + 16));
+    }
+    return [];
+  }
+  if (enemy.aiState !== "telegraph" || !["laserLance", "laserSweep"].includes(enemy.attackPattern)) return [];
+  const offsets = enemy.attackPattern === "laserSweep" ? [-.12, .12] : [0];
+  return offsets.map((offset) => ray(enemy.x, enemy.y, enemy.r, enemy.attackTargetX, enemy.attackTargetY, offset));
+}
+
 function aiPilotControls(player) {
   if (!player) return { x: 0, y: 0 };
   const partner = world.players[0];
   let targetX = partner?.x ?? W * 0.55;
   let targetY = H - 43;
+  player.aiIntent = "formation";
 
   if (world.routeChoice && partner) {
     const targetLane = partner.x < W / 3 ? 0 : partner.x > W * 2 / 3 ? 2 : 1;
@@ -1289,19 +1406,26 @@ function aiPilotControls(player) {
   if (partner?.downed) {
     targetX = partner.x;
     targetY = partner.y;
+    player.aiIntent = "rescue";
   } else {
     const liveEnemies = world.enemies.filter((enemy) => !enemy.dead);
     if (liveEnemies.length) {
       const target = liveEnemies.reduce((best, enemy) => {
-        const score = Math.abs(enemy.x - player.x) + Math.max(0, enemy.y - 155) * 0.4;
+        const targetingAi = enemy.squadTargetIndex === player.index && enemy.attackState === "telegraph";
+        const rolePriority = enemy.hullRole === "command" ? -48 : enemy.hullRole === "artillery" || enemy.weaponModule === "sniper" ? -28 : 0;
+        const score = Math.abs(enemy.x - player.x) + Math.max(0, enemy.y - 155) * 0.4 + rolePriority + (targetingAi ? -42 : 0);
         return !best || score < best.score ? { enemy, score } : best;
       }, null)?.enemy;
-      if (target) targetX = clamp(target.x, 25, W - 25);
+      if (target) {
+        targetX = clamp(target.x, 25, W - 25);
+        player.aiIntent = target.hullRole === "command" ? "focus-command" : "focus-fire";
+      }
     }
     const encounter = world.activeEncounter;
     if (encounter?.kind === "hold" || encounter?.kind === "escort") {
       targetX = encounter.x;
       targetY = encounter.y;
+      player.aiIntent = "objective";
     } else if (encounter?.kind === "collect") {
       const shard = world.encounterObjects
         .filter((object) => object.type === "salvage" && !object.dead)
@@ -1309,31 +1433,120 @@ function aiPilotControls(player) {
       if (shard) {
         targetX = shard.x;
         targetY = shard.y;
+        player.aiIntent = "salvage";
       }
     } else if (encounter?.kind === "siege") {
       targetX = encounter.x;
+      player.aiIntent = "siege";
+    }
+
+    const livePickups = world.pickups.filter((pickup) => !pickup.dead);
+    if (livePickups.length && !["hold", "escort", "collect", "siege"].includes(encounter?.kind)) {
+      const missingHull = world.players.reduce((sum, pilot) => sum + Math.max(0, pilot.maxHp - Math.max(0, pilot.hp)), 0);
+      const missingShield = world.players.reduce((sum, pilot) => sum + Math.max(0, pilot.maxShield - pilot.shield), 0);
+      const healthRatio = world.players.reduce((sum, pilot) => sum + Math.max(0, pilot.hp) / Math.max(1, pilot.maxHp), 0) / Math.max(1, world.players.length);
+      const rankedPickup = livePickups
+        .map((pickup) => {
+          const range = distance(player, pickup);
+          const sustain = pickup.type === "repair" || pickup.type === "shield";
+          const needed = pickup.type === "repair" ? missingHull > 0 : pickup.type === "shield" ? missingShield > 0 : true;
+          const utility = pickup.type === "repair"
+            ? 128 + missingHull * 13
+            : pickup.type === "shield"
+              ? 82 + missingShield * 8
+              : pickup.type === "weapon"
+                ? 48
+                : 30;
+          return { pickup, range, sustain, needed, score: needed ? utility - range * .42 : -Infinity };
+        })
+        .sort((a, b) => b.score - a.score)[0];
+      const urgentSustain = rankedPickup?.sustain && healthRatio <= .72;
+      const withinDetour = rankedPickup && rankedPickup.range <= (rankedPickup.sustain ? 175 : 105);
+      if (rankedPickup && rankedPickup.needed && (urgentSustain || withinDetour)) {
+        targetX = rankedPickup.pickup.x;
+        targetY = clamp(rankedPickup.pickup.y + 8, H * .48, H - 30);
+        player.aiIntent = "resupply";
+      }
     }
     if (partner && distance(player, partner) > 88) targetX = lerp(targetX, partner.x + 24, 0.55);
     if (player.hp <= 2 && partner) {
       targetX = lerp(targetX, partner.x, 0.68);
       targetY = Math.min(H - 30, partner.y + 14);
+      player.aiIntent = "survival";
     }
   }
 
   let steerX = (targetX - player.x) * 0.045;
   let steerY = (targetY - player.y) * 0.05;
   for (const bullet of world.enemyBullets) {
-    const futureX = bullet.x + bullet.vx * 0.34;
-    const futureY = bullet.y + bullet.vy * 0.34;
+    const toPlayerX = player.x - bullet.x;
+    const toPlayerY = player.y - bullet.y;
+    const velocitySquared = Math.max(1, bullet.vx * bullet.vx + bullet.vy * bullet.vy);
+    const targetedHoming = bullet.behavior === "homing" && bullet.targetIndex === player.index;
+    const interceptTime = clamp((toPlayerX * bullet.vx + toPlayerY * bullet.vy) / velocitySquared, .08, targetedHoming ? 1.05 : .82);
+    const futureX = bullet.x + bullet.vx * interceptTime;
+    const futureY = bullet.y + bullet.vy * interceptTime;
     const dx = player.x - futureX;
     const dy = player.y - futureY;
     const range = Math.hypot(dx, dy);
-    if (range < 62) {
-      const urgency = (62 - range) / 62;
-      steerX += (dx / Math.max(8, range)) * urgency * 4.2;
-      steerY += (dy / Math.max(8, range)) * urgency * 2.2;
+    const safety = bullet.behavior === "mine"
+      ? 82
+      : bullet.behavior === "blast"
+        ? Math.max(78, (bullet.blastRadius || 38) + 38)
+        : bullet.behavior === "homing"
+          ? targetedHoming ? 94 : 82
+          : bullet.pattern === "laneWall" || bullet.pattern === "commandCross"
+            ? 74
+            : 64;
+    if (range < safety) {
+      const urgency = (safety - range) / safety;
+      const radialX = dx / Math.max(8, range);
+      const radialY = dy / Math.max(8, range);
+      if (targetedHoming) {
+        const bulletSpeed = Math.sqrt(velocitySquared);
+        const perpendicularX = -bullet.vy / bulletSpeed;
+        const perpendicularY = bullet.vx / bulletSpeed;
+        const centerBias = (W / 2 - player.x) * perpendicularX + (H - 48 - player.y) * perpendicularY;
+        const dodgeSide = centerBias >= 0 ? 1 : -1;
+        steerX += (perpendicularX * dodgeSide * 7.4 + radialX * 2.2) * urgency;
+        steerY += (perpendicularY * dodgeSide * 4.2 + radialY * 1.6) * urgency;
+      } else {
+        steerX += radialX * urgency * (bullet.pattern === "laneWall" ? 6.2 : 4.8);
+        steerY += radialY * urgency * 2.4;
+      }
+      player.aiIntent = "evasion";
     }
   }
+  const avoidBeamLine = (line, safety) => {
+    const lineX = line.x2 - line.x1;
+    const lineY = line.y2 - line.y1;
+    const lineLengthSquared = Math.max(1, lineX * lineX + lineY * lineY);
+    const projection = clamp(((player.x - line.x1) * lineX + (player.y - line.y1) * lineY) / lineLengthSquared, 0, 1);
+    const nearestX = line.x1 + lineX * projection;
+    const nearestY = line.y1 + lineY * projection;
+    let awayX = player.x - nearestX;
+    let awayY = player.y - nearestY;
+    let range = Math.hypot(awayX, awayY);
+    if (range < 1) {
+      const lineLength = Math.sqrt(lineLengthSquared);
+      const perpendicularX = -lineY / lineLength;
+      const perpendicularY = lineX / lineLength;
+      const centerBias = (W / 2 - player.x) * perpendicularX + (H - 48 - player.y) * perpendicularY;
+      const side = centerBias >= 0 ? 1 : -1;
+      awayX = perpendicularX * side;
+      awayY = perpendicularY * side;
+      range = 1;
+    }
+    if (range >= safety) return;
+    const urgency = (safety - range) / safety;
+    steerX += awayX / range * urgency * 7.6;
+    steerY += awayY / range * urgency * 4.4;
+    player.aiIntent = "evasion";
+  };
+  for (const enemy of world.enemies) {
+    for (const line of telegraphedBeamSegments(enemy)) avoidBeamLine(line, 58);
+  }
+  for (const beam of world.enemyBeams) avoidBeamLine(beam, 44 + (beam.width || 5));
   for (const hazard of world.encounterObjects.filter((object) => object.type === "meteor" && !object.dead)) {
     const futureX = hazard.x + hazard.vx * .42;
     const futureY = hazard.y + hazard.vy * .42;
@@ -1415,7 +1628,14 @@ function upgradeIcon(upgradeId) {
     nanites: '<path d="M9 2h6v7h7v6h-7v7H9v-7H2V9h7V2Zm3 4v6H6v1h6v6h1v-6h6v-1h-6V6h-1Z"/>',
     capacitor: '<path d="M7 3h10v3h2v15H5V6h2V3Zm2 4v5h3v6l4-8h-3V7H9Z"/>',
     novaCore: '<path d="m12 1 2.3 7.4L22 6l-4.7 6 4.7 6-7.7-2.4L12 23l-2.3-7.4L2 18l4.7-6L2 6l7.7 2.4L12 1Zm0 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/>',
+    novaHarvester: '<path d="M4 4h4v5h3V2h3v7h3V4h4v7c0 4.4-2.5 7.2-7 8.6V23h-4v-3.4C6.5 18.2 4 15.4 4 11V4Zm4 8c.4 2 1.7 3.2 4 4 2.3-.8 3.6-2 4-4H8Z"/>',
+    novaAegis: '<path d="m12 2 8 3v6c0 5-3.2 8.6-8 11-4.8-2.4-8-6-8-11V5l8-3Zm0 5-1.2 3.4L7 12l3.8 1.6L12 17l1.2-3.4L17 12l-3.8-1.6L12 7Z"/>',
+    novaPurifier: '<path d="M11 2h2v5.2l3.7-3.7 1.8 1.8L14.8 9H22v3h-7.2l3.7 3.7-1.8 1.8-3.7-3.7V22h-2v-8.2l-3.7 3.7-1.8-1.8L9.2 12H2V9h7.2L5.5 5.3l1.8-1.8L11 7.2V2Z"/>',
     resonanceArray: '<path d="M2 8h6v8H2V8Zm14 0h6v8h-6V8ZM9 10h6v4H9v-4Zm2-8h2v6h-2V2Zm0 14h2v6h-2v-6Z"/>',
+    rushRelay: '<path d="M3 5h6v5H3V5Zm12 9h6v5h-6v-5ZM8 7h5v2H8V7Zm4 1h2v8H9v-2h3V8Z"/>',
+    rushSalvage: '<path d="M5 3h5v8a2 2 0 0 0 4 0V3h5v8a7 7 0 0 1-14 0V3Zm7 12 4 4h-3v3h-2v-3H8l4-4Z"/>',
+    rushOverdrive: '<path d="M3 6h8l-3-3h5l6 6-6 6H8l3-3H3V6Zm8 10h10v3H11v-3Z"/>',
+    rushGuard: '<path d="m12 2 8 3v6c0 5-3.2 8.6-8 11-4.8-2.4-8-6-8-11V5l8-3Zm-1 5v4H7v2h4v4h2v-4h4v-2h-4V7h-2Z"/>',
     magnet: '<path d="M5 3h5v8a2 2 0 0 0 4 0V3h5v8a7 7 0 0 1-14 0V3Zm0 0h5v4H5V3Zm9 0h5v4h-5V3Z"/>',
   };
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[upgradeId] || paths.novaCore}</svg>`;
@@ -1439,12 +1659,24 @@ function upgradeLevel(upgradeId) {
 }
 
 function rollDraftOptions() {
+  const draftIndex = Math.max(0, world.draftCount - 1);
   const choices = SpaceRoguelike.rollDraftOptions({
     levels: world.upgrades,
     stageIndex: world.stageIndex,
-    random,
+    draftIndex,
+    offerHistory: world.draftOfferHistory,
+    pickHistory: world.upgradeHistory,
+    random: draftRandom,
   });
-  return SpaceRelics.injectProtocolChoice({ choices, levels: world.upgrades, upgrades: UPGRADE_DEFS, random });
+  return SpaceRelics.injectProtocolChoice({
+    choices,
+    levels: world.upgrades,
+    upgrades: UPGRADE_DEFS,
+    draftIndex,
+    offerHistory: world.draftOfferHistory,
+    pickHistory: world.upgradeHistory,
+    random: draftRandom,
+  });
 }
 
 function renderBuildTray() {
@@ -1475,7 +1707,7 @@ function renderResultBuild() {
     .join(t("result.routeSeparator"));
   const encounterChip = encounters ? `<span>${t("result.encounters", { encounters })}</span>` : "";
   const talentChip = `<span>${t("result.talents", { current: profile.talents.length, total: TALENT_NODES.length })}</span>`;
-  const rushChip = `<span>${t("result.rushSummary", { count: world.rushCount, chain: world.rushBestChain, score: world.rushLastBonus })}</span>`;
+  const rushChip = `<span>${t("result.rushSummary", { count: world.rushCount, chain: world.rushBestChain })}</span>`;
   const peakThreat = THREAT_TIERS[world.threatPeak] || THREAT_TIERS[1];
   const threatChip = `<span>${t("result.threatSummary", { peak: t(peakThreat.nameKey), changes: world.threatChanges, relief: Math.round(world.threatReliefSeconds), apex: Math.round(world.threatApexSeconds) })}</span>`;
   const protocolChip = world.activeProtocols.length
@@ -1485,6 +1717,12 @@ function renderResultBuild() {
     const upgrade = UPGRADE_DEFS.find((entry) => entry.id === id);
     return upgrade ? `<span>${upgradeIcon(id)}${localizedName(upgrade)} <b>Lv.${upgradeLevel(id)}</b></span>` : "";
   }).join("");
+  const settlement = world.researchReward;
+  const rewardChips = settlement ? `<span>${t("research.breakdown", settlement.breakdown)}</span><span>${t("research.progress", { earned: settlement.dataEarned, progress: settlement.research.progress })}</span>` + settlement.discoveries.map((entry) => {
+    const node = SpaceResearch.BLUEPRINTS.find((item) => item.id === entry.id);
+    return `<span>${node ? t("research.discovered", { name: t(node.nameKey), rank: entry.rank }) : t("research.converted", { amount: entry.amount })}</span>`;
+  }).join("") + `<span>${t(settlement.cacheCount > 0 ? "research.nextRun" : "research.noCache")}</span>` : "";
+  document.querySelector("#resultRewards").innerHTML = rewardChips;
   resultBuild.innerHTML = seedChip + talentChip + rushChip + threatChip + protocolChip + routeChip + anomalyChip + pathChip + encounterChip + (upgradeChips || `<span>${t("result.buildEmpty")}</span>`);
 }
 
@@ -1496,7 +1734,7 @@ function renderUpgradeDraft(focusSelected = false) {
     const nextLevel = upgradeLevel(upgrade.id) + 1;
     const protocol = SpaceRelics.protocolUnlockedByChoice(world.upgrades, upgrade.id);
     const protocolBadge = protocol ? `<span class="protocol-ready-badge protocol-${protocol.id}">${protocolIcon(protocol.id)}${t("draft.protocolReady", { protocol: localizedName(protocol) })}</span>` : "";
-    return `<button class="upgrade-choice ${upgrade.rarity} ${protocol ? `protocol-ready protocol-${protocol.id}` : ""} ${selected ? "selected" : ""}" type="button" role="listitem" data-upgrade-id="${upgrade.id}" aria-pressed="${selected}" aria-label="${t("draft.choose", { name: localizedName(upgrade) })}"><span class="upgrade-icon">${upgradeIcon(upgrade.id)}</span><span class="upgrade-kicker"><i>${t(`draft.category.${upgrade.category}`)}</i><b>${t(`draft.rarity.${upgrade.rarity}`)}</b></span><strong>${localizedName(upgrade)}</strong><p>${localizedDescription(upgrade)}</p>${protocolBadge}<span class="upgrade-level">${t("draft.level", { current: nextLevel, max: upgrade.max })}</span></button>`;
+    return `<button class="upgrade-choice ${upgrade.rarity} ${protocol ? `protocol-ready protocol-${protocol.id}` : ""} ${selected ? "selected" : ""}" type="button" role="listitem" data-upgrade-id="${upgrade.id}" aria-pressed="${selected}" aria-label="${t("draft.choose", { name: localizedName(upgrade) })}"><span class="upgrade-icon">${upgradeIcon(upgrade.id)}</span><span class="upgrade-kicker"><i>${t(`draft.path.${upgrade.path}`)}</i><b>${t(`draft.rarity.${upgrade.rarity}`)}</b></span><strong>${localizedName(upgrade)}</strong><p>${localizedDescription(upgrade)}</p>${protocolBadge}<span class="upgrade-level">${t("draft.level", { current: nextLevel, max: upgrade.max })}</span></button>`;
   }).join("");
   if (focusSelected) upgradeOptions.querySelector(`[data-upgrade-id="${world.draftOptions[world.draftIndex]?.id}"]`)?.focus();
 }
@@ -1509,6 +1747,7 @@ function beginUpgradeDraft(context = "stage-clear") {
   world.draftTimer = 0;
   world.draftInputCooldown = .35;
   world.draftOptions = rollDraftOptions();
+  world.draftOfferHistory.push(world.draftOptions.map((upgrade) => upgrade.id));
   upgradePanel.hidden = false;
   renderUpgradeDraft(true);
   renderBuildTray();
@@ -1528,10 +1767,11 @@ function applyRunUpgrade(upgrade) {
   if (level > upgrade.max) return;
   world.upgrades[upgrade.id] = level;
   world.upgradeHistory.push(upgrade.id);
+  world.growthGrace = 12;
   for (const player of world.players) {
     SpaceRoguelike.applyUpgradeToPlayer(player, upgrade.id, level);
   }
-  world.activeProtocols = SpaceRelics.activeProtocols(world.upgrades);
+  world.activeProtocols = SpaceRelics.activeProtocols(world.upgrades, world.upgradeHistory);
   const activated = world.activeProtocols.find((protocol) => !previousProtocols.has(protocol.id));
   if (activated) {
     world.protocolFlashTimer = 1.15;
@@ -1563,7 +1803,7 @@ function confirmDraftSelection() {
     advanceStage();
   } else {
     world.spawnTimer = Math.max(world.spawnTimer, .8);
-    for (const player of world.players) player.invulnerability = Math.max(player.invulnerability, .75);
+    for (const player of world.players) player.invulnerability = Math.max(player.invulnerability, .45);
   }
   renderBuildTray();
 }
@@ -1605,10 +1845,50 @@ function renderLoadoutCards(items, unlockedIds, selectedId, container, kind) {
   }).join("");
 }
 
+function renderResearch() {
+  const research = profile.research;
+  document.querySelector("#researchProgress").textContent = t("research.storedProgress", { progress: research.progress });
+  document.querySelector("#researchRoutes").innerHTML = SpaceResearch.ROUTES.map((route) =>
+    `<button type="button" class="research-route ${research.focus === route.id ? "selected" : ""}" data-research-route="${route.id}" aria-pressed="${research.focus === route.id}"><strong>${t(route.nameKey)}</strong><small>${t(route.descriptionKey)}</small></button>`).join("");
+  document.querySelector("#researchOptions").innerHTML = SpaceResearch.BLUEPRINTS.map((node) => {
+    const rank = research.ranks[node.id];
+    const cost = SpaceResearch.COSTS[rank];
+    const branch = { exploration: "mobility", salvage: "resonance", assault: "armament" }[node.route];
+    return `<button type="button" class="talent-node ${rank === 3 ? "owned" : profile.stardust >= cost ? "available" : "blocked"}" data-research-id="${node.id}" aria-disabled="${rank === 3 || profile.stardust < cost}">${talentIcon(branch, Math.max(1, rank))}<span><strong>${t(node.nameKey)} ${rank}/3</strong><small>${t(node.descriptionKey)}</small></span><b>${rank === 3 ? t("research.max") : t("research.buy", { cost })}</b></button>`;
+  }).join("");
+}
+
+document.querySelector("#researchRoutes").addEventListener("click", (event) => {
+  const id = event.target.closest("[data-research-route]")?.dataset.researchRoute;
+  if (!SpaceResearch.ROUTES.some((route) => route.id === id)) return;
+  profile.research.focus = id;
+  saveProfile();
+  renderResearch();
+  document.querySelector(`[data-research-route="${id}"]`)?.focus();
+});
+
+document.querySelector("#researchOptions").addEventListener("click", (event) => {
+  const id = event.target.closest("[data-research-id]")?.dataset.researchId;
+  if (!id) return;
+  const purchase = SpaceResearch.purchase(profile.research, id, profile.stardust);
+  if (!purchase.ok) {
+    if (purchase.reason === "cost") showToast(t("toast.needDust", { amount: purchase.cost - profile.stardust }));
+    return;
+  }
+  profile.stardust -= purchase.cost;
+  profile.research = purchase.research;
+  saveProfile();
+  renderHangar();
+  audio.start().then(() => audio.sfx("talent"));
+  showToast(t("research.upgraded", { name: t(SpaceResearch.BLUEPRINTS.find((node) => node.id === id).nameKey) }));
+  document.querySelector(`[data-research-id="${id}"]`)?.focus();
+});
+
 function renderHangar() {
   const balance = `✦ ${profile.stardust}`;
   menuStardust.textContent = balance;
   hangarStardust.textContent = balance;
+  renderResearch();
   renderLoadoutCards(SHIP_FRAMES, profile.unlockedFrames, profile.selectedFrame, shipOptions, "frame");
   renderLoadoutCards(CORE_MODULES, profile.unlockedModules, profile.selectedModule, moduleOptions, "module");
   contractOptions.innerHTML = FLIGHT_CONTRACTS.map((contract) => {
@@ -1843,6 +2123,8 @@ function createPlayer(index) {
   const module = CORE_MODULES.find((entry) => entry.id === profile.selectedModule) || CORE_MODULES[0];
   const contract = FLIGHT_CONTRACTS.find((entry) => entry.id === profile.selectedContract) || FLIGHT_CONTRACTS[0];
   const contractHp = Math.max(4, frame.hp + contract.playerHpDelta);
+  const baseNovaChargeRate = clamp(frame.energyGain * (module.energyGain || 1) * contract.playerEnergy, .8, 1.25);
+  const collisionRadii = SpaceCollision.playerRadii(frame.id);
   const player = {
     index,
     frameId: frame.id,
@@ -1851,14 +2133,34 @@ function createPlayer(index) {
     y: H - 38,
     vx: 0,
     vy: 0,
-    r: frame.radius,
+    r: collisionRadii.hurt,
+    hurtRadius: collisionRadii.hurt,
+    bodyRadius: collisionRadii.body,
+    pickupRadius: collisionRadii.pickup,
     hp: contractHp,
     maxHp: contractHp,
     speed: frame.speed,
     damage: frame.damage * contract.playerDamage,
     fireRate: frame.fireRate,
-    energyGain: frame.energyGain * (module.energyGain || 1) * contract.playerEnergy,
+    energyGain: baseNovaChargeRate,
+    novaChargeRate: baseNovaChargeRate,
     novaDamage: frame.novaDamage,
+    novaRadiusBonus: 0,
+    novaHitChargeBonus: 0,
+    novaHitBudgetBonus: 0,
+    novaShieldCharge: 0,
+    novaRescueCharge: 0,
+    novaClearAll: false,
+    rushLinkedChargeRate: 1,
+    rushKillCharge: 0,
+    rushEliteCharge: 0,
+    rushPickupCharge: 0,
+    rushEncounterCharge: 0,
+    rushFireRate: 1,
+    rushDamage: 1,
+    rushGuard: false,
+    rushGuardInterval: RUSH_CONFIG.guardInterval,
+    rushGuardLimit: RUSH_CONFIG.guardLimit,
     maxShield: module.maxShield || 3,
     stageRepair: module.stageRepair || 0,
     reviveHp: module.reviveHp || 3,
@@ -1871,19 +2173,34 @@ function createPlayer(index) {
     projectileSpeed: 180,
     pierce: 0,
     droneLevel: 0,
+    droneVolley: 0,
     chainDamage: 0,
+    burstCadence: 0,
+    prismEcho: 0,
     handling: 18,
-    hitInvulnerability: 1.8,
+    hitInvulnerability: .72,
     shieldRegenInterval: 0,
     shieldRegenTimer: Number.POSITIVE_INFINITY,
     pickupMagnetRadius: 0,
     fireTimer: 0,
-    invulnerability: 3.5,
+    invulnerability: 2,
     shield: module.startShield || 0,
+    shieldHitTimer: 0,
+    shieldBreakTimer: 0,
+    hullHitTimer: 0,
+    damageVfxTimer: 0,
+    shieldAbsorbed: 0,
+    hullDamageTaken: 0,
     downed: false,
     downTimer: 0,
     revive: 0,
     shots: 0,
+    damageTaken: 0,
+    downCount: 0,
+    rescueCount: 0,
+    capstoneHeavyProcs: 0,
+    capstonePrismProcs: 0,
+    capstoneDroneProcs: 0,
     protocolCooldown: 0,
     buffs: Object.fromEntries(BUFF_MODULES.map((buff) => [buff.id, 0])),
     debuffs: Object.fromEntries(DEBUFF_MODULES.map((debuff) => [debuff.id, 0])),
@@ -1892,6 +2209,7 @@ function createPlayer(index) {
     buffFlash: 0,
     statusFlash: 0,
     statusSoundTimer: 0,
+    aiIntent: index === 1 ? "formation" : "human",
   };
   return SpaceConstellation.applyToPlayer(player, profile.talents);
 }
@@ -1918,8 +2236,18 @@ function confirmRouteChoice(index) {
   const choice = world.routeChoice;
   if (!choice) return;
   const selectedIndex = clamp(Math.round(index), 0, choice.options.length - 1);
-  const branch = choice.options[selectedIndex];
+  let branch = choice.options[selectedIndex];
   if (!branch) return;
+  if (!world.qaCombatApplied && (QA_VOXEL_MODE || QA_BOSS_STATE_MODE) && QA_COMBAT_STAGE !== null && QA_COMBAT_PROGRESS !== null) {
+    world.stageIndex = QA_COMBAT_STAGE;
+    world.stageTime = activeStage(QA_COMBAT_STAGE).duration * QA_COMBAT_PROGRESS;
+    world.sectorIndex = DIRECTOR.sectorForProgress(QA_COMBAT_PROGRESS);
+    world.globalSector = DIRECTOR.globalSector(QA_COMBAT_STAGE, world.sectorIndex);
+    branch = world.branchSets[QA_COMBAT_STAGE]?.[selectedIndex] || branch;
+    activateAnomaly(world.sectorIndex, { announce: false });
+    world.qaCombatApplied = true;
+    audio.setStage(world.stageIndex, false);
+  }
   world.activeBranch = branch;
   world.branchHistory[world.stageIndex] = branch;
   world.routeChoice = null;
@@ -1930,13 +2258,15 @@ function confirmRouteChoice(index) {
   for (const player of world.players) {
     player.hp = Math.min(player.maxHp, player.hp + (branch.reward.repair || 0));
     player.shield = Math.min(player.maxShield, player.shield + (branch.reward.shield || 0));
-    player.energy = Math.min(100, player.energy + (branch.reward.energy || 0));
-    player.weapon = Math.min(4, player.weapon + (branch.reward.weapon || 0));
+    player.weapon = Math.min(3, player.weapon + (branch.reward.weapon || 0));
     player.x = player.index === 0 ? W * .39 : W * .61;
     player.y = H - 38;
     player.vx = 0;
     player.vy = 0;
-    player.invulnerability = Math.max(player.invulnerability, 2);
+    player.invulnerability = Math.max(player.invulnerability, .9);
+  }
+  if (branch.reward.energy > 0) {
+    addNovaCharge("route", Math.min(NOVA_CONFIG.routeRewardCap, branch.reward.energy * NOVA_CONFIG.routeRewardScale));
   }
   audio.sfx("routeLock");
   pulseGamepad(0, 180, .42, .3);
@@ -1958,7 +2288,7 @@ function updateRouteChoice(dt) {
     player.vy = lerp(player.vy, controls.y * speed, 1 - Math.exp(-dt * player.handling));
     player.x = clamp(player.x + player.vx * dt, 13, W - 13);
     player.y = clamp(player.y + player.vy * dt, H - 72, H - 14);
-    player.invulnerability = Math.max(player.invulnerability, 2);
+    player.invulnerability = Math.max(player.invulnerability, .9);
   }
   const pilots = world.players.filter((player) => !player.downed);
   const gateState = SpaceExpedition.evaluateGateChoice(pilots.map((player) => player.x), W, 42);
@@ -1973,6 +2303,17 @@ function updateRouteChoice(dt) {
 }
 
 function resetWorld() {
+  world.runResearch = SpaceResearch.sanitize(profile.research);
+  world.researchEffects = SpaceResearch.effects(world.runResearch);
+  world.researchReward = null;
+  world.researchPickups = 0;
+  world.researchElites = 0;
+  world.researchBosses = 0;
+  world.researchProcs = 0;
+  world.researchShieldProgress = 0;
+  world.researchSectors = new Set();
+  world.growthGrace = 0;
+  world.pressureHolds = 0;
   world.runSeed = createRunSeed();
   setRunRandomSeed(world.runSeed);
   world.anomalyPlan = [...SpaceAnomalies.generatePlan(world.runSeed)].map((stage) => [...stage]);
@@ -1985,7 +2326,11 @@ function resetWorld() {
   world.anomalyForceX = 0;
   world.anomalyForceY = 0;
   world.biomes = [...SpaceExpedition.generateRoute(world.runSeed)];
-  if (QA_BIOME_ID) world.biomes[0] = SpaceExpedition.BIOMES.find((biome) => biome.id === QA_BIOME_ID);
+  if (QA_BIOME_ID) {
+    const forcedBiome = SpaceExpedition.BIOMES.find((biome) => biome.id === QA_BIOME_ID);
+    if (QA_COMBAT_STAGE !== null) world.biomes[QA_COMBAT_STAGE] = forcedBiome;
+    else world.biomes[0] = forcedBiome;
+  }
   world.branchSets = [...SpaceExpedition.generateBranchSets(world.runSeed)];
   world.branchPlanSignature = world.branchSets.map((set) => set.map((path) => path.id).join("|")).join(">");
   world.branchHistory = [];
@@ -2014,6 +2359,25 @@ function resetWorld() {
   world.encounterObjects = [];
   world.encounterHistory = [];
   world.encounterSerial = 0;
+  world.novaCharge = QA_NOVA_MODE ? NOVA_CONFIG.threshold : 0;
+  world.novaCooldown = 0;
+  world.novaCount = 0;
+  world.novaHitChargeBudget = NOVA_CONFIG.hitChargePerSecond;
+  world.novaHitChargeEarned = 0;
+  world.novaBulletsCleared = 0;
+  world.novaLocalClears = 0;
+  world.novaFullClears = 0;
+  world.novaOutsideSurvivors = 0;
+  world.novaBeamsAtTrigger = 0;
+  world.novaBeamsCleared = 0;
+  world.novaLastRadius = 0;
+  world.novaSelfChargeBlocked = 0;
+  world.novaSuppressedDeathrattles = 0;
+  world.qaNovaHazardFragments = 0;
+  world.novaLastTriggerTime = -1;
+  world.novaMinimumInterval = 0;
+  world.novaReadyTimer = 0;
+  world.qaNovaPreparedForCount = -1;
   world.rushCharge = QA_RUSH_MODE ? RUSH_CONFIG.threshold : 0;
   world.rushTimer = 0;
   world.rushCooldown = 0;
@@ -2021,6 +2385,9 @@ function resetWorld() {
   world.rushBestChain = 0;
   world.rushCount = 0;
   world.rushPulseTimer = 0;
+  world.rushGuardClears = 0;
+  world.rushGuardClearsThisRush = 0;
+  world.rushStartClears = 0;
   world.rushLastBonus = 0;
   world.activeProtocols = [];
   world.protocolProcs = 0;
@@ -2066,6 +2433,18 @@ function resetWorld() {
   world.threatReliefSeconds = 0;
   world.threatApexSeconds = 0;
   world.threatPulseTimer = 0;
+  world.combatBeatId = "breach";
+  world.combatPressure = 0;
+  world.combatPatternTier = 0;
+  world.combatBulletCap = 46;
+  world.combatStateTransitions = 0;
+  world.combatTelegraphs = 0;
+  world.combatPatterns = new Set();
+  world.formationSerial = 0;
+  world.activeFormations = new Set();
+  world.lastFormationId = "";
+  world.pendingFormation = null;
+  world.qaCombatApplied = false;
   world.introTimer = 0;
   world.clearTimer = 0;
   world.eventIndex = 0;
@@ -2098,13 +2477,55 @@ function resetWorld() {
   world.draftContext = "stage-clear";
   world.draftTimer = 0;
   world.draftInputCooldown = 0;
+  world.draftOfferHistory = [];
+  world.lootDropBudget = 0;
+  world.lootBag = [];
+  world.lootDrought = 0;
+  world.lootMaxDrought = 0;
+  world.lootDrops = 0;
   world.enemySerial = 0;
   world.chainResolving = false;
   world.discoveredVariants = new Set();
   world.variantNotice = null;
   world.variantNoticeCooldown = 0;
   world.volatileResolving = false;
+  world.combatLaserHits = 0;
+  world.combatHomingHits = 0;
+  world.combatBlastHits = 0;
+  world.combatDeathrattles = 0;
+  world.combatBodyCollisions = 0;
+  world.combatFriendlyCollisions = 0;
+  world.combatInvalidProjectiles = 0;
+  world.combatBossFragments = 0;
+  world.ambientEliteSpawns = 0;
   world.players = [createPlayer(0), createPlayer(1)];
+  syncNovaMirrors();
+  if (QA_BOSS_STATE_MODE) {
+    world.players.forEach((player) => {
+      player.maxHp = 99;
+      player.hp = 99;
+      player.invulnerability = 0;
+      player.hitInvulnerability = .18;
+    });
+  }
+  if (QA_FORCE_ELITE) {
+    world.players.forEach((player) => {
+      player.maxHp = 30;
+      player.hp = 30;
+      player.invulnerability = 0;
+    });
+  }
+  if (QA_GROWTH_MODE) {
+    const plan = QA_GROWTH_PLANS[QA_GROWTH_MODE];
+    for (const [upgradeId, maxLevel] of Object.entries(plan)) {
+      for (let level = 1; level <= maxLevel; level += 1) {
+        world.upgrades[upgradeId] = level;
+        world.upgradeHistory.push(upgradeId);
+        for (const player of world.players) SpaceRoguelike.applyUpgradeToPlayer(player, upgradeId, level);
+      }
+    }
+    world.activeProtocols = SpaceRelics.activeProtocols(world.upgrades, world.upgradeHistory);
+  }
   if (QA_BUFFS_MODE) {
     for (const player of world.players) {
       for (const buff of BUFF_MODULES) player.buffs[buff.id] = 30;
@@ -2119,10 +2540,11 @@ function resetWorld() {
       world.upgradeHistory.push(upgradeId);
       for (const player of world.players) SpaceRoguelike.applyUpgradeToPlayer(player, upgradeId, 1);
     }
-    world.activeProtocols = SpaceRelics.activeProtocols(world.upgrades);
+    world.activeProtocols = SpaceRelics.activeProtocols(world.upgrades, world.upgradeHistory);
   }
   world.bullets = [];
   world.enemyBullets = [];
+  world.enemyBeams = [];
   world.enemies = [];
   world.pickups = [];
   world.particles = [];
@@ -2158,7 +2580,8 @@ function showToast(message) {
   toastElement.textContent = message;
   toastElement.classList.remove("show");
   window.clearTimeout(showToast.timeout);
-  requestAnimationFrame(() => toastElement.classList.add("show"));
+  cancelAnimationFrame(showToast.frame);
+  showToast.frame = requestAnimationFrame(() => toastElement.classList.add("show"));
   showToast.timeout = window.setTimeout(() => toastElement.classList.remove("show"), 1900);
 }
 
@@ -2179,13 +2602,73 @@ function burst(x, y, color, count = 8, speed = 55) {
   }
 }
 
-const relicBonuses = () => SpaceRelics.combatBonuses(world.upgrades);
+const relicBonuses = () => SpaceRelics.combatBonuses(world.upgrades, world.upgradeHistory);
 const statusBonuses = (player) => SpaceStatus.combatBonuses(player?.buffs, player?.debuffs);
+
+function teamAverage(field, fallback = 0) {
+  const players = world.players.filter((player) => !player.downed);
+  if (!players.length) return fallback;
+  return players.reduce((sum, player) => sum + (Number(player[field]) || fallback), 0) / players.length;
+}
+
+function teamMaximum(field, fallback = 0) {
+  return world.players.reduce((best, player) => Math.max(best, Number(player[field]) || fallback), fallback);
+}
+
+function teamNovaChargeRate() {
+  const players = world.players.filter((player) => !player.downed);
+  if (!players.length) return 1;
+  const rate = players.reduce((sum, player) => (
+    sum + (Number(player.novaChargeRate) || Number(player.energyGain) || 1)
+      * (statusBonuses(player).sharedCharge || 1) * statusBonuses(player).energyGain
+  ), 0) / players.length;
+  return clamp(rate, .75, 3);
+}
+
+function teamRushBonuses() {
+  const relic = relicBonuses();
+  return {
+    rushLinkedChargeRate: clamp(teamAverage("rushLinkedChargeRate", 1) * (relic.linkedCharge || 1), 1, 2),
+    rushKillCharge: teamAverage("rushKillCharge"),
+    rushEliteCharge: teamAverage("rushEliteCharge"),
+    rushPickupCharge: teamAverage("rushPickupCharge") + Math.min(3, Math.max(0, relic.pickupRush || 0)),
+    rushEncounterCharge: teamAverage("rushEncounterCharge"),
+    rushFireRate: teamAverage("rushFireRate", 1),
+    rushDamage: teamAverage("rushDamage", 1),
+    rushGuard: world.players.some((player) => player.rushGuard),
+    rushGuardInterval: Math.max(.16, teamAverage("rushGuardInterval", RUSH_CONFIG.guardInterval)),
+    rushGuardLimit: Math.min(RUSH_CONFIG.guardLimit, Math.max(1, Math.round(teamMaximum("rushGuardLimit", RUSH_CONFIG.guardLimit)))),
+  };
+}
+
+function syncNovaMirrors() {
+  for (const player of world.players) player.energy = world.novaCharge;
+}
+
+function addNovaCharge(type, amount, player = null) {
+  let delta = Number(amount) || 0;
+  if (type === "nova") {
+    if (delta > 0) world.novaSelfChargeBlocked += 1;
+    return 0;
+  }
+  if (type === "hit") {
+    delta += teamAverage("novaHitChargeBonus");
+    delta = Math.min(Math.max(0, delta), world.novaHitChargeBudget);
+    world.novaHitChargeBudget = Math.max(0, world.novaHitChargeBudget - delta);
+  }
+  if (["passive", "hit", "anomaly"].includes(type)) delta *= teamNovaChargeRate();
+  else if (player && delta > 0) delta *= clamp(Number(player.novaChargeRate) || Number(player.energyGain) || 1, .75, 3);
+  const previous = world.novaCharge;
+  world.novaCharge = SpaceRush.clampNovaCharge(world.novaCharge + delta);
+  if (type === "hit") world.novaHitChargeEarned += world.novaCharge - previous;
+  syncNovaMirrors();
+  return delta;
+}
 
 function grantBuff(player, pickupType) {
   const buff = SpaceStatus.buffForPickup(pickupType);
   const current = player.buffs[buff.id] || 0;
-  player.buffs[buff.id] = Math.min(buff.duration * 1.8, current + buff.duration);
+  player.buffs[buff.id] = SpaceStatus.refreshBuffDuration(current, buff);
   player.buffFlash = .48;
   if (buff.id === "nanobloom") player.nanobloomTick = Math.min(player.nanobloomTick, .18);
   if (buff.id === "aegis") player.aegisPulse = Math.min(player.aegisPulse, .12);
@@ -2199,7 +2682,7 @@ function applyEnemyDebuff(player, bullet) {
   const bonuses = statusBonuses(player);
   const duration = Math.max(.25, (bullet.debuffDuration || 1) * bonuses.statusResistance);
   player.debuffs[bullet.debuff] = Math.max(player.debuffs[bullet.debuff] || 0, duration);
-  if (bullet.debuff === "fracture") player.energy = Math.max(0, player.energy - 6);
+  if (bullet.debuff === "fracture") addNovaCharge("fracture", -6);
   player.statusFlash = .44;
   burst(player.x, player.y, bullet.payloadColor || bullet.color, 10, 52);
   if (player.statusSoundTimer <= 0) {
@@ -2257,13 +2740,15 @@ function markProtocolProc(protocolId, x, y) {
 
 function triggerAegisNova(player) {
   if (!relicBonuses().aegisNova || player.protocolCooldown > 0) return;
-  player.protocolCooldown = 2.2;
-  for (const bullet of world.enemyBullets) {
-    if (!bullet.dead && distance(player, bullet) <= 64) bullet.dead = true;
-  }
+  player.protocolCooldown = 4;
+  const threats = world.enemyBullets
+    .filter((bullet) => !bullet.dead && distance(player, bullet) <= 42)
+    .sort((a, b) => distance(player, a) - distance(player, b))
+    .slice(0, 8);
+  for (const bullet of threats) bullet.dead = true;
   for (const enemy of world.enemies) {
-    if (enemy.dead || distance(player, enemy) > 72) continue;
-    damageEnemy(enemy, enemy.boss ? 5 : 12);
+    if (enemy.dead || distance(player, enemy) > 52) continue;
+    damageEnemy(enemy, enemy.boss ? 4 : 8);
     if (enemy.hp <= 0) killEnemy(enemy, player.index);
   }
   burst(player.x, player.y, "#82b8ff", 28, 112);
@@ -2277,12 +2762,11 @@ function addRushCharge(type) {
     if (["kill", "elite", "bossPhase"].includes(type)) {
       world.rushChain += type === "elite" ? 3 : 1;
       world.rushBestChain = Math.max(world.rushBestChain, world.rushChain);
-      world.rushTimer = Math.min(RUSH_CONFIG.maximumDuration, world.rushTimer + RUSH_CONFIG.killExtension * (type === "elite" ? 2 : 1));
       if (world.rushChain % 4 === 0) audio.sfx("rushHit");
     }
     return;
   }
-  world.rushCharge = SpaceRush.addEventCharge(world.rushCharge, type, world.linked);
+  world.rushCharge = SpaceRush.addEventCharge(world.rushCharge, type, world.linked, teamRushBonuses());
 }
 
 function startRush() {
@@ -2292,10 +2776,9 @@ function startRush() {
   world.rushChain = 0;
   world.rushCount += 1;
   world.rushPulseTimer = 0;
-  world.enemyBullets = [];
+  world.rushGuardClearsThisRush = 0;
   for (const player of world.players) {
     if (player.downed) continue;
-    player.energy = Math.min(100, player.energy + 18 * player.energyGain);
     burst(player.x, player.y, PLAYER_CONFIG[player.index].light, 36, 130);
   }
   world.flash = Math.max(world.flash, .58);
@@ -2307,19 +2790,13 @@ function startRush() {
   showToast(t("toast.rushStart"));
 }
 
-function calculateRushBonus() {
-  return Math.round(world.rushChain * 75 * (1 + world.stageIndex * .25) * (world.contract?.score || 1) * (world.activeBranch?.score || 1));
-}
-
 function finishRush() {
-  const bonus = calculateRushBonus();
-  world.score += bonus;
-  world.rushLastBonus = bonus;
+  world.rushLastBonus = 0;
   world.rushTimer = 0;
   world.rushCharge = 0;
   world.rushCooldown = RUSH_CONFIG.cooldown;
   audio.sfx("rushEnd");
-  showToast(t("toast.rushEnd", { chain: world.rushChain, score: bonus }));
+  showToast(t("toast.rushEnd", { chain: world.rushChain }));
 }
 
 function updateRush(dt) {
@@ -2327,22 +2804,27 @@ function updateRush(dt) {
   if (rushActive()) {
     world.rushTimer -= dt;
     world.rushPulseTimer -= dt;
-    if (world.rushPulseTimer <= 0 && world.players.length >= 2 && world.players.every((player) => !player.downed)) {
-      world.rushPulseTimer = .16;
+    const bonuses = teamRushBonuses();
+    if (bonuses.rushGuard && world.rushPulseTimer <= 0 && world.players.length >= 2 && world.players.every((player) => !player.downed)
+      && world.rushGuardClearsThisRush < bonuses.rushGuardLimit) {
+      world.rushPulseTimer = bonuses.rushGuardInterval;
       const [p1, p2] = world.players;
-      for (const bullet of world.enemyBullets) {
-        if (!bullet.dead && pointToSegmentDistance(bullet.x, bullet.y, p1.x, p1.y, p2.x, p2.y) <= RUSH_CONFIG.bulletGuardRadius) {
-          bullet.dead = true;
-          burst(bullet.x, bullet.y, "#fff2a6", 3, 24);
-        }
+      const bullet = world.enemyBullets
+        .filter((entry) => !entry.dead && pointToSegmentDistance(entry.x, entry.y, p1.x, p1.y, p2.x, p2.y) <= 13)
+        .sort((a, b) => pointToSegmentDistance(a.x, a.y, p1.x, p1.y, p2.x, p2.y) - pointToSegmentDistance(b.x, b.y, p1.x, p1.y, p2.x, p2.y))[0];
+      if (bullet) {
+        bullet.dead = true;
+        world.rushGuardClears += 1;
+        world.rushGuardClearsThisRush += 1;
+        burst(bullet.x, bullet.y, "#fff2a6", 3, 24);
       }
     }
     if (world.rushTimer <= 0) finishRush();
     return;
   }
-  const eligible = world.introTimer <= 0 && world.clearTimer <= 0 && !world.routeChoice;
-  const linkedCharge = world.linked ? relicBonuses().linkedCharge : 1;
-  world.rushCharge = SpaceRush.advanceCharge(world.rushCharge, dt * linkedCharge, world.linked, eligible);
+  const eligible = world.introTimer <= 0 && world.clearTimer <= 0 && !world.routeChoice && world.rushCooldown <= 0;
+  const bonuses = teamRushBonuses();
+  world.rushCharge = SpaceRush.advanceCharge(world.rushCharge, dt, world.linked, eligible, bonuses.rushLinkedChargeRate);
   if (world.rushCharge >= RUSH_CONFIG.threshold && world.rushCooldown <= 0) startRush();
 }
 
@@ -2351,12 +2833,17 @@ function enemyTarget(source) {
   if (!targets.length) return { x: W / 2, y: H, vx: 0, vy: 0 };
   if (source.aiTargeting === "weakest") return targets.reduce((best, player) => player.hp / player.maxHp < best.hp / best.maxHp ? player : best);
   if (source.aiTargeting === "isolated") return targets.reduce((best, player) => Math.abs(player.x - W / 2) > Math.abs(best.x - W / 2) ? player : best);
+  if (source.aiTargeting === "leading") return targets.reduce((best, player) => Math.hypot(player.vx || 0, player.vy || 0) > Math.hypot(best.vx || 0, best.vy || 0) ? player : best);
+  if (Number.isInteger(source.squadTargetIndex)) {
+    const assigned = targets.find((player) => player.index === source.squadTargetIndex);
+    if (assigned) return assigned;
+  }
   return targets.reduce((best, player) => distance(source, player) < distance(source, best) ? player : best);
 }
 
-function aimedVelocity(source, speed, spread = 0) {
-  const target = enemyTarget(source);
-  const lead = source.aiLead || 0;
+function aimedVelocity(source, speed, spread = 0, lockedTarget = null) {
+  const target = lockedTarget || enemyTarget(source);
+  const lead = lockedTarget ? 0 : (source.aiLead || 0) + (COMBAT.doctrineFor(source.hullRole).aimLead || 0);
   const targetX = target.x + (target.vx || 0) * lead;
   const targetY = target.y + (target.vy || 0) * lead;
   const angle = Math.atan2(targetY - source.y, targetX - source.x) + rand(-spread, spread);
@@ -2380,15 +2867,20 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
       elite,
       random,
     }));
-  const branchHealth = world.stageIndex === 0 && progress < .4
+  const branchHealth = world.stageIndex === 0 && progress < .08
     ? Math.min(1, world.activeBranch?.enemyHp || 1)
     : world.activeBranch?.enemyHp || 1;
   const contractHealth = (world.contract?.enemyHp || 1) * (stage.biome?.enemyHp || 1) * branchHealth;
   const adaptiveThreat = threatConfig();
+  const combat = COMBAT.curveFor(world.stageIndex, progress);
   const anomaly = anomalyConfig();
-  const maxHp = stats.hp * (elite ? 3.1 : 1) * contractHealth * build.hp * adaptiveThreat.enemyHp;
+  const eliteHealth = elite ? (QA_FORCE_ELITE ? 20 : 4.8) : 1;
+  const maxHp = stats.hp * eliteHealth * contractHealth * build.hp * adaptiveThreat.enemyHp;
+  const enemyRadius = stats.r * (elite ? 1.4 : 1) * build.scale;
+  const enemyId = ++world.enemySerial;
+  const formationId = options.formationId || 0;
   const enemy = {
-    id: ++world.enemySerial,
+    id: enemyId,
     type,
     hullRole: build.hullRole,
     hullNameKey: build.hullNameKey,
@@ -2398,7 +2890,8 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     vy: 0,
     hp: maxHp,
     maxHp,
-    r: stats.r * (elite ? 1.28 : 1) * build.scale,
+    r: enemyRadius,
+    bodyRadius: enemyRadius * .8,
     score: Math.round(stats.score * (elite ? 4 : 1) * build.score),
     age: 0,
     shootTimer: rand(1.6, 3),
@@ -2407,11 +2900,13 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     dead: false,
     boss: false,
     elite,
+    bossAdd: Boolean(options.bossAdd),
     hitFlash: 0,
     movementModule: build.movementId,
     movementNameKey: build.movementNameKey,
     weaponModule: build.weaponId,
     weaponNameKey: build.weaponNameKey,
+    weaponPattern: build.weaponPattern || "",
     coreModule: build.coreId,
     coreNameKey: build.coreNameKey,
     aiModule: build.aiId,
@@ -2420,7 +2915,7 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     payloadNameKey: build.payloadNameKey,
     buildSignature: build.signature,
     moduleScale: build.scale,
-    moveSpeed: build.speed * adaptiveThreat.moveSpeed * anomaly.enemyMoveSpeed,
+    moveSpeed: build.speed * adaptiveThreat.moveSpeed * anomaly.enemyMoveSpeed * combat.moveSpeed,
     moveSway: build.sway,
     moveDrift: build.drift,
     weaponBulletSpeed: build.bulletSpeed,
@@ -2436,6 +2931,30 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     aiFlank: build.aiFlank,
     aiLead: build.aiLead,
     aiEvasion: build.aiEvasion,
+    aiState: "entry",
+    aiStateTimer: COMBAT.stateDuration(build.hullRole, "entry", world.stageIndex, elite, world.enemySerial),
+    aiStateDuration: 1,
+    aiStateAge: 0,
+    attackState: "entry",
+    attackCharge: 0,
+    attackPattern: "",
+    attackCycle: 0,
+    attackTargetX: W / 2,
+    attackTargetY: H - 36,
+    attackTargetIndex: null,
+    speciesPattern: build.speciesPattern || "",
+    deathrattle: world.stageIndex === 0 && progress < .42 ? "" : build.deathrattle || "",
+    nativeBiome: build.nativeBiome || "",
+    collisionDamage: build.collisionDamage || 2,
+    collisionCooldown: 0,
+    formationId,
+    packId: options.packId || formationId || `${world.stageIndex}:${Math.floor(world.stageTime / 4)}`,
+    formationOffsetX: options.formationOffsetX || 0,
+    formationDelay: options.formationDelay || 0,
+    squadTargetIndex: Number.isInteger(options.squadTargetIndex) ? options.squadTargetIndex : null,
+    stationX: clamp(Number.isFinite(options.stationX) ? options.stationX : x, 22, W - 22),
+    stationYBias: (enemyId % 3 - 1) * 20,
+    retreating: false,
     debuff: build.debuff,
     debuffDuration: build.debuffDuration,
     debuffIntensity: build.debuffIntensity,
@@ -2444,18 +2963,32 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     threatReward: adaptiveThreat.score,
     anomalyReward: anomaly.score,
   };
-  if (build.signature !== "standard.pulse.light.sentry.clean" && !world.discoveredVariants.has(build.signature)) {
+  enemy.aiStateDuration = enemy.aiStateTimer + enemy.formationDelay;
+  enemy.aiStateTimer = enemy.aiStateDuration;
+  if (build.moduleSignature !== "standard.pulse.light.sentry.clean" && !world.discoveredVariants.has(build.signature)) {
     world.discoveredVariants.add(build.signature);
     if (world.variantNoticeCooldown <= 0) {
-      world.variantNotice = { enemy, timer: 2.8, total: 2.8 };
-      world.variantNoticeCooldown = 3.5;
+      world.variantNotice = { enemy, timer: 2.2, total: 2.2 };
+      world.variantNoticeCooldown = 6.4;
     }
   }
   return enemy;
 }
 
 function addFormationEnemy(type, x, y, options = {}) {
-  const enemy = makeEnemy(type, x, y, options);
+  if (world.stageIndex > 0) {
+    const curve = COMBAT.curveFor(world.stageIndex, world.stageTime / activeStage().duration);
+    const budget = 10 + world.stageIndex * 2 + (curve.beat.id === "killzone" ? 2 : 0);
+    const occupied = world.enemies.reduce((sum, enemy) => sum + (enemy.dead || enemy.boss ? 0 : enemy.elite ? 2.5 : 1), 0);
+    if (occupied + (options.elite ? 2.5 : 1) > budget) return null;
+  }
+  const pending = world.pendingFormation;
+  const enemy = makeEnemy(type, x, y, {
+    ...options,
+    formationId: options.formationId || pending?.id || 0,
+    squadTargetIndex: Number.isInteger(options.squadTargetIndex) ? options.squadTargetIndex : pending?.targetIndex,
+    stationX: Number.isFinite(options.stationX) ? options.stationX : x,
+  });
   if (Number.isFinite(options.vx)) enemy.vx = options.vx;
   if (Number.isFinite(options.shootDelay)) enemy.shootTimer = options.shootDelay;
   world.enemies.push(enemy);
@@ -2464,30 +2997,36 @@ function addFormationEnemy(type, x, y, options = {}) {
 
 function spawnStageEvent(event) {
   const stage = world.stageIndex;
+  const progress = clamp(world.stageTime / activeStage(stage).duration, 0, 1);
+  const nativeType = stage === 0 && progress < .25 ? null : activeStage(stage).biome?.speciesId;
+  const formationId = ++world.formationSerial;
+  world.pendingFormation = { id: formationId, targetIndex: formationId % 2 };
+  world.activeFormations.add(formationId);
   if (event.pattern === "chevron") {
-    [-2, -1, 0, 1, 2].forEach((column) => addFormationEnemy("scout", W / 2 + column * 39, -12 - Math.abs(column) * 13));
+    [-2, -1, 0, 1, 2].forEach((column) => addFormationEnemy(column === 0 && nativeType ? nativeType : "scout", W / 2 + column * 39, -12 - Math.abs(column) * 13));
   } else if (event.pattern === "crossfire") {
     for (let row = 0; row < 2; row += 1) {
-      addFormationEnemy("dart", -10, 48 + row * 42, { vx: 34, shootDelay: 2 + row * .35 });
-      addFormationEnemy("dart", W + 10, 69 + row * 42, { vx: -34, shootDelay: 2.2 + row * .35 });
+      addFormationEnemy(row === 0 && nativeType ? nativeType : "dart", -10, 48 + row * 42, { vx: 34, shootDelay: 2 + row * .35 });
+      addFormationEnemy(row === 0 && nativeType ? nativeType : "dart", W + 10, 69 + row * 42, { vx: -34, shootDelay: 2.2 + row * .35 });
     }
   } else if (event.pattern === "convoy") {
-    addFormationEnemy("tank", W / 2, -18, { shootDelay: 2.5 });
+    addFormationEnemy(nativeType || "tank", W / 2, -18, { shootDelay: 2.5 });
     addFormationEnemy("scout", W / 2 - 58, -34, { shootDelay: 2.1 });
     addFormationEnemy("scout", W / 2 + 58, -34, { shootDelay: 2.3 });
     addFormationEnemy("dart", W / 2 - 104, -55);
     addFormationEnemy("dart", W / 2 + 104, -55);
   } else if (event.pattern === "pinwheel") {
-    [72, 184, 296, 408].forEach((x, index) => addFormationEnemy("spinner", x, -16 - (index % 2) * 25, { shootDelay: 1.7 + index * .2 }));
+    [72, 184, 296, 408].forEach((x, index) => addFormationEnemy(index === 1 && nativeType ? nativeType : "spinner", x, -16 - (index % 2) * 25, { shootDelay: 1.7 + index * .2 }));
   } else if (event.pattern === "minefield") {
-    [55, 145, 240, 335, 425].forEach((x, index) => addFormationEnemy("mine", x, -14 - (index % 2) * 30, { shootDelay: 2.1 + index * .14 }));
+    [55, 145, 240, 335, 425].forEach((x, index) => addFormationEnemy(index === 2 && nativeType ? nativeType : "mine", x, -14 - (index % 2) * 30, { shootDelay: 2.1 + index * .14 }));
   } else if (event.pattern === "pincer") {
     for (let row = 0; row < 3; row += 1) {
-      addFormationEnemy(row === 1 ? "spinner" : "dart", -12, 42 + row * 42, { vx: 38, shootDelay: 1.9 + row * .22 });
-      addFormationEnemy(row === 1 ? "spinner" : "dart", W + 12, 61 + row * 42, { vx: -38, shootDelay: 2.05 + row * .22 });
+      const pincerType = row === 1 && nativeType ? nativeType : row === 1 ? "spinner" : "dart";
+      addFormationEnemy(pincerType, -12, 42 + row * 42, { vx: 38, shootDelay: 1.9 + row * .22 });
+      addFormationEnemy(pincerType, W + 12, 61 + row * 42, { vx: -38, shootDelay: 2.05 + row * .22 });
     }
   } else if (event.pattern === "elite") {
-    addFormationEnemy(event.eliteType, W / 2, -22, { elite: true, shootDelay: 1.4 });
+    addFormationEnemy(nativeType || event.eliteType, W / 2, -22, { elite: true, shootDelay: 1.4 });
     const guardType = stage === 0 ? "scout" : stage === 1 ? "dart" : "mine";
     addFormationEnemy(guardType, W / 2 - 68, -42, { shootDelay: 2.4 });
     addFormationEnemy(guardType, W / 2 + 68, -42, { shootDelay: 2.6 });
@@ -2499,6 +3038,7 @@ function spawnStageEvent(event) {
     addFormationEnemy(guardType, W / 2 - spacing, -42 - reinforcement * 22, { shootDelay: 2.45 + reinforcement * .24 });
     addFormationEnemy(guardType, W / 2 + spacing, -42 - reinforcement * 22, { shootDelay: 2.65 + reinforcement * .24 });
   }
+  world.pendingFormation = null;
   world.stageEvent = { ...event, timer: 3.1, total: 3.1 };
   world.spawnTimer = Math.max(world.spawnTimer, 1.8);
   world.flash = Math.max(world.flash, .18);
@@ -2507,6 +3047,14 @@ function spawnStageEvent(event) {
 }
 
 function enterSector(sectorIndex) {
+  const key = `${world.stageIndex}:${sectorIndex}`;
+  if (!world.researchSectors.has(key)) {
+    world.researchSectors.add(key);
+    if (world.researchEffects.sectorEnergy > 0) {
+      addNovaCharge("encounter", world.researchEffects.sectorEnergy);
+      researchShield();
+    }
+  }
   world.sectorIndex = sectorIndex;
   world.globalSector = DIRECTOR.globalSector(world.stageIndex, sectorIndex);
   activateAnomaly(sectorIndex, { announce: true });
@@ -2516,30 +3064,100 @@ function enterSector(sectorIndex) {
   world.spawnTimer = Math.max(world.spawnTimer, 1.15);
 }
 
-function spawnEnemy() {
+function leastCrowdedFormationCenter() {
+  const lanes = [84, 162, 240, 318, 396];
+  const rotation = Math.floor(random() * lanes.length);
+  let bestCenter = lanes[rotation];
+  let bestCrowding = Number.POSITIVE_INFINITY;
+  for (let step = 0; step < lanes.length; step += 1) {
+    const center = lanes[(rotation + step) % lanes.length];
+    const crowding = world.enemies.reduce((score, enemy) => {
+      if (enemy.dead || enemy.boss || enemy.aiState === "retreat") return score;
+      const anchor = Number.isFinite(enemy.stationX) ? enemy.stationX : enemy.x;
+      const proximity = Math.max(0, 128 - Math.abs(anchor - center));
+      return score + proximity * proximity;
+    }, 0);
+    if (crowding < bestCrowding) {
+      bestCrowding = crowding;
+      bestCenter = center;
+    }
+  }
+  return bestCenter;
+}
+
+function rollAmbientElite(combat, progress) {
+  const liveElites = world.enemies.filter((enemy) => !enemy.dead && !enemy.boss && enemy.elite).length;
+  if (liveElites >= 1 + world.stageIndex) return false;
+  if (QA_FORCE_ELITE) return true;
+  const chance = COMBAT.ambientEliteChance({
+    stageIndex: world.stageIndex,
+    progress,
+    threatTier: world.threatTier,
+    beatId: combat.beat.id,
+  });
+  return random() < chance;
+}
+
+function spawnTacticalWing(maxMembers = 3) {
   const stage = activeStage();
-  const progress = world.stageTime / stage.duration;
+  const progress = clamp(world.stageTime / stage.duration, 0, 1);
+  const combat = COMBAT.curveFor(world.stageIndex, progress);
+  const formation = COMBAT.chooseFormation({ stageIndex: world.stageIndex, patternTier: combat.patternTier, random });
+  const formationId = ++world.formationSerial;
+  const targetIndex = formationId % 2;
+  const center = leastCrowdedFormationCenter();
+  const members = formation.members.slice(0, Math.max(1, maxMembers));
+  const eliteLeader = rollAmbientElite(combat, progress);
+  members.forEach(([type, offsetX, delay], index) => {
+    const memberType = index === 0 && stage.biome?.speciesId && !(world.stageIndex === 0 && progress < .25) ? stage.biome.speciesId : type;
+    const x = clamp(center + offsetX, 24, W - 24);
+    const enemy = makeEnemy(memberType, x, -16 - Math.abs(offsetX) * .12 - delay * 18, {
+      elite: eliteLeader && index === 0,
+      formationId,
+      formationOffsetX: offsetX,
+      formationDelay: delay,
+      squadTargetIndex: targetIndex,
+      stationX: x,
+    });
+    world.enemies.push(enemy);
+  });
+  if (eliteLeader) {
+    world.ambientEliteSpawns += 1;
+    audio.sfx("elite");
+  }
+  world.activeFormations.add(formationId);
+  world.lastFormationId = formation.id;
+  return members.length;
+}
+
+function spawnEnemy(maxMembers = 1) {
+  const stage = activeStage();
+  const progress = clamp(world.stageTime / stage.duration, 0, 1);
+  const combat = COMBAT.curveFor(world.stageIndex, progress);
+  if (!QA_HULL_ID && maxMembers > 1 && random() < combat.wingChance) return spawnTacticalWing(maxMembers);
   const type = QA_HULL_ID || SpaceExpedition.chooseEnemyHull({ stageIndex: world.stageIndex, progress, biome: stage.biome, random });
+  const elite = rollAmbientElite(combat, progress);
 
   if (progress > 0.35 && random() < 0.08 + world.stageIndex * 0.035) {
     const side = random() < 0.5 ? -12 : W + 12;
-    const enemy = makeEnemy(type, side, rand(45, 130));
+    const enemy = makeEnemy(type, side, rand(45, 130), { elite });
     enemy.vx = side < 0 ? rand(25, 45) : rand(-45, -25);
     world.enemies.push(enemy);
   } else {
-    world.enemies.push(makeEnemy(type));
+    world.enemies.push(makeEnemy(type, undefined, undefined, { elite }));
   }
+  if (elite) {
+    world.ambientEliteSpawns += 1;
+    audio.sfx("elite");
+  }
+  return 1;
 }
 
 function spawnBoss() {
   if (world.activeEncounter) finishEncounter(false);
-  const baseHealth = [340, 500, 700][world.stageIndex];
+  const baseHealth = [420, 640, 920][world.stageIndex];
   const stage = activeStage();
   const health = (QA_BOSS_STATE_MODE ? baseHealth * 100 : QA_FAST_MODE ? baseHealth * .14 : baseHealth) * (world.contract?.enemyHp || 1) * (stage.biome?.enemyHp || 1) * (world.activeBranch?.enemyHp || 1);
-  for (const enemy of world.enemies) {
-    if (!enemy.dead) burst(enemy.x, enemy.y, stage.accent, enemy.elite ? 18 : 6, 55);
-  }
-  world.enemies = [];
   world.boss = {
     id: ++world.enemySerial,
     type: `boss${world.stageIndex + 1}`,
@@ -2550,7 +3168,8 @@ function spawnBoss() {
     vy: 0,
     hp: health,
     maxHp: health,
-    r: [30, 34, 40][world.stageIndex],
+    r: [28, 32, 37][world.stageIndex],
+    bodyRadius: [28, 32, 37][world.stageIndex],
     score: 5000 * (world.stageIndex + 1),
     age: 0,
     shootTimer: 1.5,
@@ -2562,7 +3181,9 @@ function spawnBoss() {
     attackIndex: 0,
     attackCharge: 0,
     attackTargetX: W / 2,
-    phaseLevel: 1,
+    attackTargetY: H - 48,
+    attackTargetIndex: null,
+    phaseLevel: QA_BOSS_STATE_MODE ? QA_BOSS_PHASE : 1,
     phaseShield: QA_FAST_MODE ? .45 : 2.2,
     hitFlash: 0,
     seed: 0,
@@ -2571,6 +3192,7 @@ function spawnBoss() {
   world.enemies.push(world.boss);
   world.bossSpawned = true;
   world.enemyBullets = [];
+  world.enemyBeams = [];
   world.stageEvent = null;
   world.cinematic = { type: "boss", timer: 2.4, total: 2.4 };
   world.flash = 0.7;
@@ -2589,27 +3211,44 @@ function enterBossPhase(boss, nextPhase) {
   boss.attackTimer = QA_FAST_MODE ? .32 : .9;
   boss.attackCharge = 0;
   world.enemyBullets = [];
+  world.enemyBeams = [];
   world.flash = Math.max(world.flash, .62);
   world.shake = Math.max(world.shake, .52);
   world.cinematic = { type: "phase", timer: 1.1, total: 1.1 };
   burst(boss.x, boss.y, activeStage().accent, 42, 120);
+  addNovaCharge("bossPhase", 5);
   addRushCharge("bossPhase");
   audio.sfx("bossPhase");
   showToast(`${t("hud.phaseTitle", { phase: nextPhase })} // ${bossPhaseText(world.stageIndex, nextPhase)}`);
 }
 
-function enemyBullet(x, y, vx, vy, color = "#ff7d8b", size = 3, source = null) {
+function enemyBullet(x, y, vx, vy, color = "#ff7d8b", size = 3, source = null, options = {}) {
   const stage = activeStage();
   const progress = world.stageTime / stage.duration;
-  const branchSpeed = world.stageIndex === 0 && progress < .4
+  const combat = COMBAT.curveFor(world.stageIndex, progress);
+  const budgetClass = options.budgetClass || (source?.boss ? "boss" : source?.dead && source?.deathrattle ? "deathrattle" : "ordinary");
+  const budgetBonus = budgetClass === "boss" ? 34 : budgetClass === "deathrattle" ? 12 : 0;
+  const bulletCap = combat.bulletCap + budgetBonus;
+  if (world.enemyBullets.filter((bullet) => !bullet.dead).length >= bulletCap) return null;
+  const branchSpeed = world.stageIndex === 0 && progress < .08
     ? Math.min(1, world.activeBranch?.bulletSpeed || 1)
     : world.activeBranch?.bulletSpeed || 1;
-  const speedMultiplier = (world.contract?.bulletSpeed || 1) * (stage.biome?.bulletSpeed || 1) * branchSpeed * threatConfig().bulletSpeed * anomalyConfig().enemyBulletSpeed;
-  world.enemyBullets.push({
-    x,
-    y,
-    vx: vx * speedMultiplier,
-    vy: vy * speedMultiplier,
+  const biomeSpeed = world.stageIndex === 0 && progress < .08
+    ? Math.min(1, stage.biome?.bulletSpeed || 1)
+    : stage.biome?.bulletSpeed || 1;
+  const tacticalSpeed = source?.boss ? 1 : combat.bulletSpeed;
+  const speedMultiplier = (world.contract?.bulletSpeed || 1) * biomeSpeed * branchSpeed * threatConfig().bulletSpeed * anomalyConfig().enemyBulletSpeed * tacticalSpeed;
+  const finiteInput = [x, y, vx, vy].every(Number.isFinite);
+  if (!finiteInput) world.combatInvalidProjectiles += 1;
+  const safeX = Number.isFinite(x) ? x : W / 2;
+  const safeY = Number.isFinite(y) ? y : 0;
+  const safeVx = Number.isFinite(vx) ? vx : 0;
+  const safeVy = Number.isFinite(vy) ? vy : 62;
+  const bullet = {
+    x: safeX,
+    y: safeY,
+    vx: safeVx * speedMultiplier,
+    vy: safeVy * speedMultiplier,
     r: size,
     color: source?.debuff ? source.payloadColor : color,
     age: 0,
@@ -2622,31 +3261,383 @@ function enemyBullet(x, y, vx, vy, color = "#ff7d8b", size = 3, source = null) {
     payloadColor: source?.payloadColor || color,
     bossStage: source?.boss ? world.stageIndex : null,
     bossPhase: source?.boss ? source.phaseLevel : 0,
-  });
+    behavior: options.behavior || "linear",
+    pattern: options.pattern || source?.attackPattern || "linear",
+    curve: (options.curve || 0) * (source?.elite ? 1.12 : 1),
+    homing: options.homing || 0,
+    homingDuration: options.homingDuration || 0,
+    targetIndex: Number.isInteger(options.targetIndex) ? options.targetIndex : source?.squadTargetIndex,
+    triggerAge: options.triggerAge || 0,
+    burstCount: options.burstCount || 0,
+    burstSpeed: (options.burstSpeed || 0) * speedMultiplier,
+    baseSpeed: Math.hypot(safeVx, safeVy) * speedMultiplier,
+    damage: Math.max(1, Number(options.damage) || 1),
+    blastRadius: Math.max(0, Number(options.blastRadius) || 0),
+    blastDamage: Math.max(0, Number(options.blastDamage) || 0),
+    enemyBlastDamage: Math.max(0, Number(options.enemyBlastDamage) || 0),
+    anchored: Boolean(options.anchored),
+    sourceId: source?.id || 0,
+    budgetClass,
+    budgetBonus,
+  };
+  world.enemyBullets.push(bullet);
+  return bullet;
 }
 
-function fireAimed(enemy, speed = 62, count = 1, spread = 0.12, color) {
+function enemyBeam(source, target, options = {}) {
+  if (!source || world.enemyBeams.length >= 12) return null;
+  const finiteInput = [source.x, source.y, source.r, target?.x, target?.y].every(Number.isFinite);
+  if (!finiteInput) world.combatInvalidProjectiles += 1;
+  const startX = Number.isFinite(source.x) ? source.x : W / 2;
+  const startY = (Number.isFinite(source.y) ? source.y : 0) + (Number.isFinite(source.r) ? source.r : 4) * .45;
+  const targetX = Number.isFinite(target?.x) ? target.x : W / 2;
+  const targetY = Number.isFinite(target?.y) ? target.y : H - 42;
+  const angle = Math.atan2(targetY - startY, targetX - startX) + (options.angleOffset || 0);
+  const reach = Math.hypot(W, H) * 1.45;
+  const beam = {
+    x1: startX,
+    y1: startY,
+    x2: startX + Math.cos(angle) * reach,
+    y2: startY + Math.sin(angle) * reach,
+    age: 0,
+    duration: options.duration || .34,
+    width: options.width || 5,
+    damage: options.damage || (source.boss ? 2 : source.elite ? 2 : 1),
+    color: options.color || (source.boss ? activeStage().accent : "#ffdf68"),
+    pattern: options.pattern || source.attackPattern || "laserLance",
+    sourceId: source.id,
+    bossStage: source.boss ? world.stageIndex : null,
+    debuff: source.debuff || "",
+    debuffDuration: source.debuffDuration || 0,
+    debuffIntensity: source.debuffIntensity || 0,
+    payloadColor: source.payloadColor || options.color || "#ffdf68",
+    hitIds: [],
+    dead: false,
+  };
+  world.enemyBeams.push(beam);
+  return beam;
+}
+
+function fireAimed(enemy, speed = 62, count = 1, spread = 0.12, color, options = {}) {
   const finalSpeed = speed * (enemy.weaponBulletSpeed || 1);
   const finalCount = count + (enemy.weaponExtraShots || 0);
   const finalSpread = spread * (enemy.weaponSpread || 1) * threatConfig().aimSpread;
   for (let i = 0; i < finalCount; i += 1) {
     const offset = (i - (finalCount - 1) / 2) * finalSpread;
-    const velocity = aimedVelocity(enemy, finalSpeed);
+    const velocity = aimedVelocity(enemy, finalSpeed, 0, options.target || null);
     const angle = Math.atan2(velocity.vy, velocity.vx) + offset;
-    enemyBullet(enemy.x, enemy.y + enemy.r * 0.5, Math.cos(angle) * finalSpeed, Math.sin(angle) * finalSpeed, color, enemy.weaponModule === "sniper" ? 2.25 : 3, enemy);
+    enemyBullet(enemy.x, enemy.y + enemy.r * 0.5, Math.cos(angle) * finalSpeed, Math.sin(angle) * finalSpeed, color, enemy.weaponModule === "sniper" ? 2.25 : 3, enemy, options);
   }
   const sound = enemy.weaponModule === "twin" ? "enemyTwin" : enemy.weaponModule === "sniper" ? "enemySniper" : "enemyShoot";
   audio.sfx(sound);
 }
 
-function fireRing(enemy, count, speed, phase = 0, color = "#ff6b8c") {
+function fireRing(enemy, count, speed, phase = 0, color = "#ff6b8c", options = {}) {
   const finalSpeed = speed * (enemy.weaponBulletSpeed || 1);
   const finalCount = count + (enemy.weaponRingBonus || 0);
   for (let i = 0; i < finalCount; i += 1) {
     const angle = phase + (i / finalCount) * TAU;
-    enemyBullet(enemy.x, enemy.y, Math.cos(angle) * finalSpeed, Math.sin(angle) * finalSpeed, color, 2.5, enemy);
+    enemyBullet(enemy.x, enemy.y, Math.cos(angle) * finalSpeed, Math.sin(angle) * finalSpeed, color, 2.5, enemy, options);
   }
   audio.sfx(enemy.weaponModule === "orbit" ? "enemyOrbit" : "enemyShoot");
+}
+
+function lockedAttackTarget(enemy) {
+  return {
+    x: Number.isFinite(enemy.attackTargetX) ? enemy.attackTargetX : W / 2,
+    y: Number.isFinite(enemy.attackTargetY) ? enemy.attackTargetY : H - 42,
+    vx: 0,
+    vy: 0,
+    index: Number.isInteger(enemy.attackTargetIndex) ? enemy.attackTargetIndex : undefined,
+  };
+}
+
+function fireLaneWall(enemy, speed, pattern = "laneWall") {
+  const targetX = enemy.attackTargetX || W / 2;
+  const spacing = 34;
+  const finalSpeed = speed * (enemy.weaponBulletSpeed || 1);
+  for (let x = 18; x <= W - 18; x += spacing) {
+    if (Math.abs(x - targetX) < 39) continue;
+    enemyBullet(x, enemy.y + enemy.r * .45, (x - W / 2) * .018, finalSpeed, "#ff6f72", 2.7, enemy, { pattern });
+  }
+  audio.sfx("enemyTwin");
+}
+
+function firePincer(enemy, speed, pattern = "pincer") {
+  const target = lockedAttackTarget(enemy);
+  const finalSpeed = speed * (enemy.weaponBulletSpeed || 1);
+  for (const side of [-1, 1]) {
+    const origin = { ...enemy, x: side < 0 ? 12 : W - 12, y: clamp(enemy.y + 22, 58, 132) };
+    const velocity = aimedVelocity(origin, finalSpeed, 0, target);
+    for (let lane = -1; lane <= 1; lane += 1) {
+      const angle = Math.atan2(velocity.vy, velocity.vx) + lane * .12;
+      enemyBullet(origin.x, origin.y + lane * 8, Math.cos(angle) * finalSpeed, Math.sin(angle) * finalSpeed, side < 0 ? "#ff668c" : "#b86cff", 2.5, enemy, { pattern, behavior: "curve", curve: side * -.18 });
+    }
+  }
+  audio.sfx("enemyTwin");
+}
+
+function fireSeedMine(enemy, cluster = false) {
+  const count = cluster ? 3 : 1;
+  const target = lockedAttackTarget(enemy);
+  for (let index = 0; index < count; index += 1) {
+    const finalSpeed = (48 + index * 3) * (enemy.weaponBulletSpeed || 1);
+    const velocity = aimedVelocity(enemy, finalSpeed, 0, target);
+    const angle = Math.atan2(velocity.vy, velocity.vx) + (index - (count - 1) / 2) * .26;
+    enemyBullet(enemy.x, enemy.y + enemy.r * .4, Math.cos(angle) * finalSpeed, Math.sin(angle) * finalSpeed, "#ff5470", 3.2, enemy, {
+      pattern: cluster ? "seedCluster" : "seedMine",
+      behavior: "mine",
+      triggerAge: 1.05 + index * .16,
+      burstCount: cluster ? 6 : 7,
+      burstSpeed: cluster ? 55 : 62,
+    });
+  }
+  audio.sfx("enemyOrbit");
+}
+
+function fireHunterSeeker(enemy, cluster = false, pattern = "hunterSeeker") {
+  const target = lockedAttackTarget(enemy);
+  const academy = world.stageIndex === 0;
+  fireAimed(enemy, academy ? (cluster ? 88 : 96) : cluster ? 96 : 104, academy ? (cluster ? 2 : 1) : cluster ? 3 : 2, cluster ? .14 : .08, "#ff5fa2", {
+    target,
+    pattern,
+    behavior: "homing",
+    homing: academy ? 1.55 : cluster ? 2.05 : 2.35,
+    homingDuration: academy ? (cluster ? 1.45 : 1.7) : cluster ? 2.7 : 3.15,
+    targetIndex: target.index,
+  });
+}
+
+function fireBlastSeed(enemy, cluster = false, pattern = "blastSeed") {
+  const target = lockedAttackTarget(enemy);
+  const count = cluster ? 3 : 1;
+  for (let index = 0; index < count; index += 1) {
+    const speed = (56 + world.stageIndex * 6 + index * 2) * (enemy.weaponBulletSpeed || 1);
+    const velocity = aimedVelocity(enemy, speed, 0, target);
+    const angle = Math.atan2(velocity.vy, velocity.vx) + (index - (count - 1) / 2) * .18;
+    const blastRadius = cluster ? 34 : 42;
+    const travelDistance = Math.hypot(target.x - enemy.x, target.y - (enemy.y + enemy.r * .45));
+    const projectile = enemyBullet(enemy.x, enemy.y + enemy.r * .45, Math.cos(angle) * speed, Math.sin(angle) * speed, "#ff7a4f", 3.6, enemy, {
+      pattern,
+      behavior: "blast",
+      blastRadius,
+      blastDamage: enemy.elite ? 3 : 2,
+      burstCount: cluster ? 8 : 10,
+      burstSpeed: cluster ? 58 : 64,
+      targetIndex: target.index,
+    });
+    if (projectile) projectile.triggerAge = clamp((travelDistance - blastRadius * .58) / Math.max(1, projectile.baseSpeed), .52, 2.55) + index * .05;
+  }
+  audio.sfx("enemyOrbit");
+}
+
+function fireLaser(enemy, sweep = false, pattern = "laserLance") {
+  const target = lockedAttackTarget(enemy);
+  const offsets = sweep ? [-.12, .12] : [0];
+  for (const angleOffset of offsets) enemyBeam(enemy, target, {
+    pattern,
+    angleOffset,
+    width: sweep ? 4.6 : enemy.elite ? 7 : 5.4,
+    damage: enemy.elite ? 3 : 2,
+    duration: sweep ? .42 : .32,
+    color: sweep ? "#ff72d4" : "#ffe070",
+  });
+  audio.sfx("enemySniper");
+}
+
+function executeEnemyPattern(enemy) {
+  const stage = world.stageIndex;
+  const progress = clamp(world.stageTime / activeStage().duration, 0, 1);
+  const combat = COMBAT.curveFor(stage, progress);
+  const pattern = enemy.attackPattern || COMBAT.patternFor({ role: enemy.hullRole, weaponId: enemy.weaponModule, weaponPattern: enemy.weaponPattern, speciesPattern: enemy.speciesPattern, patternTier: combat.patternTier, cycle: enemy.attackCycle, elite: enemy.elite });
+  const target = lockedAttackTarget(enemy);
+  const tier = combat.patternTier;
+  world.combatPatterns.add(pattern);
+  enemy.attackCycle += 1;
+  if (pattern === "snapBurst") {
+    fireAimed(enemy, 62 + stage * 8, tier >= 3 ? 2 : 1, .08, "#ff8aa3", { target, targetIndex: target.index, pattern, behavior: tier >= 3 ? "homing" : "linear", homing: .82, homingDuration: .72 });
+  } else if (pattern === "twinBurst") {
+    fireAimed(enemy, 68 + stage * 8, 2, .12, "#ffc45e", { target, pattern });
+  } else if (pattern === "predictiveFan") {
+    fireAimed(enemy, 70 + stage * 9, 3 + Math.floor(tier / 3), .16, "#ff936b", { target, pattern });
+  } else if (pattern === "sweep") {
+    fireAimed(enemy, 66 + stage * 8, 5, .2, "#ff6f88", { target, pattern, behavior: "curve", curve: Math.sin(enemy.seed) * .2 });
+  } else if (pattern === "lance" || pattern === "twinLance") {
+    fireAimed(enemy, 108 + stage * 12, pattern === "twinLance" ? 2 : 1, .055, "#ffcf62", { target, pattern, behavior: "brake", damage: enemy.elite ? 3 : 2 });
+  } else if (pattern === "laserLance" || pattern === "laserSweep") {
+    fireLaser(enemy, pattern === "laserSweep", pattern);
+  } else if (pattern === "hunterSeeker") {
+    fireHunterSeeker(enemy, tier >= 4, pattern);
+  } else if (pattern === "blastSeed" || pattern === "proximityBloom") {
+    fireBlastSeed(enemy, pattern === "proximityBloom", pattern);
+  } else if (pattern === "ramCharge") {
+    enemy.aiStateDuration = enemy.elite ? 1.05 : .86;
+    enemy.aiStateTimer = enemy.aiStateDuration;
+    audio.sfx("enemyCharge");
+  } else if (pattern === "heavyFan") {
+    fireAimed(enemy, 64 + stage * 7, 4, .2, "#ff6f63", { target, pattern });
+  } else if (pattern === "laneWall") {
+    fireLaneWall(enemy, 60 + stage * 8, pattern);
+  } else if (pattern === "spiral") {
+    fireRing(enemy, 7 + stage * 2, 52 + stage * 6, enemy.age * .72, "#b58aff", { pattern, behavior: "curve", curve: .34 });
+  } else if (pattern === "counterSpiral") {
+    fireRing(enemy, 6 + stage, 50 + stage * 6, enemy.age * .6, "#b58aff", { pattern, behavior: "curve", curve: .44 });
+    fireRing(enemy, 6 + stage, 61 + stage * 6, -enemy.age * .5 + .2, "#ff668c", { pattern, behavior: "curve", curve: -.4 });
+  } else if (pattern === "pincer") {
+    firePincer(enemy, 70 + stage * 8, pattern);
+  } else if (pattern === "seedMine" || pattern === "seedCluster") {
+    fireSeedMine(enemy, pattern === "seedCluster");
+  } else if (pattern === "commandSalvo") {
+    fireAimed(enemy, 72 + stage * 8, 3, .13, "#ffe16c", { target, pattern });
+    fireRing(enemy, 5 + stage, 48 + stage * 5, enemy.age * .28, "#ff87d7", { pattern });
+  } else if (pattern === "commandCross") {
+    fireLaneWall(enemy, 64 + stage * 8, pattern);
+    firePincer(enemy, 68 + stage * 7, pattern);
+  } else if (pattern === "eliteHalo") {
+    fireRing(enemy, 8 + stage * 2, 56 + stage * 7, enemy.age * .34, activeStage().accent, { pattern, behavior: "curve", curve: .28, damage: 2 });
+  } else if (pattern === "eliteCross") {
+    firePincer(enemy, 74 + stage * 8, pattern);
+    fireAimed(enemy, 78 + stage * 8, 3, .16, "#fff0a0", { target, pattern, damage: 2 });
+  }
+  world.shake = Math.max(world.shake, enemy.elite ? .24 : .08);
+}
+
+function setEnemyState(enemy, state) {
+  enemy.aiState = state;
+  enemy.attackState = state;
+  enemy.aiStateAge = 0;
+  const combat = COMBAT.curveFor(world.stageIndex, clamp(world.stageTime / activeStage().duration, 0, 1));
+  const fireCompression = state === "position" || state === "recover"
+    ? Math.max(.52, (enemy.weaponCooldown || 1) / (threatConfig().fireRate * anomalyConfig().enemyFireRate * combat.fireRate))
+    : 1;
+  enemy.aiStateDuration = state === "retreat"
+    ? 3
+    : COMBAT.stateDuration(enemy.hullRole, state, world.stageIndex, enemy.elite, enemy.seed + enemy.attackCycle) * fireCompression;
+  enemy.aiStateTimer = enemy.aiStateDuration;
+  enemy.attackCharge = 0;
+  world.combatStateTransitions += 1;
+  if (state === "telegraph") {
+    if (world.stageIndex > 0) {
+      const activeAttackers = world.enemies.filter((other) => other !== enemy && !other.dead && !other.boss
+        && ["telegraph", "attack"].includes(other.aiState)).length;
+      const attackSlots = combat.beat.id === "release" || world.growthGrace > 0 || world.boss ? 2 : 4;
+      if (activeAttackers >= attackSlots) {
+        world.pressureHolds += 1;
+        setEnemyState(enemy, "recover");
+        return;
+      }
+    }
+    const target = enemyTarget(enemy);
+    enemy.attackTargetX = target.x + (target.vx || 0) * ((enemy.aiLead || 0) + COMBAT.doctrineFor(enemy.hullRole).aimLead);
+    enemy.attackTargetY = target.y + (target.vy || 0) * ((enemy.aiLead || 0) + COMBAT.doctrineFor(enemy.hullRole).aimLead);
+    enemy.attackTargetIndex = Number.isInteger(target.index) ? target.index : null;
+    enemy.attackPattern = COMBAT.patternFor({ role: enemy.hullRole, weaponId: enemy.weaponModule, weaponPattern: enemy.weaponPattern, speciesPattern: enemy.speciesPattern, patternTier: combat.patternTier, cycle: enemy.attackCycle, elite: enemy.elite });
+    const highRisk = (pattern) => ["laserLance", "laserSweep", "ramCharge", "blastSeed", "proximityBloom"].includes(pattern);
+    if (highRisk(enemy.attackPattern)) {
+      const reserved = new Set(world.enemies.filter((other) => other !== enemy && !other.dead && !other.boss
+        && ["telegraph", "attack"].includes(other.aiState) && highRisk(other.attackPattern)).map((other) => other.id));
+      for (const beam of world.enemyBeams) if (!beam.dead) reserved.add(beam.sourceId);
+      for (const bullet of world.enemyBullets) if (!bullet.dead && bullet.behavior === "blast") reserved.add(bullet.sourceId);
+      const allowance = combat.beat.id === "release" || world.growthGrace > 0 || world.boss ? 1 : 2;
+      if (reserved.size >= allowance) {
+        world.pressureHolds += 1;
+        setEnemyState(enemy, "recover");
+        return;
+      }
+    }
+    if (enemy.attackPattern === "laserLance") enemy.aiStateDuration = Math.max(enemy.aiStateDuration, 1.12);
+    else if (enemy.attackPattern === "laserSweep") enemy.aiStateDuration = Math.max(enemy.aiStateDuration, 1.28);
+    if (enemy.attackPattern === "ramCharge") {
+      const dx = enemy.attackTargetX - enemy.x;
+      const dy = enemy.attackTargetY - enemy.y;
+      const range = Math.max(1, Math.hypot(dx, dy));
+      enemy.attackEndX = clamp(enemy.attackTargetX + dx / range * 48, 12, W - 12);
+      enemy.attackEndY = clamp(enemy.attackTargetY + dy / range * 48, 18, H + 24);
+    }
+    enemy.aiStateTimer = enemy.aiStateDuration;
+    world.combatTelegraphs += 1;
+    audio.sfx("enemyCharge");
+  } else if (state === "attack") {
+    executeEnemyPattern(enemy);
+  }
+}
+
+function advanceEnemyState(enemy, canFire) {
+  let next = COMBAT.nextState(enemy.hullRole, enemy.aiState);
+  if (next === "telegraph" && !canFire) next = "position";
+  setEnemyState(enemy, next);
+}
+
+function updateEnemyTactics(enemy, dt, canFire) {
+  const doctrine = COMBAT.doctrineFor(enemy.hullRole);
+  const target = enemyTarget(enemy);
+  const flankSide = Math.sin(enemy.seed * 2.17) >= 0 ? 1 : -1;
+  const formationBias = enemy.formationId ? enemy.formationOffsetX * .52 : 0;
+  let desiredX = lerp(enemy.stationX, target.x + formationBias, enemy.formationId ? .34 : .68);
+  const currentRange = Math.hypot(target.x - enemy.x, target.y - enemy.y);
+  const desiredDepth = clamp(target.y - doctrine.engagementRange + enemy.stationYBias, 24, H - 72);
+  const depthSettled = Math.abs(enemy.y - desiredDepth) <= doctrine.rangeBand * .35;
+  let desiredY = depthSettled ? enemy.y : desiredDepth;
+  if (currentRange < doctrine.engagementRange - doctrine.rangeBand) {
+    const retreat = doctrine.engagementRange - doctrine.rangeBand - currentRange;
+    desiredX += Math.sign(enemy.x - target.x || flankSide) * Math.min(doctrine.rangeBand, retreat * .38);
+    desiredY -= Math.min(doctrine.rangeBand, retreat * .42);
+  } else if (currentRange > doctrine.engagementRange + doctrine.rangeBand) {
+    desiredY += Math.min(doctrine.rangeBand * .7, (currentRange - doctrine.engagementRange) * .16);
+  }
+  desiredY = clamp(desiredY, 24, H - 72);
+  enemy.engagementRange = doctrine.engagementRange;
+  enemy.rangeError = currentRange - doctrine.engagementRange;
+  const weaveAmplitude = Math.max(0, (enemy.moveSway || 1) - 1) * 34;
+  desiredX += Math.sin(enemy.age * (1.35 + (enemy.moveSway || 1) * .22) + enemy.seed) * weaveAmplitude;
+  if (enemy.hullRole === "flanker") desiredX = target.x + flankSide * doctrine.lateral;
+  else if (enemy.hullRole === "striker") desiredX += Math.sin(enemy.age * 1.8 + enemy.seed) * doctrine.lateral * .38;
+  else if (enemy.hullRole === "artillery") desiredX += Math.sin(enemy.age * .72 + enemy.seed) * doctrine.lateral;
+  if (enemy.aiModule === "pack") {
+    const packmates = world.enemies.filter((other) => !other.dead && other !== enemy && other.aiModule === "pack" && other.packId === enemy.packId);
+    const rank = packmates.filter((other) => other.id < enemy.id).length - packmates.length * .5;
+    desiredX = target.x + clamp(rank * 24 + flankSide * 18, -76, 76);
+    const attackingPackmate = packmates.find((other) => other.aiState === "telegraph" || other.aiState === "attack");
+    if (attackingPackmate && enemy.aiState === "position") enemy.aiStateTimer = Math.min(enemy.aiStateTimer, .16 + Math.abs(rank) * .05);
+  } else if (enemy.aiModule === "ambusher" && enemy.aiState !== "attack") {
+    desiredX = flankSide < 0 ? 24 : W - 24;
+  }
+  desiredX = clamp(desiredX, 20, W - 20);
+
+  enemy.aiStateTimer -= dt;
+  enemy.aiStateAge += dt;
+  if (enemy.aiState === "entry") {
+    enemy.y += doctrine.entrySpeed * (enemy.moveSpeed || 1) * dt;
+    enemy.x = lerp(enemy.x, desiredX, 1 - Math.exp(-dt * 2.4));
+  } else if (enemy.aiState === "position" || enemy.aiState === "recover" || enemy.aiState === "telegraph") {
+    const hold = enemy.aiState === "telegraph" ? .48 : 1;
+    enemy.vx *= Math.exp(-dt * 3.2);
+    enemy.y = lerp(enemy.y, desiredY + Math.sin(enemy.age * 1.1 + enemy.seed) * 5, 1 - Math.exp(-dt * 2.2 * hold));
+    enemy.x = lerp(enemy.x, desiredX, 1 - Math.exp(-dt * (1.8 + enemy.aiSteer * 1.8) * hold));
+    if (enemy.aiState !== "telegraph") updateEnemyIntelligence(enemy, dt);
+  } else if (enemy.aiState === "attack") {
+    if (enemy.attackPattern === "ramCharge") {
+      const dx = (enemy.attackEndX ?? enemy.attackTargetX) - enemy.x;
+      const dy = (enemy.attackEndY ?? enemy.attackTargetY) - enemy.y;
+      const range = Math.max(1, Math.hypot(dx, dy));
+      const speed = (enemy.elite ? 188 : 158) * (enemy.moveSpeed || 1);
+      enemy.x += dx / range * speed * dt;
+      enemy.y += dy / range * speed * dt;
+    } else if (["striker", "flanker", "interceptor"].includes(enemy.hullRole)) {
+      enemy.y += doctrine.entrySpeed * .66 * (enemy.moveSpeed || 1) * dt;
+      const attackX = enemy.aiModule === "ambusher" ? target.x - flankSide * 18 : target.x + flankSide * doctrine.lateral * .35;
+      enemy.x = lerp(enemy.x, attackX, 1 - Math.exp(-dt * (enemy.aiModule === "ambusher" ? 5.2 : 3.4)));
+    }
+  } else if (enemy.aiState === "breakaway") {
+    const orbitY = clamp(doctrine.stationY + enemy.stationYBias + 34, 48, H - 82);
+    enemy.y = lerp(enemy.y, orbitY, 1 - Math.exp(-dt * 2.8));
+    enemy.x += flankSide * doctrine.lateral * .72 * dt;
+  }
+
+  if (enemy.aiState === "telegraph") enemy.attackCharge = clamp(1 - enemy.aiStateTimer / Math.max(.01, enemy.aiStateDuration), 0, 1);
+  if (enemy.aiStateTimer <= 0) advanceEnemyState(enemy, canFire);
+  enemy.x = clamp(enemy.x, enemy.aiState === "entry" ? -32 : 16, enemy.aiState === "entry" ? W + 32 : W - 16);
+  if (enemy.aiState !== "entry") enemy.y = clamp(enemy.y, 24, H - 58);
 }
 
 function beginBossAttack(boss, stage) {
@@ -2657,7 +3648,10 @@ function beginBossAttack(boss, stage) {
   boss.attackDuration = (BOSS_ATTACK_TELEGRAPH[boss.attackId] || .8) * (QA_FAST_MODE ? .52 : 1);
   boss.attackTimer = boss.attackDuration;
   boss.attackCharge = 0;
-  boss.attackTargetX = enemyTarget(boss).x;
+  const target = enemyTarget(boss);
+  boss.attackTargetX = target.x;
+  boss.attackTargetY = target.y;
+  boss.attackTargetIndex = Number.isInteger(target.index) ? target.index : null;
   audio.sfx("bossCharge");
 }
 
@@ -2665,33 +3659,33 @@ function executeBossAttack(boss, stage) {
   const phase = boss.phaseLevel;
   const id = boss.attackId;
   if (id === "petalBurst") {
-    fireRing(boss, 7 + phase * 2, 31 + phase * 4, boss.age * .42, "#ff72ac");
+    fireRing(boss, 7 + phase * 2, 58 + phase * 7, boss.age * .42, "#ff72ac", { pattern: "boss:petalBurst" });
   } else if (id === "sunLance") {
-    fireAimed(boss, 42 + phase * 3, 1 + phase, .13, "#ffd166");
+    fireLaser(boss, phase >= 3, "boss:sunLance");
   } else if (id === "seedSpiral") {
-    fireRing(boss, 8 + phase * 2, 29 + phase * 3, boss.age * .68, "#ff9dcc");
-    fireRing(boss, 5 + phase, 39, -boss.age * .42, "#ffca58");
+    fireRing(boss, 8 + phase * 2, 54 + phase * 6, boss.age * .68, "#ff9dcc", { pattern: "boss:seedSpiral" });
+    fireRing(boss, 5 + phase, 72, -boss.age * .42, "#ffca58", { pattern: "boss:seedSpiral" });
   } else if (id === "twinBloom") {
-    fireRing(boss, 10, 35, boss.age * .4, "#ff72ac");
-    fireRing(boss, 10, 35, boss.age * .4 + Math.PI / 10, "#ffca58");
+    fireBlastSeed(boss, true, "boss:twinBloom");
   } else if (id === "railWall") {
-    for (let lane = -2; lane <= 2; lane += 1) enemyBullet(boss.x + lane * 12, boss.y + 14, lane * 3, 38 + Math.abs(lane) * 2, "#70eaff", 2.7, boss);
+    for (let lane = -1; lane <= 1; lane += 1) enemyBeam({ ...boss, x: boss.x + lane * 28 }, { x: boss.attackTargetX + lane * 92, y: H + 20 }, { pattern: "boss:railWall", width: 5.8, damage: phase >= 3 ? 3 : 2, duration: .38, color: lane ? "#70eaff" : "#ffe16c" });
   } else if (id === "thunderFan") {
-    fireAimed(boss, 46 + phase * 2, 2 + phase, .16, "#ffe16c");
+    fireAimed(boss, 82 + phase * 8, 2 + phase, .16, "#ffe16c", { damage: phase >= 3 ? 2 : 1, pattern: "boss:thunderFan" });
   } else if (id === "forgeCross") {
-    fireRing(boss, 6 + phase * 2, 33 + phase * 3, Math.PI / 4, "#70eaff");
-    fireAimed(boss, 45, 2, .12, "#ffe16c");
+    fireRing(boss, 6 + phase * 2, 62 + phase * 7, Math.PI / 4, "#70eaff", { pattern: "boss:forgeCross" });
+    fireAimed(boss, 84, 2, .12, "#ffe16c", { pattern: "boss:forgeCross" });
   } else if (id === "doubleRail") {
-    for (const side of [-1, 1]) for (let lane = -1; lane <= 1; lane += 1) enemyBullet(boss.x + side * 22 + lane * 7, boss.y + 16, side * 5 + lane * 2, 46, side > 0 ? "#ffe16c" : "#70eaff", 3, boss);
+    for (const side of [-1, 1]) enemyBeam({ ...boss, x: boss.x + side * 24 }, { x: boss.attackTargetX + side * 34, y: H + 16 }, { pattern: "boss:doubleRail", width: 7.2, damage: 3, duration: .46, color: side > 0 ? "#ffe16c" : "#70eaff" });
   } else if (id === "spiralCrown") {
-    fireRing(boss, 9 + phase * 3, 31 + phase * 4, -boss.age * .62, "#c183ff");
+    fireRing(boss, 9 + phase * 3, 58 + phase * 7, -boss.age * .62, "#c183ff", { pattern: "boss:spiralCrown" });
   } else if (id === "voidPincer") {
-    fireAimed(boss, 45 + phase * 2, 2 + phase, .2, "#ff4f70");
+    fireHunterSeeker(boss, true, "boss:voidPincer");
   } else if (id === "eclipseTwin") {
-    fireRing(boss, 8 + phase * 2, 34, boss.age * .36, "#c183ff");
-    fireRing(boss, 7 + phase, 43, -boss.age * .28, "#ff4f70");
+    fireRing(boss, 8 + phase * 2, 62, boss.age * .36, "#c183ff", { pattern: "boss:eclipseTwin" });
+    fireRing(boss, 7 + phase, 78, -boss.age * .28, "#ff4f70", { pattern: "boss:eclipseTwin", damage: phase >= 3 ? 2 : 1 });
   } else if (id === "tripleEclipse") {
-    for (let ring = 0; ring < 3; ring += 1) fireRing(boss, 8, 32 + ring * 7, boss.age * (ring % 2 ? -.34 : .4) + ring * .18, ring === 1 ? "#ff4f70" : "#c183ff");
+    fireBlastSeed(boss, true, "boss:tripleEclipse");
+    fireRing(boss, 10 + phase, 72, boss.age * -.38, "#c183ff", { pattern: "boss:tripleEclipse" });
   }
   boss.attackState = "recover";
   boss.attackTimer = Math.max(.66, 1.42 - phase * .15 - stage * .08) * (QA_FAST_MODE ? .58 : 1);
@@ -2717,87 +3711,40 @@ function updateEnemyIntelligence(enemy, dt) {
 
 function updateEnemy(enemy, dt) {
   enemy.age += dt;
-  enemy.shootTimer -= dt * (enemy.boss ? 1 : threatConfig().fireRate * anomalyConfig().enemyFireRate);
   enemy.hitFlash = Math.max(0, (enemy.hitFlash || 0) - dt);
+  enemy.collisionCooldown = Math.max(0, (enemy.collisionCooldown || 0) - dt);
   const canFire = world.stageTime > 6;
 
   if (enemy.boss) {
     updateBoss(enemy, dt);
     return;
   }
-
-  if (enemy.elite) {
-    enemy.eliteTimer -= dt * threatConfig().fireRate * anomalyConfig().enemyFireRate;
-    if (enemy.y < 58) enemy.y += 22 * (enemy.moveSpeed || 1) * dt;
-    else {
-      enemy.y = lerp(enemy.y, 58, 1 - Math.exp(-dt * 3));
-      enemy.x += Math.sin(enemy.age * 1.15 + enemy.seed) * 20 * (enemy.moveSway || 1) * dt;
-    }
-    if (canFire && enemy.eliteTimer <= 0 && enemy.y > 28) {
-      fireRing(enemy, 6 + world.stageIndex * 2, 27 + world.stageIndex * 3, enemy.age * .32, activeStage().accent);
-      fireAimed(enemy, 38 + world.stageIndex * 3, 2, .2, "#fff0a0");
-      enemy.eliteTimer = Math.max(1.65, 2.6 - world.stageIndex * .22) * (enemy.weaponCooldown || 1);
-    }
-    return;
-  }
-
   enemy.x += enemy.vx * dt;
   enemy.x += Math.sin(enemy.age * .85 + enemy.seed) * (enemy.moveDrift || 0) * dt;
-  updateEnemyIntelligence(enemy, dt);
+  updateEnemyTactics(enemy, dt, canFire);
+}
 
-  if (enemy.type === "scout") {
-    enemy.y += (29 + world.stageIndex * 5) * (enemy.moveSpeed || 1) * dt;
-    enemy.x += Math.sin(enemy.age * 3 + enemy.seed) * 18 * (enemy.moveSway || 1) * dt;
-    if (canFire && enemy.shootTimer <= 0 && enemy.y > 20) {
-      fireAimed(enemy, 34 + world.stageIndex * 5, 1, 0, "#ff8aa3");
-      enemy.shootTimer = rand(2.5, 3.6) * (enemy.weaponCooldown || 1);
-    }
-  } else if (enemy.type === "dart") {
-    enemy.y += (48 + world.stageIndex * 6) * (enemy.moveSpeed || 1) * dt;
-    enemy.x += Math.sin(enemy.age * 6 + enemy.seed) * 55 * (enemy.moveSway || 1) * dt;
-    if (canFire && enemy.shootTimer <= 0 && enemy.y > 30) {
-      fireAimed(enemy, 43, world.stageIndex === 0 ? 1 : 2, 0.13, "#f8ca62");
-      enemy.shootTimer = rand(2.7, 3.8) * (enemy.weaponCooldown || 1);
-    }
-  } else if (enemy.type === "tank") {
-    if (enemy.y < 52) enemy.y += 22 * (enemy.moveSpeed || 1) * dt;
-    else enemy.x += Math.sin(enemy.age * 1.1 + enemy.seed) * 15 * (enemy.moveSway || 1) * dt;
-    if (canFire && enemy.shootTimer <= 0 && enemy.y > 20) {
-      fireAimed(enemy, 38, 2 + world.stageIndex, 0.17, "#ff6f63");
-      enemy.shootTimer = rand(2.5, 3.2) * (enemy.weaponCooldown || 1);
-    }
-  } else if (enemy.type === "spinner") {
-    enemy.y += 25 * (enemy.moveSpeed || 1) * dt;
-    enemy.x += Math.cos(enemy.age * 2.7 + enemy.seed) * 30 * (enemy.moveSway || 1) * dt;
-    if (canFire && enemy.shootTimer <= 0 && enemy.y > 25) {
-      fireRing(enemy, 5 + world.stageIndex * 2, 29 + world.stageIndex * 4, enemy.age, "#a88bff");
-      enemy.shootTimer = 3.2 * (enemy.weaponCooldown || 1);
-    }
-  } else if (enemy.type === "mine") {
-    enemy.y += 17 * (enemy.moveSpeed || 1) * dt;
-    enemy.x += Math.sin(enemy.age + enemy.seed) * 9 * (enemy.moveSway || 1) * dt;
-    if (canFire && enemy.shootTimer <= 0 && enemy.y > 30) {
-      fireRing(enemy, 7, 27, enemy.age * 0.4, "#ff5470");
-      enemy.shootTimer = 3 * (enemy.weaponCooldown || 1);
-    }
-  } else if (enemy.type === "lancer") {
-    enemy.y += (34 + world.stageIndex * 4) * (enemy.moveSpeed || 1) * dt;
-    enemy.x += Math.sin(enemy.age * 2.2 + enemy.seed) * 38 * (enemy.moveSway || 1) * dt;
-    if (canFire && enemy.shootTimer <= 0 && enemy.y > 28) {
-      fireAimed(enemy, 48, 2, .08, "#70eaff");
-      enemy.shootTimer = rand(2.45, 3.15) * (enemy.weaponCooldown || 1);
-    }
-  } else if (enemy.type === "carrier") {
-    if (enemy.y < 58) enemy.y += 19 * (enemy.moveSpeed || 1) * dt;
-    else enemy.x += Math.sin(enemy.age * .76 + enemy.seed) * 12 * (enemy.moveSway || 1) * dt;
-    if (canFire && enemy.shootTimer <= 0 && enemy.y > 24) {
-      fireRing(enemy, 6 + world.stageIndex, 27 + world.stageIndex * 2, -enemy.age * .22, "#ff87d7");
-      fireAimed(enemy, 38, 1, 0, "#ffe16c");
-      enemy.shootTimer = rand(3.1, 3.8) * (enemy.weaponCooldown || 1);
+function resolveEnemyCrowding(dt) {
+  const enemies = world.enemies.filter((enemy) => !enemy.dead && !enemy.boss);
+  for (let first = 0; first < enemies.length; first += 1) {
+    const a = enemies[first];
+    for (let second = first + 1; second < enemies.length; second += 1) {
+      const b = enemies[second];
+      if (["entry", "attack"].includes(a.aiState) || ["entry", "attack"].includes(b.aiState)) continue;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const range = Math.max(.01, Math.hypot(dx, dy));
+      const clearance = a.r + b.r + 5 - range;
+      if (clearance <= 0) continue;
+      const push = clearance * .5 * Math.min(1, dt * 12);
+      const nx = dx / range;
+      const ny = dy / range;
+      a.x = clamp(a.x - nx * push, 16, W - 16);
+      a.y = clamp(a.y - ny * push, 24, H - 58);
+      b.x = clamp(b.x + nx * push, 16, W - 16);
+      b.y = clamp(b.y + ny * push, 24, H - 58);
     }
   }
-
-  if (enemy.y > H + 24 || enemy.x < -40 || enemy.x > W + 40) enemy.dead = true;
 }
 
 function updateBoss(boss, dt) {
@@ -2828,13 +3775,18 @@ function updateBoss(boss, dt) {
   }
 
   if (boss.secondaryTimer <= 0) {
+    const nativeType = activeStage().biome?.speciesId;
+    const liveAdds = world.enemies.filter((enemy) => !enemy.dead && !enemy.boss).length;
+    const addBudget = Math.max(0, [8, 10, 12][stage] - liveAdds);
+    const desiredAdds = stage < 2 ? 2 : 3;
+    const addCount = Math.min(desiredAdds, addBudget);
     if (stage === 0) {
-      for (let i = 0; i < 2; i += 1) world.enemies.push(makeEnemy("dart", boss.x + (i ? 22 : -22), boss.y + 20));
+      for (let i = 0; i < addCount; i += 1) world.enemies.push(makeEnemy(i === 0 && nativeType ? nativeType : "dart", boss.x + (i ? 22 : -22), boss.y + 20, { bossAdd: true }));
     } else if (stage === 1) {
-      for (let i = 0; i < 2; i += 1) world.enemies.push(makeEnemy("spinner", boss.x + (i ? 30 : -30), boss.y + 15));
-      world.shake = 0.25;
+      for (let i = 0; i < addCount; i += 1) world.enemies.push(makeEnemy(i === 0 && nativeType ? nativeType : "spinner", boss.x + (i ? 30 : -30), boss.y + 15, { bossAdd: true }));
+      if (addCount > 0) world.shake = 0.25;
     } else {
-      for (let i = 0; i < 3; i += 1) world.enemies.push(makeEnemy(i % 2 ? "mine" : "dart", rand(30, W - 30), -10));
+      for (let i = 0; i < addCount; i += 1) world.enemies.push(makeEnemy(i === 1 && nativeType ? nativeType : i % 2 ? "mine" : "dart", rand(30, W - 30), -10, { bossAdd: true }));
     }
     boss.secondaryTimer = Math.max(3, 5.4 - phase * 1.2 - stage * 0.3);
   }
@@ -2842,7 +3794,7 @@ function updateBoss(boss, dt) {
 
 function playerShoot(player) {
   const config = PLAYER_CONFIG[player.index];
-  const rush = SpaceRush.combatMultipliers(rushActive());
+  const rush = SpaceRush.combatMultipliers(rushActive(), teamRushBonuses());
   const relic = relicBonuses();
   const status = statusBonuses(player);
   const movingFast = Math.hypot(player.vx, player.vy) > player.speed * .42;
@@ -2874,14 +3826,26 @@ function playerShoot(player) {
   patterns[player.weapon - 1].forEach((shot) => {
     addShot(shot);
   });
-  if (player.droneLevel > 0 && player.shots % 3 === 2) {
+  if (player.burstCadence > 0 && player.shots % player.burstCadence === player.burstCadence - 1) {
+    addShot({ x: 0, vx: 0, damage: 1.75, r: 2.6, color: "#fff0a8" });
+    player.capstoneHeavyProcs += 1;
+  }
+  if (player.prismEcho > 0 && player.shots % 4 === 1) {
+    addShot({ x: -10, vx: -42, damage: .42, color: "#ff8fd2" });
+    addShot({ x: 10, vx: 42, damage: .42, color: "#8de9ff" });
+    player.capstonePrismProcs += 1;
+  }
+  const droneCadence = player.droneVolley ? 3 : 4;
+  if (player.droneLevel > 0 && player.shots % droneCadence === droneCadence - 1) {
     const offset = 11 + player.droneLevel * 3;
     const spread = 25 + player.droneLevel * 5;
-    addShot({ x: -offset, vx: -spread, damage: .72, seeker: relic.seekerTurn }, 1 + (player.droneLevel - 1) * .16);
-    addShot({ x: offset, vx: spread, damage: .72, seeker: relic.seekerTurn }, 1 + (player.droneLevel - 1) * .16);
+    addShot({ x: -offset, vx: -spread, damage: .58, seeker: relic.seekerTurn }, 1 + (player.droneLevel - 1) * .12);
+    addShot({ x: offset, vx: spread, damage: .58, seeker: relic.seekerTurn }, 1 + (player.droneLevel - 1) * .12);
+    if (player.droneVolley) addShot({ x: 0, vx: 0, damage: .5, seeker: Math.max(.8, relic.seekerTurn), color: "#c691ff" });
+    if (player.droneVolley) player.capstoneDroneProcs += 1;
     if (relic.prismChoir) {
-      addShot({ x: -offset - 5, vx: -spread * 1.35, damage: .48, seeker: relic.seekerTurn, color: "#ff8fd2" });
-      addShot({ x: offset + 5, vx: spread * 1.35, damage: .48, seeker: relic.seekerTurn, color: "#ff8fd2" });
+      addShot({ x: -offset - 5, vx: -spread * 1.35, damage: .32, seeker: relic.seekerTurn, color: "#ff8fd2" });
+      addShot({ x: offset + 5, vx: spread * 1.35, damage: .32, seeker: relic.seekerTurn, color: "#ff8fd2" });
       markProtocolProc("prismChoir", player.x, player.y - 8);
     }
   }
@@ -2916,54 +3880,161 @@ function damageEnemy(enemy, amount) {
   return { hull: remaining, barrier: barrierDamage, broken };
 }
 
-function useNova(player) {
-  player.energy = 0;
-  world.enemyBullets.forEach((bullet) => {
+function novaDangerState() {
+  const pilots = world.players.filter((player) => !player.downed);
+  const radiusBonus = teamMaximum("novaRadiusBonus");
+  const clearRadius = NOVA_CONFIG.clearRadius + radiusBonus;
+  const damageRadius = NOVA_CONFIG.damageRadius + radiusBonus;
+  const localBullets = world.enemyBullets.filter((bullet) => !bullet.dead && pilots.some((pilot) => distance(pilot, bullet) <= clearRadius));
+  const outsideBullets = world.enemyBullets.filter((bullet) => !bullet.dead && !pilots.some((pilot) => distance(pilot, bullet) <= clearRadius));
+  const localEnemies = world.enemies.filter((enemy) => !enemy.dead && pilots.some((pilot) => distance(pilot, enemy) <= damageRadius));
+  return { pilots, radiusBonus, clearRadius, damageRadius, localBullets, outsideBullets, localEnemies };
+}
+
+function prepareQaNovaHazards() {
+  if (!QA_NOVA_MODE || world.novaCount >= 2 || world.qaNovaPreparedForCount === world.novaCount) return;
+  if (world.novaCount > 0 && world.novaCooldown > .45) return;
+  const pilot = world.players.find((player) => !player.downed);
+  if (!pilot) return;
+  const source = { id: -700 - world.novaCount, x: pilot.x, y: pilot.y - 40, r: 4, attackPattern: "qaNova", elite: false, boss: false };
+  for (const [offsetX, offsetY] of [[-34, -26], [34, -26]]) {
+    enemyBullet(pilot.x + offsetX, pilot.y + offsetY, 0, 0, "#ff72bc", 3, source, { pattern: "qa:nova-near" });
+  }
+  enemyBullet(pilot.x - 30, pilot.y + 24, 0, 0, "#ff72bc", 3, source, {
+    pattern: "qa:nova-near", behavior: "mine", triggerAge: .01, burstCount: 6, burstSpeed: 64,
+  });
+  enemyBullet(pilot.x + 30, pilot.y + 24, 0, 0, "#ff8a62", 3.4, source, {
+    pattern: "qa:nova-near", behavior: "blast", triggerAge: .01, burstCount: 8, burstSpeed: 68,
+    blastRadius: 28, blastDamage: 2,
+  });
+  enemyBullet(18, 42, 0, 0, "#ffdf68", 3, source, { pattern: "qa:nova-far" });
+  const target = makeEnemy("dart", pilot.x, pilot.y - 54, { bossAdd: true });
+  target.hp = 1;
+  target.maxHp = 1;
+  target.score = 0;
+  target.deathrattle = "mineRing";
+  target.aiState = "recover";
+  world.enemies.push(target);
+  world.enemyBeams.push({
+    x1: 18, y1: 38, x2: W - 18, y2: 38, age: 0, duration: 2, width: 4, damage: 1,
+    color: "#ffdf68", pattern: "qa:nova-beam", sourceId: source.id, bossStage: null,
+    debuff: "", debuffDuration: 0, debuffIntensity: 0, payloadColor: "#ffdf68", hitIds: [], dead: false,
+  });
+  world.novaCharge = NOVA_CONFIG.threshold;
+  world.qaNovaPreparedForCount = world.novaCount;
+  syncNovaMirrors();
+}
+
+function useNova() {
+  if (world.novaCharge < NOVA_CONFIG.threshold || world.novaCooldown > 0) return false;
+  const danger = novaDangerState();
+  const { pilots } = danger;
+  if (!pilots.length) return false;
+  const { radiusBonus, clearRadius, damageRadius } = danger;
+  const clearAll = world.players.some((player) => player.novaClearAll);
+  const damageMultiplier = teamAverage("novaDamage", 1);
+  const beamsBefore = world.enemyBeams.filter((beam) => !beam.dead).length;
+  world.novaCharge = 0;
+  world.novaCooldown = NOVA_CONFIG.cooldown;
+  world.novaCount += 1;
+  const shieldEvery = world.researchEffects.novaShieldEvery;
+  if (shieldEvery && world.novaCount % shieldEvery === 0) researchShield();
+  if (world.novaLastTriggerTime >= 0) {
+    const interval = world.time - world.novaLastTriggerTime;
+    world.novaMinimumInterval = world.novaMinimumInterval > 0 ? Math.min(world.novaMinimumInterval, interval) : interval;
+  }
+  world.novaLastTriggerTime = world.time;
+  world.novaLastRadius = clearRadius;
+  world.novaBeamsAtTrigger = beamsBefore;
+  for (const bullet of world.enemyBullets) {
+    if (bullet.dead || (!clearAll && !pilots.some((pilot) => distance(pilot, bullet) <= clearRadius))) continue;
     bullet.dead = true;
-    burst(bullet.x, bullet.y, PLAYER_CONFIG[player.index].color, 2, 16);
-  });
-  world.enemies.forEach((enemy) => {
-    const damage = damageEnemy(enemy, (enemy.boss ? 42 : 55) * player.novaDamage);
+    world.novaBulletsCleared += 1;
+    if (clearAll) world.novaFullClears += 1;
+    else world.novaLocalClears += 1;
+    const pilot = pilots.reduce((best, candidate) => distance(candidate, bullet) < distance(best, bullet) ? candidate : best);
+    burst(bullet.x, bullet.y, PLAYER_CONFIG[pilot.index].color, 2, 16);
+  }
+  world.novaOutsideSurvivors = world.enemyBullets.filter((bullet) => !bullet.dead && !pilots.some((pilot) => distance(pilot, bullet) <= clearRadius)).length;
+  world.novaBeamsCleared += Math.max(0, beamsBefore - world.enemyBeams.filter((beam) => !beam.dead).length);
+  for (const enemy of world.enemies) {
+    if (enemy.dead || !pilots.some((pilot) => distance(pilot, enemy) <= damageRadius)) continue;
+    const damage = damageEnemy(enemy, (enemy.boss ? NOVA_CONFIG.bossDamage : NOVA_CONFIG.damage) * damageMultiplier);
     if (damage.hull <= 0 && damage.barrier <= 0) enemy.hitFlash = .1;
-    if (enemy.hp <= 0) killEnemy(enemy, player.index);
-  });
-  for (let i = 0; i < 64; i += 1) {
-    const angle = (i / 64) * TAU;
+    if (enemy.hp <= 0) killEnemy(enemy, -1, { novaSource: true, suppressDeathrattle: true });
+  }
+  for (const player of pilots) for (let i = 0; i < 32; i += 1) {
+    const angle = (i / 32) * TAU;
     world.particles.push({
       x: player.x,
       y: player.y,
       vx: Math.cos(angle) * visualRand(90, 190),
       vy: Math.sin(angle) * visualRand(90, 190),
-      life: 0.65,
-      maxLife: 0.65,
+      life: .65,
+      maxLife: .65,
       color: PLAYER_CONFIG[player.index].color,
       size: i % 3 ? 1 : 2,
     });
   }
+  syncNovaMirrors();
   world.flash = 0.45;
   world.shake = 0.45;
   audio.sfx("nova");
-  pulseGamepad(player.index, 260, 0.75, 0.45);
-  showToast(t("toast.nova", { player: player.index + 1 }));
+  pulseGamepad(0, 260, .75, .45);
+  pulseGamepad(1, 260, .75, .45);
+  showToast(t("toast.novaShared"));
+  return true;
 }
 
-function damagePlayer(player) {
-  if (QA_BOSS_STATE_MODE && world.boss) return false;
+function updateNova(dt) {
+  world.novaCooldown = Math.max(0, world.novaCooldown - dt);
+  const hitBudget = NOVA_CONFIG.hitChargePerSecond + teamAverage("novaHitBudgetBonus");
+  world.novaHitChargeBudget = Math.min(hitBudget, world.novaHitChargeBudget + hitBudget * dt);
+  const eligible = world.introTimer <= 0 && world.clearTimer <= 0 && !world.routeChoice;
+  if (eligible) prepareQaNovaHazards();
+  if (eligible && world.novaCharge < NOVA_CONFIG.threshold) {
+    addNovaCharge("passive", NOVA_CONFIG.passiveChargePerSecond * dt);
+    const anomalyRate = Math.max(0, anomalyConfig().energyRate || 0);
+    if (anomalyRate > 0) addNovaCharge("anomaly", anomalyRate * dt);
+  }
+  if (eligible && world.novaCharge >= NOVA_CONFIG.threshold) {
+    world.novaReadyTimer += dt;
+    const danger = novaDangerState();
+    const immediateDanger = danger.localBullets.length > 0 || danger.localEnemies.length > 0;
+    const qaReady = !QA_NOVA_MODE || (danger.localBullets.length >= 4 && danger.outsideBullets.length >= 1 && world.enemyBeams.some((beam) => !beam.dead));
+    if (world.novaCooldown <= 0 && qaReady && immediateDanger) useNova();
+  } else {
+    world.novaReadyTimer = 0;
+  }
+}
+
+function damagePlayer(player, amount = 1) {
   if (player.invulnerability > 0 || player.downed) return false;
+  const incoming = Math.max(1, Math.round(Number(amount) || 1));
+  let remaining = incoming;
+  player.damageTaken += incoming;
   if (player.shield > 0) {
     world.threatRecentDamage = 1;
-    player.shield -= 1;
-    player.invulnerability = 0.45;
+    const absorbed = Math.min(player.shield, remaining);
+    player.shield -= absorbed;
+    player.shieldAbsorbed += absorbed;
+    player.shieldHitTimer = .32;
+    player.shieldBreakTimer = player.shield <= 0 ? .55 : 0;
+    remaining -= absorbed;
+    player.invulnerability = remaining > 0 ? 0 : .22;
     player.shieldRegenTimer = player.shieldRegenInterval || Number.POSITIVE_INFINITY;
     burst(player.x, player.y, "#9be9ff", 8, 45);
-    audio.sfx("shield");
+    audio.sfx(player.shield <= 0 ? "shieldBreak" : "shieldBlock");
     pulseGamepad(player.index, 80, 0.16, 0.34);
+    if (player.novaShieldCharge > 0) addNovaCharge("shield", player.novaShieldCharge, player);
     triggerAegisNova(player);
-    return true;
+    if (remaining <= 0) return true;
   }
 
   world.threatRecentDamage = 1;
-  player.hp -= 1;
+  player.hp -= remaining;
+  player.hullDamageTaken += remaining;
+  player.hullHitTimer = .35;
   player.invulnerability = player.hitInvulnerability;
   player.shieldRegenTimer = player.shieldRegenInterval || Number.POSITIVE_INFINITY;
   world.shake = 0.3;
@@ -2973,6 +4044,7 @@ function damagePlayer(player) {
 
   if (player.hp <= 0) {
     player.downed = true;
+    player.downCount += 1;
     player.downTimer = 12;
     player.revive = 0;
     player.vx = 0;
@@ -2988,12 +4060,14 @@ function damagePlayer(player) {
 
 function revivePlayer(player) {
   player.downed = false;
+  player.rescueCount += 1;
   player.hp = Math.min(player.maxHp, player.reviveHp);
-  player.invulnerability = 2.5;
+  player.invulnerability = 1.2;
   player.shield = 1;
   player.downTimer = 0;
   player.revive = 0;
   burst(player.x, player.y, PLAYER_CONFIG[player.index].light, 28, 90);
+  if (player.novaRescueCharge > 0) addNovaCharge("rescue", player.novaRescueCharge, player);
   addRushCharge("rescue");
   audio.sfx("revive");
   showToast(t("toast.revived", { player: player.index + 1 }));
@@ -3007,6 +4081,9 @@ function updatePlayers(dt) {
     const controls = input.player(player.index);
     player.controls = controls;
     player.invulnerability = Math.max(0, player.invulnerability - dt);
+    player.shieldHitTimer = Math.max(0, player.shieldHitTimer - dt);
+    player.shieldBreakTimer = Math.max(0, player.shieldBreakTimer - dt);
+    player.hullHitTimer = Math.max(0, player.hullHitTimer - dt);
     player.fireTimer -= dt;
     player.protocolCooldown = Math.max(0, player.protocolCooldown - dt);
     updatePlayerStatus(player, dt);
@@ -3037,19 +4114,30 @@ function updatePlayers(dt) {
     }
 
     const status = statusBonuses(player);
-    const speed = player.speed * status.speed * anomaly.playerSpeed;
+    const rush = SpaceRush.combatMultipliers(rushActive(), teamRushBonuses());
+    const speed = player.speed * status.speed * anomaly.playerSpeed * rush.moveSpeed;
     const field = SpaceAnomalies.playerForce(world.activeAnomaly, world.anomalyElapsed, player.x, player.y, W, H);
     forceTotalX += field.x;
     forceTotalY += field.y;
-    player.vx = lerp(player.vx, controls.x * speed + field.x, 1 - Math.exp(-dt * player.handling));
-    player.vy = lerp(player.vy, controls.y * speed + field.y, 1 - Math.exp(-dt * player.handling));
+    player.vx = lerp(player.vx, controls.x * speed + field.x, 1 - Math.exp(-dt * player.handling * rush.handling));
+    player.vy = lerp(player.vy, controls.y * speed + field.y, 1 - Math.exp(-dt * player.handling * rush.handling));
     player.x = clamp(player.x + player.vx * dt, 13, W - 13);
     player.y = clamp(player.y + player.vy * dt, 32, H - 14);
 
-    if (anomaly.energyRate > 0) player.energy = Math.min(100, player.energy + anomaly.energyRate * player.energyGain * status.energyGain * dt);
+    player.damageVfxTimer = Math.max(0, player.damageVfxTimer - dt);
+    const hullRatio = player.hp / player.maxHp;
+    if (hullRatio <= .6 && player.damageVfxTimer <= 0) {
+      const critical = hullRatio <= .3;
+      player.damageVfxTimer = critical ? .14 : .32;
+      world.particles.push({
+        x: player.x + visualRand(-3, 3), y: player.y + 5,
+        vx: visualRand(-5, 5), vy: visualRand(9, 19),
+        life: .7, maxLife: .7, color: critical ? "#af7157" : "#667180", size: critical ? 2 : 1.4,
+      });
+      if (critical) burst(player.x, player.y + 4, "#ffab62", 1, 16);
+    }
 
     if (player.fireTimer <= 0) playerShoot(player);
-    if (player.energy >= 100) useNova(player);
   }
 
   const livePilots = Math.max(1, world.players.filter((player) => !player.downed).length);
@@ -3074,7 +4162,7 @@ function updatePlayers(dt) {
   const linkRange = Math.max(p1.linkRange, p2.linkRange) * (world.activeBranch?.reward.link || 1);
   const linked = !p1.downed && !p2.downed && distance(p1, p2) < linkRange;
   if (linked) {
-    const rush = SpaceRush.combatMultipliers(rushActive());
+    const rush = SpaceRush.combatMultipliers(rushActive(), teamRushBonuses());
     const relic = relicBonuses();
     world.beamTimer -= dt;
     if (world.beamTimer <= 0) {
@@ -3082,10 +4170,9 @@ function updatePlayers(dt) {
       for (const enemy of world.enemies) {
         if (!enemy.dead && pointToSegmentDistance(enemy.x, enemy.y, p1.x, p1.y, p2.x, p2.y) < enemy.r + 3 + relic.beamRadius) {
           const statusBeam = (statusBonuses(p1).beamDamage + statusBonuses(p2).beamDamage) * .5;
-          damageEnemy(enemy, 1.2 * rush.linkDamage * relic.beamDamage * statusBeam * ((p1.beamDamage + p2.beamDamage) * .5));
+          const damage = damageEnemy(enemy, 1.2 * rush.linkDamage * relic.beamDamage * statusBeam * ((p1.beamDamage + p2.beamDamage) * .5));
+          if (damage.hull > 0 || damage.barrier > 0) addNovaCharge("hit", NOVA_CONFIG.hitCharge);
           if (relic.resonantGyro && world.protocolSoundTimer <= 0) markProtocolProc("resonantGyro", enemy.x, enemy.y);
-          p1.energy = clamp(p1.energy + 0.45 * p1.energyGain * statusBonuses(p1).energyGain, 0, 100);
-          p2.energy = clamp(p2.energy + 0.45 * p2.energyGain * statusBonuses(p2).energyGain, 0, 100);
           if (enemy.hp <= 0) killEnemy(enemy, 0);
         }
       }
@@ -3094,22 +4181,71 @@ function updatePlayers(dt) {
   world.linked = linked;
 }
 
-function killEnemy(enemy, owner = 0) {
+function triggerEnemyDeathrattle(enemy) {
+  if (enemy.boss || !enemy.deathrattle) return;
+  const projectilesBefore = world.enemyBullets.length + world.enemyBeams.length;
+  let directEffect = false;
+  const target = enemyTarget(enemy);
+  enemy.attackTargetX = target.x;
+  enemy.attackTargetY = target.y;
+  enemy.attackTargetIndex = Number.isInteger(target.index) ? target.index : null;
+  if (enemy.deathrattle === "seekerBurst") {
+    fireHunterSeeker(enemy, true, "death:seekerBurst");
+  } else if (enemy.deathrattle === "shardFan") {
+    fireRing(enemy, 8, 82 + world.stageIndex * 8, enemy.age * .7, "#d99cff", { pattern: "death:shardFan", damage: 1 });
+  } else if (enemy.deathrattle === "arcCross") {
+    fireRing(enemy, 4, 96 + world.stageIndex * 8, Math.PI / 4, "#70eaff", { pattern: "death:arcCross", damage: 2 });
+  } else if (enemy.deathrattle === "mineRing") {
+    for (let index = 0; index < 4; index += 1) {
+      const angle = index / 4 * TAU + enemy.age;
+      enemyBullet(enemy.x, enemy.y, Math.cos(angle) * 42, Math.sin(angle) * 42, "#ff72bc", 3, enemy, { pattern: "death:mineRing", behavior: "mine", triggerAge: .64, burstCount: 6, burstSpeed: 64 });
+    }
+  } else if (enemy.deathrattle === "crossBurst") {
+    fireRing(enemy, 8, 94 + world.stageIndex * 9, Math.PI / 8, "#ff5278", { pattern: "death:crossBurst", damage: 2 });
+  } else if (enemy.deathrattle === "seedBurst") {
+    fireBlastSeed(enemy, true, "death:seedBurst");
+  } else if (enemy.deathrattle === "blast") {
+    const radius = 48 + world.stageIndex * 5 + (enemy.elite ? 14 : 0);
+    directEffect = Boolean(enemyBullet(enemy.x, enemy.y, 0, 0, "#ff9a58", 5.2, enemy, {
+      pattern: "death:blast",
+      behavior: "blast",
+      triggerAge: .68,
+      burstCount: 10,
+      burstSpeed: 64,
+      blastRadius: radius,
+      blastDamage: enemy.elite ? 4 : 3,
+      enemyBlastDamage: 12,
+      anchored: true,
+      budgetClass: "deathrattle",
+    }));
+    if (directEffect) {
+      burst(enemy.x, enemy.y, "#ff9a58", 8, radius * .72);
+      audio.sfx("enemyCharge");
+    }
+  }
+  if (directEffect || world.enemyBullets.length + world.enemyBeams.length > projectilesBefore) world.combatDeathrattles += 1;
+}
+
+function killEnemy(enemy, owner = 0, options = {}) {
   if (enemy.dead) return;
   enemy.dead = true;
   world.kills += 1;
+  if (enemy.elite && !enemy.boss) world.researchElites += 1;
+  if (enemy.boss) world.researchBosses += 1;
   world.threatKillMomentum += enemy.elite ? 2.2 : enemy.boss ? 4 : 1;
   world.combo = world.comboTimer > 0 ? world.combo + 1 : 1;
   world.comboTimer = 2.4;
   world.bestCombo = Math.max(world.bestCombo, world.combo);
   const multiplier = 1 + Math.floor(world.combo / 8) * 0.5;
-  const rush = SpaceRush.combatMultipliers(rushActive());
+  const rush = SpaceRush.combatMultipliers(rushActive(), teamRushBonuses());
   world.score += Math.round(enemy.score * multiplier * rush.score * (world.contract?.score || 1) * (world.activeBranch?.score || 1) * (enemy.threatReward || 1) * (enemy.anomalyReward || 1));
   const player = world.players[owner];
-  if (player) player.energy = clamp(player.energy + (enemy.boss ? 35 : 4.5) * player.energyGain * statusBonuses(player).energyGain, 0, 100);
+  if (options.novaSource) addNovaCharge("nova", NOVA_CONFIG.hitCharge);
   burst(enemy.x, enemy.y, enemy.boss ? "#fff2a6" : activeStage().accent, enemy.boss ? 80 : 12, enemy.boss ? 150 : 65);
   addRushCharge("kill");
   if (enemy.elite) addRushCharge("elite");
+  if (options.suppressDeathrattle && enemy.deathrattle) world.novaSuppressedDeathrattles += 1;
+  else triggerEnemyDeathrattle(enemy);
 
   if (!enemy.boss && player?.chainDamage > 0 && !world.chainResolving) {
     const chainLevel = upgradeLevel("chain");
@@ -3122,7 +4258,8 @@ function killEnemy(enemy, owner = 0) {
     world.chainResolving = true;
     try {
       for (const target of targets) {
-        damageEnemy(target, player.chainDamage * relic.chainDamage);
+        const damage = damageEnemy(target, player.chainDamage * relic.chainDamage);
+        if (damage.hull > 0 || damage.barrier > 0) addNovaCharge("hit", NOVA_CONFIG.hitCharge, player);
         burst(target.x, target.y, "#b6f7ff", 5, 42);
         if (target.hp <= 0) killEnemy(target, owner);
       }
@@ -3135,14 +4272,22 @@ function killEnemy(enemy, owner = 0) {
   if (!enemy.boss && enemy.volatileRadius > 0 && !world.volatileResolving) {
     world.volatileResolving = true;
     try {
-      burst(enemy.x, enemy.y, enemy.moduleColor || activeStage().accent, 24, 105);
-      audio.sfx("volatile");
-      world.shake = Math.max(world.shake, .24);
       const blastDamage = 7 + world.stageIndex * 2;
-      for (const target of world.enemies) {
-        if (target.dead || target === enemy || distance(enemy, target) > enemy.volatileRadius) continue;
-        damageEnemy(target, blastDamage);
-        if (target.hp <= 0) killEnemy(target, owner);
+      const warning = enemyBullet(enemy.x, enemy.y, 0, 0, enemy.moduleColor || activeStage().accent, 4.8, enemy, {
+        pattern: "death:volatile",
+        behavior: "blast",
+        triggerAge: .72,
+        burstCount: 8,
+        burstSpeed: 58,
+        blastRadius: enemy.volatileRadius,
+        blastDamage: enemy.elite ? 4 : 3,
+        enemyBlastDamage: blastDamage,
+        anchored: true,
+        budgetClass: "deathrattle",
+      });
+      if (warning) {
+        burst(enemy.x, enemy.y, enemy.moduleColor || activeStage().accent, 7, enemy.volatileRadius * .7);
+        audio.sfx("enemyCharge");
       }
     } finally {
       world.volatileResolving = false;
@@ -3153,37 +4298,83 @@ function killEnemy(enemy, owner = 0) {
     handleBossDefeat(enemy);
   } else {
     audio.sfx(Math.random() < 0.28 ? "explode" : "hit");
-    const dropChance = (enemy.elite ? 1 : enemy.type === "tank" ? 0.32 : 0.105) * anomalyConfig().dropRate;
-    if (random() < dropChance) spawnPickup(enemy.x, enemy.y);
     if (enemy.elite) {
+      spawnPickup(enemy.x - 8, enemy.y + 3);
       spawnPickup(enemy.x + 12, enemy.y - 4);
+      world.lootDrought = 0;
       world.flash = Math.max(world.flash, .38);
       world.shake = Math.max(world.shake, .42);
       showToast(t("toast.elite", { event: world.stageEvent ? eventText(world.stageEvent, "name") : t("toast.routeThreatClear") }));
+    } else {
+      const result = SpaceLoot.advanceBudget(world.lootDropBudget, enemy.type, lootRandom());
+      world.lootDropBudget = result.budget;
+      world.lootDrought += 1;
+      world.lootMaxDrought = Math.max(world.lootMaxDrought, world.lootDrought);
+      if (result.drops > 0) {
+        for (let index = 0; index < result.drops; index += 1) spawnPickup(enemy.x + index * 7, enemy.y - index * 4);
+        world.lootDrought = 0;
+      }
     }
   }
 }
 
-function spawnPickup(x, y) {
-  const roll = random();
-  const type = roll < 0.42 ? "weapon" : roll < 0.67 ? "repair" : roll < 0.84 ? "shield" : "energy";
+function spawnPickup(x, y, forcedType = "") {
+  let type = forcedType;
+  if (!SpaceLoot.LOOT_TYPES.includes(type)) {
+    const draw = SpaceLoot.drawType(world.lootBag, lootRandom);
+    type = draw.type;
+    world.lootBag = [...draw.bag];
+  }
+  world.lootDrops += 1;
   world.pickups.push({ x, y, type, age: 0, vy: 24, r: 7, dead: false });
 }
 
+function researchShield() {
+  const pilot = world.players.filter((player) => !player.downed && player.shield < player.maxShield)
+    .sort((a, b) => (b.maxShield - b.shield) - (a.maxShield - a.shield))[0];
+  if (!pilot) return false;
+  pilot.shield = Math.min(pilot.maxShield, pilot.shield + 1);
+  pilot.shieldHitTimer = .32;
+  burst(pilot.x, pilot.y, "#76dbff", 10, 35);
+  world.researchProcs += 1;
+  audio.sfx("shieldBlock");
+  return true;
+}
+
 function applyPickup(player, pickup) {
-  if (pickup.type === "weapon") player.weapon = Math.min(4, player.weapon + 1);
-  else if (pickup.type === "repair") player.hp = Math.min(player.maxHp, player.hp + 2);
-  else if (pickup.type === "shield") player.shield = Math.min(player.maxShield, player.shield + 2);
-  else player.energy = Math.min(100, player.energy + 40 * player.energyGain * statusBonuses(player).energyGain);
+  if (pickup.dead) return;
+  world.researchPickups += 1;
+  const effects = world.researchEffects;
+  if (effects.pickupEnergy) { addNovaCharge("pickup", effects.pickupEnergy, player); world.researchProcs += 1; }
+  if (effects.pickupShieldEvery) {
+    world.researchShieldProgress = Math.min(effects.pickupShieldEvery, world.researchShieldProgress + 1);
+    if (world.researchShieldProgress >= effects.pickupShieldEvery && researchShield()) world.researchShieldProgress = 0;
+  }
+  if (pickup.type === "weapon") {
+    for (const pilot of world.players.filter((entry) => !entry.downed)) pilot.weapon = Math.min(3, pilot.weapon + 1);
+  } else if (pickup.type === "repair") {
+    player.hp = Math.min(player.maxHp, player.hp + 2);
+    if (world.gameMode === "solo") {
+      const partner = world.players.find((entry) => entry !== player && !entry.downed);
+      if (partner) partner.hp = Math.min(partner.maxHp, partner.hp + 1);
+    }
+  } else if (pickup.type === "shield") {
+    player.shield = Math.min(player.maxShield, player.shield + 2);
+    if (world.gameMode === "solo") {
+      const partner = world.players.find((entry) => entry !== player && !entry.downed);
+      if (partner) partner.shield = Math.min(partner.maxShield, partner.shield + 1);
+    }
+  } else {
+    addNovaCharge("pickup", NOVA_CONFIG.energyPickupCharge, player);
+  }
   const buff = grantBuff(player, pickup.type);
   pickup.dead = true;
   addRushCharge("pickup");
   const relic = relicBonuses();
   if (relic.salvageReactor) {
-    player.energy = Math.min(100, player.energy + relic.pickupEnergy * player.energyGain * statusBonuses(player).energyGain);
-    if (!rushActive()) world.rushCharge = SpaceRush.clampCharge(world.rushCharge + relic.pickupRush);
-    for (let index = 0; index < 8; index += 1) {
-      const angle = index / 8 * TAU;
+    addNovaCharge("pickup", Math.min(6, (relic.pickupEnergy || 0) / 3), player);
+    for (let index = 0; index < 4; index += 1) {
+      const angle = index / 4 * TAU;
       world.bullets.push({
         x: pickup.x,
         y: pickup.y,
@@ -3210,6 +4401,7 @@ function handleBossDefeat() {
   world.score += Math.round(2500 * (world.stageIndex + 1) * (world.contract?.score || 1) * (world.activeBranch?.score || 1) * anomalyConfig().score);
   world.clearTimer = QA_FAST_MODE ? 1.1 : 4.2;
   world.enemyBullets = [];
+  world.enemyBeams = [];
   world.boss = null;
   world.stageEvent = null;
   world.cinematic = { type: "clear", timer: world.clearTimer, total: world.clearTimer };
@@ -3245,6 +4437,7 @@ function advanceStage() {
   world.boss = null;
   world.enemies = [];
   world.enemyBullets = [];
+  world.enemyBeams = [];
   world.pickups = [];
   for (const player of world.players) {
     if (player.downed) {
@@ -3254,8 +4447,9 @@ function advanceStage() {
       player.hp = Math.max(1, player.hp);
     }
     player.hp = Math.min(player.maxHp, player.hp + 2 + player.stageRepair);
-    player.weapon = Math.max(1 + player.weaponFloor, player.weapon - 1);
-    player.invulnerability = 2;
+    // Route transitions preserve picked weapons and every run upgrade.
+    player.weapon = Math.max(1 + player.weaponFloor, player.weapon);
+    player.invulnerability = .9;
   }
   audio.setStage(world.stageIndex, false);
   prepareRouteChoice(world.stageIndex);
@@ -3319,11 +4513,12 @@ function finishEncounter(success) {
   if (success) {
     const reward = encounter.reward;
     for (const player of world.players) {
-      player.energy = Math.min(100, player.energy + (reward.energy || 0));
-      player.weapon = Math.min(4, player.weapon + (reward.weapon || 0));
-      player.hp = Math.min(player.maxHp, player.hp + (reward.repair || 0));
+      player.weapon = Math.min(3, player.weapon + (reward.weapon || 0));
+      player.hp = Math.min(player.maxHp, player.hp + (reward.repair || 0) + (player.downed ? 0 : world.researchEffects.encounterRepair));
       player.shield = Math.min(player.maxShield, player.shield + (reward.shield || 0));
     }
+    if (reward.energy > 0) addNovaCharge("encounter", NOVA_CONFIG.encounterCharge);
+    if (world.researchEffects.encounterRepair) world.researchProcs += 1;
     world.score += Math.round((reward.score || 0) * (world.contract?.score || 1) * (world.activeBranch?.score || 1) * anomalyConfig().score);
     addRushCharge("encounter");
     burst(encounter.x, encounter.y, encounter.color, 34, 110);
@@ -3398,6 +4593,7 @@ function updateEncounter(dt) {
 }
 
 function updateStage(dt) {
+  world.growthGrace = Math.max(0, world.growthGrace - dt);
   const stage = activeStage();
   if (world.clearTimer > 0) {
     world.clearTimer -= dt;
@@ -3417,6 +4613,11 @@ function updateStage(dt) {
   world.spawnTimer -= dt;
   const progress = clamp(world.stageTime / stage.duration, 0, 1);
   const intensity = DIRECTOR.intensityFor(world.stageIndex, progress);
+  const combat = COMBAT.curveFor(world.stageIndex, progress);
+  world.combatBeatId = combat.beat.id;
+  world.combatPressure = combat.pressure;
+  world.combatPatternTier = combat.patternTier;
+  world.combatBulletCap = combat.bulletCap;
   if (!QA_VOXEL_MODE && intensity.sector !== world.sectorIndex) enterSector(intensity.sector);
   const nextDraftPoint = DIRECTOR.MID_DRAFT_POINTS[world.midDraftIndex];
   if (!QA_VOXEL_MODE && !world.activeEncounter && nextDraftPoint !== undefined && progress >= nextDraftPoint) {
@@ -3434,24 +4635,29 @@ function updateStage(dt) {
     spawnStageEvent(nextEvent);
     world.eventIndex += 1;
   }
-  if (world.spawnTimer <= 0) {
+  const preBossRecovery = !QA_VOXEL_MODE && world.stageTime >= stage.duration - 10;
+  const releaseBacklog = combat.beat.id === "release" && world.enemies.filter((enemy) => !enemy.dead && !enemy.boss).length >= 5;
+  if (world.spawnTimer <= 0 && !preBossRecovery && !releaseBacklog && world.growthGrace <= 0) {
     const adaptiveThreat = threatConfig();
-    const enemyCap = Math.max(4, 6 + world.stageIndex * 2 + intensity.enemyCapBonus + adaptiveThreat.capBonus);
-    const activeEnemies = world.enemies.filter((enemy) => !enemy.boss).length;
-    if (activeEnemies < enemyCap) {
-      spawnEnemy();
-      if (progress > 0.72 && random() < 0.08 + world.stageIndex * 0.03) {
+    const rawEnemyCap = Math.max(4, 6 + world.stageIndex * 2 + intensity.enemyCapBonus + adaptiveThreat.capBonus + combat.capBonus);
+    const chapterBudget = world.stageIndex > 0 ? 10 + world.stageIndex * 2 + (combat.beat.id === "killzone" ? 2 : 0) : rawEnemyCap;
+    const enemyCap = QA_FORCE_ELITE ? 1 : Math.min(rawEnemyCap, chapterBudget);
+    const activeEnemies = world.enemies.filter((enemy) => !enemy.dead && !enemy.boss).length;
+    const weightedEnemies = world.enemies.reduce((sum, enemy) => sum + (enemy.dead || enemy.boss ? 0 : enemy.elite ? 2.5 : 1), 0);
+    if (weightedEnemies < enemyCap) {
+      const spawned = spawnEnemy(Math.min(3, Math.ceil(enemyCap - weightedEnemies)));
+      if (spawned === 1 && progress > 0.72 && activeEnemies + spawned < enemyCap && random() < 0.08 + world.stageIndex * 0.03) {
         world.enemies.push(makeEnemy(choose(["scout", "dart"])));
       }
     }
     const ecologyRate = stage.biome?.spawnRate || 1;
-    const routeRate = world.stageIndex === 0 && progress < .4
+    const routeRate = world.stageIndex === 0 && progress < .08
       ? Math.min(1, world.activeBranch?.spawnRate || 1)
       : world.activeBranch?.spawnRate || 1;
-    const encounterRate = world.stageIndex === 0 && progress < .4
+    const encounterRate = world.stageIndex === 0 && progress < .08
       ? Math.min(1, world.activeEncounter?.spawnRate || 1)
       : world.activeEncounter?.spawnRate || 1;
-    world.spawnTimer = Math.max(0.62, (1.72 - world.stageIndex * 0.13 - progress * 0.55) / ((world.contract?.spawnRate || 1) * ecologyRate * routeRate * encounterRate * intensity.spawnCadence * adaptiveThreat.spawnRate * anomalyConfig().spawnRate));
+    world.spawnTimer = Math.max(0.38, (1.68 - world.stageIndex * 0.15 - progress * 0.58) / ((world.contract?.spawnRate || 1) * ecologyRate * routeRate * encounterRate * intensity.spawnCadence * adaptiveThreat.spawnRate * anomalyConfig().spawnRate * combat.spawnRate));
   }
   if (!QA_VOXEL_MODE && world.stageTime >= stage.duration) spawnBoss();
 }
@@ -3478,19 +4684,152 @@ function updateObjects(dt) {
     if (bullet.y < -12 || bullet.y > H + 12 || bullet.x < -12 || bullet.x > W + 12) bullet.dead = true;
   }
 
+  const spawnedEnemyBullets = [];
   for (const bullet of world.enemyBullets) {
+    if (bullet.dead) continue;
     bullet.age += dt;
-    const anomalyFlow = SpaceAnomalies.bulletFlow(world.activeAnomaly, world.anomalyElapsed, bullet, W, H, true);
-    bullet.x += (bullet.vx + anomalyFlow.x) * dt;
-    bullet.y += (bullet.vy + anomalyFlow.y) * dt;
+    const blastProximity = bullet.behavior === "blast" && !bullet.anchored && bullet.age >= .32 && world.players.some((player) => (
+      !player.downed && distance(player, bullet) <= bullet.blastRadius * .78 + player.hurtRadius
+    ));
+    if (bullet.behavior === "curve") {
+      const angle = (bullet.curve || 0) * dt;
+      const cosine = Math.cos(angle);
+      const sine = Math.sin(angle);
+      const vx = bullet.vx * cosine - bullet.vy * sine;
+      bullet.vy = bullet.vx * sine + bullet.vy * cosine;
+      bullet.vx = vx;
+    } else if (bullet.behavior === "brake") {
+      const speed = Math.max(1, Math.hypot(bullet.vx, bullet.vy));
+      if (bullet.age < .42) {
+        const drag = Math.exp(-dt * 3.6);
+        bullet.vx *= drag;
+        bullet.vy *= drag;
+      } else {
+        const targetSpeed = Math.max(speed, bullet.baseSpeed || speed);
+        const accelerated = Math.min(targetSpeed, speed + targetSpeed * dt * 1.8);
+        bullet.vx = bullet.vx / speed * accelerated;
+        bullet.vy = bullet.vy / speed * accelerated;
+      }
+    } else if (bullet.behavior === "homing" && bullet.age <= bullet.homingDuration) {
+      const target = world.players.find((player) => player.index === bullet.targetIndex && !player.downed)
+        || world.players.find((player) => !player.downed);
+      if (target) {
+        const speed = Math.max(1, Math.hypot(bullet.vx, bullet.vy));
+        const currentAngle = Math.atan2(bullet.vy, bullet.vx);
+        const targetAngle = Math.atan2(target.y - bullet.y, target.x - bullet.x);
+        const angleDelta = Math.atan2(Math.sin(targetAngle - currentAngle), Math.cos(targetAngle - currentAngle));
+        const guidanceProgress = clamp(bullet.age / Math.max(.01, bullet.homingDuration), 0, 1);
+        const guidanceScale = lerp(1, .32, guidanceProgress * guidanceProgress);
+        const maxTurn = (bullet.homing || .35) * guidanceScale * dt;
+        const nextAngle = currentAngle + clamp(angleDelta, -maxTurn, maxTurn);
+        bullet.vx = Math.cos(nextAngle) * speed;
+        bullet.vy = Math.sin(nextAngle) * speed;
+      }
+    } else if (bullet.behavior === "mine") {
+      const drag = Math.exp(-dt * 2.2);
+      bullet.vx *= drag;
+      bullet.vy *= drag;
+      if (bullet.age >= bullet.triggerAge) {
+        const count = Math.max(4, bullet.burstCount || 6);
+        const phase = bullet.age + bullet.sourceId * .31;
+        for (let index = 0; index < count; index += 1) {
+          const angle = phase + index / count * TAU;
+          spawnedEnemyBullets.push({
+            ...bullet,
+            vx: Math.cos(angle) * bullet.burstSpeed,
+            vy: Math.sin(angle) * bullet.burstSpeed,
+            r: Math.max(2.1, bullet.r * .72),
+            age: 0,
+            dead: false,
+            behavior: "linear",
+            pattern: `${bullet.pattern}:burst`,
+            baseSpeed: bullet.burstSpeed,
+            triggerAge: 0,
+            burstCount: 0,
+          });
+        }
+        bullet.dead = true;
+        burst(bullet.x, bullet.y, bullet.color, 8, 42);
+        audio.sfx("enemyOrbit");
+        continue;
+      }
+    } else if (bullet.behavior === "blast" && (bullet.age >= bullet.triggerAge || blastProximity)) {
+      const count = Math.max(6, bullet.burstCount || 8);
+      const phase = bullet.age + bullet.sourceId * .37;
+      for (let index = 0; index < count; index += 1) {
+        const angle = phase + index / count * TAU;
+        spawnedEnemyBullets.push({
+          ...bullet,
+          vx: Math.cos(angle) * bullet.burstSpeed,
+          vy: Math.sin(angle) * bullet.burstSpeed,
+          r: Math.max(2.2, bullet.r * .64),
+          age: 0,
+          dead: false,
+          damage: 1,
+          behavior: "linear",
+          pattern: `${bullet.pattern}:blast`,
+          baseSpeed: bullet.burstSpeed,
+          triggerAge: 0,
+          burstCount: 0,
+          blastRadius: 0,
+          blastDamage: 0,
+        });
+      }
+      for (const player of world.players) {
+        if (!player.downed && SpaceCollision.hostileBlastHitsPlayer(bullet, player) && damagePlayer(player, bullet.blastDamage || 2)) {
+          world.combatBlastHits += 1;
+          applyEnemyDebuff(player, bullet);
+        }
+      }
+      if (bullet.enemyBlastDamage > 0) {
+        for (const targetEnemy of world.enemies) {
+          if (targetEnemy.dead || targetEnemy.id === bullet.sourceId || distance(targetEnemy, bullet) > bullet.blastRadius) continue;
+          damageEnemy(targetEnemy, bullet.enemyBlastDamage);
+          if (targetEnemy.hp <= 0) killEnemy(targetEnemy, -1);
+        }
+      }
+      bullet.dead = true;
+      burst(bullet.x, bullet.y, bullet.color, 18, bullet.blastRadius * 2.4);
+      world.shake = Math.max(world.shake, .24);
+      audio.sfx("volatile");
+      continue;
+    }
+    const anomalyFlow = bullet.anchored ? { x: 0, y: 0 } : SpaceAnomalies.bulletFlow(world.activeAnomaly, world.anomalyElapsed, bullet, W, H, true);
+    bullet.x += (bullet.anchored ? 0 : bullet.vx + anomalyFlow.x) * dt;
+    bullet.y += (bullet.anchored ? 0 : bullet.vy + anomalyFlow.y) * dt;
     if (bullet.y < -25 || bullet.y > H + 25 || bullet.x < -25 || bullet.x > W + 25 || bullet.age > 10) bullet.dead = true;
+  }
+  let activeBulletCount = world.enemyBullets.reduce((count, bullet) => count + (bullet.dead ? 0 : 1), 0);
+  for (const spawned of spawnedEnemyBullets) {
+    const hardCap = world.combatBulletCap + Math.max(0, spawned.budgetBonus || 0);
+    if (activeBulletCount >= hardCap) continue;
+    world.enemyBullets.push(spawned);
+    activeBulletCount += 1;
+    if ((spawned.pattern || "").startsWith("qa:nova-near:")) world.qaNovaHazardFragments += 1;
+    if (spawned.budgetClass === "boss" && (spawned.pattern || "").includes(":blast")) world.combatBossFragments += 1;
+  }
+
+  for (const beam of world.enemyBeams) {
+    beam.age += dt;
+    for (const player of world.players) {
+      if (player.downed || beam.hitIds.includes(player.index)) continue;
+      if (pointToSegmentDistance(player.x, player.y, beam.x1, beam.y1, beam.x2, beam.y2) <= player.hurtRadius + beam.width) {
+        beam.hitIds.push(player.index);
+        if (damagePlayer(player, beam.damage)) {
+          world.combatLaserHits += 1;
+          applyEnemyDebuff(player, beam);
+        }
+      }
+    }
+    if (beam.age >= beam.duration) beam.dead = true;
   }
 
   for (const enemy of world.enemies) updateEnemy(enemy, dt);
+  resolveEnemyCrowding(dt);
   for (const pickup of world.pickups) {
     pickup.age += dt;
     pickup.y += pickup.vy * dt;
-    const rushMagnet = SpaceRush.combatMultipliers(rushActive()).pickupMagnet;
+    const rushMagnet = SpaceRush.combatMultipliers(rushActive(), teamRushBonuses()).pickupMagnet;
     const anomaly = anomalyConfig();
     const magnetTarget = world.players
       .filter((player) => !player.downed && player.pickupMagnetRadius + rushMagnet + statusBonuses(player).pickupMagnet + anomaly.pickupMagnet > 0)
@@ -3563,7 +4902,18 @@ function handleCollisions() {
           burst(bullet.x, bullet.y, "#ffffff", 2, 18);
           break;
         }
-        const damage = damageEnemy(enemy, bullet.damage);
+        const markEvery = world.researchEffects.markEvery;
+        let markBonus = 0;
+        if (markEvery && (enemy.elite || enemy.boss)) {
+          enemy.researchMarks = (enemy.researchMarks || 0) + 1;
+          if (enemy.researchMarks >= markEvery) {
+            enemy.researchMarks = 0;
+            markBonus = bullet.damage;
+            world.researchProcs += 1;
+            burst(enemy.x, enemy.y, "#ffe16c", 8, 45);
+          }
+        }
+        const damage = damageEnemy(enemy, bullet.damage + markBonus);
         bullet.hitIds?.push(enemy.id);
         if (damage.barrier > 0 && !bullet.phaseBarrier) bullet.dead = true;
         else if (bullet.pierceLeft > 0) bullet.pierceLeft -= 1;
@@ -3571,7 +4921,7 @@ function handleCollisions() {
         if (damage.barrier > 0 && bullet.phaseBarrier) markProtocolProc("phaseLance", bullet.x, bullet.y);
         if (enemy.boss) world.shake = Math.max(world.shake, .035);
         const owner = world.players[bullet.owner];
-        owner.energy = clamp(owner.energy + 0.28 * owner.energyGain * statusBonuses(owner).energyGain, 0, 100);
+        if (damage.hull > 0 || damage.barrier > 0) addNovaCharge("hit", NOVA_CONFIG.hitCharge, owner);
         burst(bullet.x, bullet.y, bullet.color, 2, 20);
         if (enemy.hp <= 0) killEnemy(enemy, bullet.owner);
         break;
@@ -3583,10 +4933,12 @@ function handleCollisions() {
     if (bullet.dead) continue;
     for (const player of world.players) {
       if (player.downed) continue;
-      const hitRadius = Math.max(3, bullet.r + player.r - 2.5);
-      if ((bullet.x - player.x) ** 2 + (bullet.y - player.y) ** 2 < hitRadius ** 2) {
+      if (SpaceCollision.hostileBulletHitsPlayer(bullet, player)) {
         bullet.dead = true;
-        if (damagePlayer(player)) applyEnemyDebuff(player, bullet);
+        if (damagePlayer(player, bullet.damage || 1)) {
+          if (bullet.behavior === "homing") world.combatHomingHits += 1;
+          applyEnemyDebuff(player, bullet);
+        }
         break;
       }
     }
@@ -3596,21 +4948,60 @@ function handleCollisions() {
     if (enemy.dead) continue;
     for (const player of world.players) {
       if (player.downed) continue;
-      const hitRadius = enemy.r + player.r - 4;
-      if ((enemy.x - player.x) ** 2 + (enemy.y - player.y) ** 2 < hitRadius ** 2) {
-        damagePlayer(player);
-        if (!enemy.boss) {
-          damageEnemy(enemy, 8);
-          if (enemy.hp <= 0) killEnemy(enemy, player.index);
+      if (enemy.collisionCooldown <= 0 && SpaceCollision.bodyHitsPlayer(enemy, player)) {
+        const impactDamage = enemy.boss ? 4 : enemy.elite ? 4 : Math.max(3, enemy.collisionDamage || 2);
+        const playerDamaged = damagePlayer(player, impactDamage);
+        enemy.collisionCooldown = .7;
+        if (playerDamaged) world.combatBodyCollisions += 1;
+        if (playerDamaged && !enemy.boss) {
+          damageEnemy(enemy, Math.max(12, enemy.maxHp * (enemy.elite ? .34 : .58)));
+          if (enemy.hp <= 0) {
+            killEnemy(enemy, player.index);
+            break;
+          }
         }
       }
+    }
+  }
+
+  for (let first = 0; first < world.enemies.length; first += 1) {
+    const a = world.enemies[first];
+    if (a.dead || a.boss || a.collisionCooldown > 0) continue;
+    for (let second = first + 1; second < world.enemies.length; second += 1) {
+      const b = world.enemies[second];
+      if (b.dead || b.boss || b.collisionCooldown > 0) continue;
+      const impactState = a.aiState === "attack" || b.aiState === "attack" || a.attackPattern === "ramCharge" || b.attackPattern === "ramCharge";
+      if (!impactState) continue;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const range = Math.hypot(dx, dy);
+      const bodyRange = (a.bodyRadius || a.r * .8) + (b.bodyRadius || b.r * .8);
+      if (range >= bodyRange) continue;
+      const normalX = range > .01 ? dx / range : (a.id % 2 ? 1 : -1);
+      const normalY = range > .01 ? dy / range : 0;
+      damageEnemy(a, Math.max(10, b.maxHp * .28));
+      damageEnemy(b, Math.max(10, a.maxHp * .28));
+      const separation = Math.max(8, (bodyRange - range) * .5 + 3);
+      a.x -= normalX * separation;
+      a.y -= normalY * separation;
+      b.x += normalX * separation;
+      b.y += normalY * separation;
+      a.collisionCooldown = .72;
+      b.collisionCooldown = .72;
+      world.combatFriendlyCollisions += 1;
+      burst((a.x + b.x) * .5, (a.y + b.y) * .5, "#ffb45f", 18, 92);
+      world.shake = Math.max(world.shake, .28);
+      audio.sfx("explode");
+      if (a.hp <= 0) killEnemy(a, -1);
+      if (b.hp <= 0) killEnemy(b, -1);
+      break;
     }
   }
 
   for (const pickup of world.pickups) {
     if (pickup.dead) continue;
     for (const player of world.players) {
-      if (!player.downed && distance(pickup, player) < pickup.r + player.r + 2) {
+      if (!player.downed && SpaceCollision.pickupTouchesPlayer(pickup, player)) {
         applyPickup(player, pickup);
         break;
       }
@@ -3620,11 +5011,13 @@ function handleCollisions() {
   for (const object of world.encounterObjects) {
     if (object.dead) continue;
     for (const player of world.players) {
-      if (player.downed || distance(object, player) >= object.r + player.r + 2) continue;
+      const touches = object.type === "meteor"
+        ? SpaceCollision.bodyHitsPlayer({ ...object, bodyRadius: object.r }, player)
+        : SpaceCollision.pickupTouchesPlayer(object, player);
+      if (player.downed || !touches) continue;
       if (object.type === "salvage" && world.activeEncounter?.kind === "collect") {
         object.dead = true;
         world.activeEncounter.progress = Math.min(world.activeEncounter.goal, world.activeEncounter.progress + 1);
-        player.energy = Math.min(100, player.energy + 5 * player.energyGain * statusBonuses(player).energyGain);
         burst(object.x, object.y, object.color, 12, 58);
         audio.sfx("encounterTick");
         pulseGamepad(player.index, 65, .08, .22);
@@ -3641,6 +5034,7 @@ function handleCollisions() {
 
   world.bullets = world.bullets.filter((bullet) => !bullet.dead);
   world.enemyBullets = world.enemyBullets.filter((bullet) => !bullet.dead);
+  world.enemyBeams = world.enemyBeams.filter((beam) => !beam.dead);
   world.enemies = world.enemies.filter((enemy) => !enemy.dead);
   world.pickups = world.pickups.filter((pickup) => !pickup.dead);
   world.encounterObjects = world.encounterObjects.filter((object) => !object.dead);
@@ -3713,11 +5107,16 @@ function update(dt) {
     input.endFrame();
     return;
   }
+  if (world.clearTimer > 0) {
+    input.endFrame();
+    return;
+  }
   updatePlayers(dt);
   if (world.mode !== "playing") {
     input.endFrame();
     return;
   }
+  updateNova(dt);
   updateRush(dt);
   updateEncounter(dt);
   updateObjects(dt);
@@ -3754,16 +5153,18 @@ function renderResult() {
 
 function endGame(victory) {
   if (world.mode === "ended") return;
+  cancelAnimationFrame(showToast.frame);
+  window.clearTimeout(showToast.timeout);
+  toastElement.classList.remove("show");
   if (rushActive()) {
-    const bonus = calculateRushBonus();
-    world.score += bonus;
-    world.rushLastBonus = bonus;
+    world.rushLastBonus = 0;
     world.rushTimer = 0;
     world.rushCharge = 0;
   }
   world.mode = "ended";
   upgradePanel.hidden = true;
   world.enemyBullets = [];
+  world.enemyBeams = [];
   world.enemies = [];
   world.activeEncounter = null;
   world.encounterObjects = [];
@@ -3771,8 +5172,16 @@ function endGame(victory) {
   const previousHighScore = profile.highScore;
   const runSeconds = world.runStartedAt ? Math.max(0, Math.round((performance.now() - world.runStartedAt) / 1000)) : 0;
   if (!QA_FAST_MODE) {
-    const baseReward = Math.max(20, Math.floor(world.score / 300) + world.kills * 2 + (world.stageIndex + 1) * 25 + (victory ? 150 : 0));
-    world.stardustReward = Math.round(baseReward * (world.contract?.stardust || 1));
+    world.researchReward = SpaceResearch.settle({
+      kills: world.kills,
+      sectors: world.stageIndex * 3 + Math.min(3, Math.floor(world.stageTime / activeStage().duration * 3)),
+      bosses: world.researchBosses,
+      encounters: world.encounterHistory.filter((record) => record.success).length,
+      pickups: world.researchPickups, elites: world.researchElites,
+      victory, multiplier: world.contract?.stardust || 1,
+    }, world.runResearch, world.runSeed, profile.runs);
+    world.stardustReward = world.researchReward.dust;
+    profile.research = world.researchReward.research;
     profile.runs += 1;
     profile.clears += victory ? 1 : 0;
     if (victory) profile.contractClears[world.contractId] = (profile.contractClears[world.contractId] || 0) + 1;
@@ -4306,15 +5715,26 @@ function drawHud() {
   const p2 = world.players[1];
   pixelText("P1", 9, 10, PLAYER_CONFIG[0].color, "left", 7);
   pixelText(String(world.score).padStart(6, "0"), 27, 10, "#f7f4df", "left", 7);
-  drawBar(9, 14, 65, p1.hp / p1.maxHp, PLAYER_CONFIG[0].color);
-  drawBar(78, 14, 48, p1.energy / 100, "#c691ff");
+  drawBar(9, 14, 65, p1.hp / p1.maxHp, p1.hp / p1.maxHp <= .3 ? "#ff826b" : "#94dba6");
+  drawBar(78, 14, 48, world.novaCharge / NOVA_CONFIG.threshold, "#c691ff");
   pixelText(`W${p1.weapon}`, 130, 18, "#8585a4", "left", 6);
 
   pixelText(world.gameMode === "solo" ? "AI" : "P2", W - 9, 10, PLAYER_CONFIG[1].color, "right", 7);
   pixelText(String(world.score).padStart(6, "0"), W - 27, 10, "#f7f4df", "right", 7);
-  drawBar(W - 74, 14, 65, p2.hp / p2.maxHp, PLAYER_CONFIG[1].color, true);
-  drawBar(W - 126, 14, 48, p2.energy / 100, "#c691ff", true);
+  drawBar(W - 74, 14, 65, p2.hp / p2.maxHp, p2.hp / p2.maxHp <= .3 ? "#ff826b" : "#94dba6", true);
+  drawBar(W - 126, 14, 48, world.novaCharge / NOVA_CONFIG.threshold, "#c691ff", true);
   pixelText(`W${p2.weapon}`, W - 130, 18, "#8585a4", "right", 6);
+
+  for (const player of world.players) {
+    const left = player.index === 0;
+    const x = left ? 9 : W - 9;
+    const align = left ? "left" : "right";
+    drawBar(left ? 9 : W - 74, 20, 65, player.shield / player.maxShield, player.shieldHitTimer > 0 ? "#d6ffff" : "#6edcf5", !left);
+    pixelText(t("hud.hullShield", { hp: Math.max(0, player.hp), maxHp: player.maxHp, shield: player.shield, maxShield: player.maxShield }), x, 34, player.shieldBreakTimer > 0 ? "#d6ffff" : "#bcc5d8", align, 5);
+    if (player.hp / player.maxHp <= .3 && !player.downed) pixelText(t("hud.hullCritical"), x, 43, "#ffae77", align, 5);
+  }
+  pixelText(t("hud.novaMeter", { percent: Math.floor(world.novaCharge / NOVA_CONFIG.threshold * 100) }), 78, 24, "#c691ff", "left", 4.5);
+  pixelText(t("hud.novaMeter", { percent: Math.floor(world.novaCharge / NOVA_CONFIG.threshold * 100) }), W - 78, 24, "#c691ff", "right", 4.5);
 
   pixelText(`${stageText(stage, "code")} // ${biomeText(stage.biome, "name")}`, W / 2, 10, "#d6d4e4", "center", 6);
   const progress = world.bossSpawned ? 1 : world.stageTime / stage.duration;
@@ -4326,13 +5746,15 @@ function drawHud() {
 
   if (world.combo > 1) {
     const scale = Math.min(2, 1 + world.combo * 0.02);
-    pixelText(t("hud.combo", { combo: world.combo }), W - 9, 43, world.combo > 20 ? "#ffe27a" : "#ffffff", "right", 7 * scale);
+    if (p2.hp / p2.maxHp > .3) pixelText(t("hud.combo", { combo: world.combo }), W - 9, 43, world.combo > 20 ? "#ffe27a" : "#ffffff", "right", 7 * scale);
   }
   const threat = threatConfig();
   const threatPulse = world.threatPulseTimer > 0 ? .72 + Math.sin(world.time * 20) * .28 : 1;
   ctx.globalAlpha = threatPulse;
   pixelText(t("hud.threatLevel", { level: world.threatTier + 1, name: t(threat.nameKey) }), W - 9, 53, threat.color, "right", 5.5);
   drawBar(W - 62, 57, 53, (world.threatTier + 1) / THREAT_TIERS.length, threat.color, true);
+  const combatBeat = COMBAT.BEATS.find((beat) => beat.id === world.combatBeatId) || COMBAT.BEATS[0];
+  pixelText(t("hud.combatBeat", { beat: t(combatBeat.nameKey), tier: world.combatPatternTier + 1 }), W - 9, 68, combatBeat.id === "killzone" ? "#ff8a70" : "#9d9bb4", "right", 5);
   ctx.globalAlpha = 1;
   const anomaly = world.activeAnomaly;
   if (anomaly) {
@@ -4356,7 +5778,7 @@ function drawHud() {
   }
   if (world.linked) pixelText(t("hud.resonance"), W / 2, H - 8, "#92fff0", "center", 6);
   if (world.activeProtocols.length) {
-    const protocol = world.activeProtocols[0];
+    const protocol = world.activeProtocols[Math.floor(world.time / 4) % world.activeProtocols.length];
     pixelText(t("hud.protocolActive", { protocol: localizedName(protocol), procs: world.protocolProcs }), 9, H - 8, protocol.color, "left", 5.5);
   }
   for (const player of world.players) {
@@ -4382,12 +5804,7 @@ function drawHud() {
     pixelText(phaseLabel, W / 2, 48, world.boss.phaseShield > 0 ? "#ffffff" : "#85849e", "center", 5.5);
   }
 
-  for (const player of world.players) {
-    if (!player.downed && player.energy >= 100) {
-      const x = player.index === 0 ? 9 : W - 9;
-      pixelText(t("hud.skillReady"), x, 34, PLAYER_CONFIG[player.index].light, player.index === 0 ? "left" : "right", 6);
-    }
-  }
+  if (world.novaCharge >= NOVA_CONFIG.threshold) pixelText(world.novaCooldown > 0 ? t("hud.novaCooling", { seconds: Math.ceil(world.novaCooldown) }) : t("hud.novaReady"), W / 2, world.boss ? 61 : 34, "#d7a8ff", "center", 6);
 }
 
 function drawEncounterHud() {
@@ -4447,17 +5864,17 @@ function drawVariantNotice() {
   const reveal = clamp((notice.total - notice.timer) * 5, 0, 1) * clamp(notice.timer * 2.6, 0, 1);
   const enemy = notice.enemy;
   const moduleNames = [enemy.movementNameKey, enemy.weaponNameKey, enemy.coreNameKey, enemy.aiNameKey, enemy.payloadNameKey].map((key) => t(key)).join(" // ");
-  const width = 218;
-  const x = W / 2 - width / 2;
-  const y = 57;
+  const width = 158;
+  const x = 8;
+  const y = 64;
   ctx.save();
   ctx.globalAlpha = reveal;
-  ctx.fillStyle = "rgba(5, 6, 18, .88)";
-  ctx.fillRect(x, y, width, 30);
+  ctx.fillStyle = "rgba(5, 6, 18, .78)";
+  ctx.fillRect(x, y, width, 34);
   ctx.fillStyle = enemy.moduleColor || activeStage().accent;
-  ctx.fillRect(x, y, 3, 30);
-  pixelText(t("hud.enemyScan"), W / 2, y + 10, enemy.moduleColor || activeStage().accent, "center", 5.5);
-  pixelText(moduleNames, W / 2, y + 22, "#ffffff", "center", 7);
+  ctx.fillRect(x, y, 3, 34);
+  pixelText(t("hud.enemyScan"), x + 9, y + 9, enemy.moduleColor || activeStage().accent, "left", 5);
+  wrappedPixelText(moduleNames, x + 9, y + 19, width - 16, 7, "#ffffff", "left", 5.25, 2);
   ctx.restore();
 }
 
@@ -4530,6 +5947,32 @@ function drawMenuScene() {
   ctx.globalAlpha = 1;
 }
 
+function enemyLayoutStats() {
+  const enemies = world.enemies.filter((enemy) => !enemy.dead && !enemy.boss && enemy.aiState !== "entry" && enemy.y >= 20 && enemy.y < H - 40);
+  let overlapPairs = 0;
+  let closePairs = 0;
+  let minClearance = enemies.length > 1 ? Number.POSITIVE_INFINITY : 0;
+  for (let first = 0; first < enemies.length; first += 1) {
+    for (let second = first + 1; second < enemies.length; second += 1) {
+      const a = enemies[first];
+      const b = enemies[second];
+      const clearance = Math.hypot(a.x - b.x, a.y - b.y) - a.r - b.r;
+      minClearance = Math.min(minClearance, clearance);
+      if (clearance < 0) overlapPairs += 1;
+      if (clearance < 12) closePairs += 1;
+    }
+  }
+  const xs = enemies.map((enemy) => enemy.x);
+  const ys = enemies.map((enemy) => enemy.y);
+  return {
+    overlapPairs,
+    closePairs,
+    minClearance: Number.isFinite(minClearance) ? minClearance : 0,
+    spreadX: xs.length ? Math.max(...xs) - Math.min(...xs) : 0,
+    spreadY: ys.length ? Math.max(...ys) - Math.min(...ys) : 0,
+  };
+}
+
 function draw() {
   renderer3D.render(world, world.routeStages.length ? world.routeStages : STAGES, PLAYER_CONFIG, profile.settings);
   resizeHudCanvas();
@@ -4562,6 +6005,15 @@ function draw() {
     ctx.globalAlpha = 1;
   }
 
+  const enemyLayout = enemyLayoutStats();
+  const activeEnemies = world.enemies.filter((enemy) => !enemy.boss);
+  const enemyBulletSpeeds = world.enemyBullets.map((bullet) => Math.hypot(bullet.vx, bullet.vy));
+  const enemyBulletAverage = enemyBulletSpeeds.length ? enemyBulletSpeeds.reduce((sum, speed) => sum + speed, 0) / enemyBulletSpeeds.length : 0;
+  const homingSpeeds = world.enemyBullets.filter((bullet) => bullet.behavior === "homing").map((bullet) => Math.hypot(bullet.vx, bullet.vy));
+  const homingAverage = homingSpeeds.length ? homingSpeeds.reduce((sum, speed) => sum + speed, 0) / homingSpeeds.length : 0;
+  const standoffErrors = activeEnemies.map((enemy) => Math.abs(enemy.rangeError)).filter(Number.isFinite);
+  const activeEnemyTelegraphs = activeEnemies.filter((enemy) => enemy.aiState === "telegraph" && enemy.attackPattern);
+  const nativeSpecies = activeStage().biome?.speciesId || "";
   canvas.dataset.mode = world.mode;
   canvas.dataset.language = SpaceI18n.language;
   canvas.dataset.stage = String(world.stageIndex + 1);
@@ -4575,7 +6027,69 @@ function draw() {
   canvas.dataset.drafts = String(world.draftCount);
   canvas.dataset.draftContext = world.draftContext;
   canvas.dataset.enemies = String(world.enemies.length);
+  canvas.dataset.enemyOverlapPairs = String(enemyLayout.overlapPairs);
+  canvas.dataset.enemyClosePairs = String(enemyLayout.closePairs);
+  canvas.dataset.enemyMinClearance = enemyLayout.minClearance.toFixed(1);
+  canvas.dataset.enemySpread = `${enemyLayout.spreadX.toFixed(1)}|${enemyLayout.spreadY.toFixed(1)}`;
+  canvas.dataset.enemyStandoffError = standoffErrors.length
+    ? `${(standoffErrors.reduce((sum, error) => sum + error, 0) / standoffErrors.length).toFixed(1)}|${Math.max(...standoffErrors).toFixed(1)}`
+    : "0.0|0.0";
   canvas.dataset.enemyBullets = String(world.enemyBullets.length);
+  canvas.dataset.enemyBeams = String(world.enemyBeams.length);
+  canvas.dataset.enemyHomingBullets = String(world.enemyBullets.filter((bullet) => bullet.behavior === "homing").length);
+  canvas.dataset.enemyBlastBullets = String(world.enemyBullets.filter((bullet) => bullet.behavior === "blast").length);
+  canvas.dataset.enemyHomingSpeed = homingSpeeds.length
+    ? `${Math.min(...homingSpeeds).toFixed(1)}|${homingAverage.toFixed(1)}|${Math.max(...homingSpeeds).toFixed(1)}`
+    : "0.0|0.0|0.0";
+  canvas.dataset.enemyBeamFinite = world.enemyBeams.every((beam) => [beam.x1, beam.y1, beam.x2, beam.y2].every(Number.isFinite)) ? "true" : "false";
+  canvas.dataset.enemyBulletSpeed = enemyBulletSpeeds.length
+    ? `${Math.min(...enemyBulletSpeeds).toFixed(1)}|${enemyBulletAverage.toFixed(1)}|${Math.max(...enemyBulletSpeeds).toFixed(1)}`
+    : "0.0|0.0|0.0";
+  canvas.dataset.combatLaserHits = String(world.combatLaserHits);
+  canvas.dataset.combatHomingHits = String(world.combatHomingHits);
+  canvas.dataset.combatBlastHits = String(world.combatBlastHits);
+  canvas.dataset.combatDeathrattles = String(world.combatDeathrattles);
+  canvas.dataset.combatBodyCollisions = String(world.combatBodyCollisions);
+  canvas.dataset.combatFriendlyCollisions = String(world.combatFriendlyCollisions);
+  canvas.dataset.combatInvalidProjectiles = String(world.combatInvalidProjectiles);
+  canvas.dataset.combatBossFragments = String(world.combatBossFragments);
+  canvas.dataset.ambientEliteSpawns = String(world.ambientEliteSpawns);
+  canvas.dataset.combatBeat = world.combatBeatId;
+  canvas.dataset.combatPressure = world.combatPressure.toFixed(3);
+  canvas.dataset.combatPatternTier = String(world.combatPatternTier);
+  canvas.dataset.combatBulletCap = String(world.combatBulletCap);
+  canvas.dataset.combatHardBulletCap = String(world.combatBulletCap + (world.boss ? 34 : 12));
+  canvas.dataset.bossAddCap = String(world.boss ? [8, 10, 12][world.stageIndex] : 0);
+  canvas.dataset.bossAdds = String(world.boss ? activeEnemies.filter((enemy) => enemy.bossAdd).length : 0);
+  canvas.dataset.combatStateTransitions = String(world.combatStateTransitions);
+  canvas.dataset.combatTelegraphs = String(world.combatTelegraphs);
+  canvas.dataset.combatPatterns = [...world.combatPatterns].join(",");
+  canvas.dataset.enemyTelegraphPatterns = activeEnemyTelegraphs.map((enemy) => enemy.attackPattern).join(",");
+  canvas.dataset.enemyTelegraphTargets = activeEnemyTelegraphs.map((enemy) => {
+    const targetIndex = Number.isInteger(enemy.attackTargetIndex) ? enemy.attackTargetIndex : -1;
+    const endX = Number.isFinite(enemy.attackEndX) ? enemy.attackEndX : enemy.attackTargetX;
+    const endY = Number.isFinite(enemy.attackEndY) ? enemy.attackEndY : enemy.attackTargetY;
+    return `${enemy.id}|${enemy.attackPattern}|${targetIndex}|${enemy.x.toFixed(1)}|${enemy.y.toFixed(1)}|${enemy.attackTargetX.toFixed(1)}|${enemy.attackTargetY.toFixed(1)}|${endX.toFixed(1)}|${endY.toFixed(1)}`;
+  }).join(",");
+  canvas.dataset.enemyAiStates = [...new Set(world.enemies.filter((enemy) => !enemy.boss).map((enemy) => enemy.aiState))].filter(Boolean).join(",");
+  canvas.dataset.enemyAiDoctrines = [...new Set(activeEnemies.map((enemy) => `${enemy.aiModule}:${enemy.aiState}`))].join(",");
+  canvas.dataset.enemyHulls = [...new Set(activeEnemies.map((enemy) => enemy.type))].join(",");
+  canvas.dataset.enemyPositions = activeEnemies.slice(0, 8).map((enemy) => `${enemy.id}|${enemy.x.toFixed(1)}|${enemy.y.toFixed(1)}|${enemy.aiState}`).join(",");
+  canvas.dataset.enemyWeapons = [...new Set(activeEnemies.map((enemy) => enemy.weaponModule))].filter(Boolean).join(",");
+  canvas.dataset.enemySpecies = nativeSpecies;
+  canvas.dataset.enemyNativeCount = String(activeEnemies.filter((enemy) => enemy.type === nativeSpecies).length);
+  canvas.dataset.enemyEliteCount = String(activeEnemies.filter((enemy) => enemy.elite).length);
+  canvas.dataset.enemyMaxHp = String(activeEnemies.length ? Math.max(...activeEnemies.map((enemy) => enemy.maxHp)) : 0);
+  canvas.dataset.enemyMaxAge = (activeEnemies.length ? Math.max(...activeEnemies.map((enemy) => enemy.age)) : 0).toFixed(2);
+  canvas.dataset.enemyMaxCycles = String(activeEnemies.length ? Math.max(...activeEnemies.map((enemy) => enemy.attackCycle || 0)) : 0);
+  canvas.dataset.enemyFormations = String(new Set(world.enemies.filter((enemy) => !enemy.boss && enemy.formationId).map((enemy) => enemy.formationId)).size);
+  canvas.dataset.lastFormation = world.lastFormationId || "solo";
+  canvas.dataset.enemyScanLayout = "edge-compact";
+  canvas.dataset.enemyScanActive = world.variantNotice ? "true" : "false";
+  canvas.dataset.enemyScanVisible = world.variantNotice && world.introTimer <= 0 && world.clearTimer <= 0 && !world.stageEvent ? "true" : "false";
+  canvas.dataset.enemyScanBounds = "8,64,158,34";
+  canvas.dataset.runGrowth = SpaceRoguelike.growthScore(world.upgrades).toFixed(2);
+  canvas.dataset.qaCombat = world.qaCombatApplied ? `${world.stageIndex + 1}:${(world.stageTime / activeStage().duration).toFixed(3)}` : "off";
   const adaptiveThreat = threatConfig();
   canvas.dataset.threatTier = String(world.threatTier);
   canvas.dataset.threatId = adaptiveThreat.id;
@@ -4617,11 +6131,27 @@ function draw() {
   canvas.dataset.bossAttack = world.boss?.attackId || "";
   canvas.dataset.bossAttackCharge = (world.boss?.attackCharge || 0).toFixed(2);
   canvas.dataset.playerHp = world.players.map((player) => player.hp).join(",");
+  canvas.dataset.playerMaxHp = world.players.map((player) => player.maxHp).join(",");
   canvas.dataset.playerShield = world.players.map((player) => player.shield).join(",");
+  canvas.dataset.playerShieldAbsorbed = world.players.map((player) => player.shieldAbsorbed).join(",");
+  canvas.dataset.playerHullDamage = world.players.map((player) => player.hullDamageTaken).join(",");
+  canvas.dataset.playerDamageState = world.players.map((player) => player.downed ? "downed" : player.hp / player.maxHp <= .3 ? "critical" : player.hp / player.maxHp <= .6 ? "damaged" : "healthy").join(",");
+  canvas.dataset.playerHitFeedback = world.players.map((player) => `${player.shieldHitTimer.toFixed(2)}|${player.shieldBreakTimer.toFixed(2)}|${player.hullHitTimer.toFixed(2)}`).join(",");
   canvas.dataset.playerSpeed = world.players.map((player) => player.speed).join(",");
   canvas.dataset.playerFireRate = world.players.map((player) => player.fireRate).join(",");
   canvas.dataset.playerDamage = world.players.map((player) => player.damage.toFixed(3)).join(",");
   canvas.dataset.playerEnergyGain = world.players.map((player) => player.energyGain.toFixed(3)).join(",");
+  canvas.dataset.playerShots = world.players.map((player) => player.shots).join(",");
+  canvas.dataset.playerPosition = world.players.map((player) => `${player.x.toFixed(1)}|${player.y.toFixed(1)}`).join(",");
+  canvas.dataset.playerDamageTaken = world.players.map((player) => player.damageTaken).join(",");
+  canvas.dataset.playerDowned = world.players.map((player) => player.downed ? "1" : "0").join(",");
+  canvas.dataset.playerDownCount = world.players.map((player) => player.downCount).join(",");
+  canvas.dataset.playerRescueCount = world.players.map((player) => player.rescueCount).join(",");
+  canvas.dataset.playerProjectiles = String(world.bullets.length);
+  canvas.dataset.growthCapstones = world.players.map((player) => `${player.burstCadence > 0 ? 1 : 0}|${player.prismEcho > 0 ? 1 : 0}|${player.droneVolley > 0 ? 1 : 0}`).join(",");
+  canvas.dataset.growthCapstoneProcs = world.players.map((player) => `${player.capstoneHeavyProcs}|${player.capstonePrismProcs}|${player.capstoneDroneProcs}`).join(",");
+  canvas.dataset.qaGrowth = QA_GROWTH_MODE || "off";
+  canvas.dataset.aiIntent = world.gameMode === "solo" ? world.players[1]?.aiIntent || "formation" : "human-coop";
   canvas.dataset.fps = String(measuredFps);
   canvas.dataset.qa = QA_LABEL;
   canvas.dataset.frame = world.loadoutFrame;
@@ -4632,10 +6162,20 @@ function draw() {
   canvas.dataset.talents = profile.talents.join(",");
   canvas.dataset.talentCount = String(profile.talents.length);
   canvas.dataset.stardustReward = String(world.stardustReward);
+  canvas.dataset.researchRanks = JSON.stringify(profile.research.ranks);
+  canvas.dataset.researchFocus = world.runResearch.focus;
+  canvas.dataset.researchProcs = String(world.researchProcs);
+  canvas.dataset.researchCaches = String(world.researchReward?.cacheCount || 0);
+  canvas.dataset.growthGrace = world.growthGrace.toFixed(2);
+  canvas.dataset.pressureHolds = String(world.pressureHolds);
   canvas.dataset.runSeed = String(world.runSeed);
   canvas.dataset.upgradeCount = String(world.upgradeHistory.length);
+  canvas.dataset.kills = String(world.kills);
   canvas.dataset.upgrades = [...new Set(world.upgradeHistory)].map((id) => `${id}:${upgradeLevel(id)}`).join(",");
   canvas.dataset.draftOptions = world.draftOptions.map((upgrade) => upgrade.id).join(",");
+  canvas.dataset.draftOfferHistory = world.draftOfferHistory.map((offer) => offer.join("+")).join("|");
+  canvas.dataset.buildFocus = SpaceRoguelike.focusPath(world.upgradeHistory) || "none";
+  canvas.dataset.rngStreams = "combat,draft,loot,route,cosmetic";
   canvas.dataset.routeSignature = world.routeSignature;
   canvas.dataset.biome = activeStage().biome?.id || "";
   canvas.dataset.enemyVariants = String(world.discoveredVariants.size);
@@ -4657,16 +6197,51 @@ function draw() {
     : "";
   canvas.dataset.encounterHistory = world.encounterHistory.map((record) => `${record.encounter.id}:${record.success ? "success" : "failed"}`).join(",");
   canvas.dataset.encounterObjects = String(world.encounterObjects.length);
+  canvas.dataset.lootBudget = world.lootDropBudget.toFixed(3);
+  canvas.dataset.lootDrought = String(world.lootDrought);
+  canvas.dataset.lootMaxDrought = String(world.lootMaxDrought);
+  canvas.dataset.lootDrops = String(world.lootDrops);
+  canvas.dataset.lootBag = world.lootBag.join(",") || "empty";
+  canvas.dataset.teamNovaCharge = world.novaCharge.toFixed(2);
+  canvas.dataset.novaSharedMirrors = world.players.map((player) => player.energy.toFixed(2)).join("|");
+  canvas.dataset.novaCount = String(world.novaCount);
+  canvas.dataset.novaHitChargeEarned = world.novaHitChargeEarned.toFixed(2);
+  canvas.dataset.novaChargeRate = teamNovaChargeRate().toFixed(3);
+  canvas.dataset.novaClearRadius = String(NOVA_CONFIG.clearRadius + teamMaximum("novaRadiusBonus"));
+  canvas.dataset.novaCooldown = world.novaCooldown.toFixed(2);
+  canvas.dataset.novaMinInterval = world.novaMinimumInterval.toFixed(2);
+  canvas.dataset.novaLocalClears = String(world.novaLocalClears);
+  canvas.dataset.novaFullClears = String(world.novaFullClears);
+  canvas.dataset.novaOutsideSurvivors = String(world.novaOutsideSurvivors);
+  canvas.dataset.novaBeamsAtTrigger = String(world.novaBeamsAtTrigger);
+  canvas.dataset.novaBeamsCleared = String(world.novaBeamsCleared);
+  canvas.dataset.novaSelfChargeRejected = String(world.novaSelfChargeBlocked);
+  canvas.dataset.novaSuppressedDeathrattles = String(world.novaSuppressedDeathrattles);
+  canvas.dataset.novaHazardFragments = String(world.qaNovaHazardFragments);
+  canvas.dataset.novaLastRadius = world.novaLastRadius.toFixed(1);
   canvas.dataset.rushCharge = world.rushCharge.toFixed(2);
   canvas.dataset.rushActive = String(rushActive());
   canvas.dataset.rushTimer = world.rushTimer.toFixed(2);
+  canvas.dataset.rushCooldown = world.rushCooldown.toFixed(2);
   canvas.dataset.rushChain = String(world.rushChain);
   canvas.dataset.rushBestChain = String(world.rushBestChain);
   canvas.dataset.rushCount = String(world.rushCount);
+  canvas.dataset.rushStartClears = String(world.rushStartClears);
+  canvas.dataset.rushGuardClears = String(world.rushGuardClears);
+  canvas.dataset.rushGuardLimit = String(teamRushBonuses().rushGuardLimit);
+  const rushDiagnostics = SpaceRush.combatMultipliers(true, teamRushBonuses());
+  canvas.dataset.rushMoveSpeed = rushDiagnostics.moveSpeed.toFixed(3);
+  canvas.dataset.rushHandling = rushDiagnostics.handling.toFixed(3);
+  canvas.dataset.rushFireRate = rushDiagnostics.fireRate.toFixed(3);
+  canvas.dataset.rushDamage = rushDiagnostics.damage.toFixed(3);
   canvas.dataset.rushLastBonus = String(world.rushLastBonus);
   canvas.dataset.protocols = world.activeProtocols.map((protocol) => protocol.id).join(",");
+  canvas.dataset.protocolPrimary = world.activeProtocols[0]?.id || "none";
   canvas.dataset.protocolCount = String(world.activeProtocols.length);
   canvas.dataset.protocolProcs = String(world.protocolProcs);
+  canvas.dataset.playerHurtRadius = world.players.map((player) => player.hurtRadius.toFixed(2)).join(",");
+  canvas.dataset.playerBodyRadius = world.players.map((player) => player.bodyRadius.toFixed(2)).join(",");
+  canvas.dataset.playerPickupRadius = world.players.map((player) => player.pickupRadius.toFixed(2)).join(",");
   canvas.dataset.hudResolution = `${canvas.width}x${canvas.height}`;
   canvas.dataset.hudScale = `${hudScaleX.toFixed(3)}x${hudScaleY.toFixed(3)}`;
 }

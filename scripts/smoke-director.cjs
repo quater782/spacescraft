@@ -96,7 +96,7 @@ async function run() {
     maxEncounters = Math.max(maxEncounters, Number(latest.encounters || 0));
     maxDrafts = Math.max(maxDrafts, Number(latest.drafts || 0));
     sawBoss ||= latest.bossState !== "off";
-    if (sawBoss && maxEvents === 9 && maxEncounters === 4 && maxDrafts >= 2) break;
+    if (sawBoss && maxEvents === 9 && maxEncounters === 4 && maxDrafts >= 4) break;
     if (latest.mode === "ended") break;
   }
   window.webContents.sendInputEvent({ type: "keyUp", keyCode: "A" });
@@ -109,7 +109,7 @@ async function run() {
   if (latest.sceneAnomaly !== latest.anomalyId) throw new Error(`gameplay/render anomaly mismatch: ${JSON.stringify(latest)}`);
   if (maxEvents !== 9) throw new Error(`formation timeline incomplete: ${maxEvents}/9`);
   if (maxEncounters !== 4) throw new Error(`encounter timeline incomplete: ${maxEncounters}/4`);
-  if (maxDrafts < 2 || !draftContexts.has("mid-stage")) throw new Error(`mid-stage drafts missing: ${maxDrafts}, ${JSON.stringify([...draftContexts])}`);
+  if (maxDrafts < 4 || !draftContexts.has("mid-stage")) throw new Error(`mid-stage drafts missing: ${maxDrafts}, ${JSON.stringify([...draftContexts])}`);
   if (!sawBoss) throw new Error(`chapter boss was not reached: ${JSON.stringify(latest)}`);
   if (latest.renderer !== "three-r185-instanced-voxel" || latest.expeditionSectors !== "9-progressive-voxel-gates" || latest.sectorAnomalies !== "9-seeded-gameplay-fields") throw new Error(`sector renderer contract missing: ${JSON.stringify(latest)}`);
   if (Number(latest.fps) < 40) throw new Error(`director smoke performance too low: ${latest.fps} FPS`);

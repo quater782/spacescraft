@@ -35,19 +35,45 @@ assert.deepEqual([...api.activeProtocols({ rail: 1, phase: 1 })].map((protocol) 
 assert.equal(api.eligibleMates(railLevels, upgrades).some(({ upgrade }) => upgrade.id === "phase"), true);
 
 const baseChoices = ["overclock", "gyro", "nanites"].map((id) => upgrades.find((upgrade) => upgrade.id === id));
-const injected = api.injectProtocolChoice({ choices: baseChoices, levels: railLevels, upgrades, random: () => 0 });
+const firstWindow = api.injectProtocolChoice({
+  choices: baseChoices, levels: railLevels, upgrades, random: () => 0,
+  draftIndex: 1, offerHistory: [["rail", "turbo", "capacitor"]], pickHistory: ["rail"],
+});
+assert.deepEqual(Array.from(firstWindow, (upgrade) => upgrade.id), Array.from(baseChoices, (upgrade) => upgrade.id), "protocol mates must not be forced every immediate draft");
+const injected = api.injectProtocolChoice({
+  choices: baseChoices, levels: railLevels, upgrades, random: () => 0,
+  draftIndex: 2, offerHistory: [["rail", "turbo", "capacitor"], ["overclock", "gyro", "nanites"]], pickHistory: ["rail", "overclock"],
+});
 assert.equal(injected.length, 3);
 assert.equal(new Set(injected.map((upgrade) => upgrade.id)).size, 3);
-assert.equal(injected.some((upgrade) => upgrade.id === "phase"), true, "second draft must expose a deterministic protocol mate");
+assert.equal(injected[2].id, "phase", "the mate must appear exactly once by the second subsequent draft");
+const notRepeated = api.injectProtocolChoice({
+  choices: baseChoices, levels: railLevels, upgrades, random: () => 0,
+  draftIndex: 2, offerHistory: [["rail", "turbo", "capacitor"], ["overclock", "phase", "nanites"]], pickHistory: ["rail", "overclock"],
+});
+assert.deepEqual(Array.from(notRepeated, (upgrade) => upgrade.id), Array.from(baseChoices, (upgrade) => upgrade.id), "an already offered mate must not be injected again");
+
+const multiLevels = { rail: 1, phase: 1, overclock: 1, turbo: 1 };
+assert.deepEqual(Array.from(api.activeProtocols(multiLevels, ["rail", "phase", "overclock", "turbo"]), (protocol) => protocol.id), ["cometDrive", "phaseLance"], "completing a new synergy must retain older ones");
+assert.deepEqual(Array.from(api.activeProtocols(multiLevels, ["overclock", "turbo", "rail", "phase"]), (protocol) => protocol.id), ["phaseLance", "cometDrive"], "completion order affects display only");
+assert.deepEqual(Array.from(api.activeProtocols(multiLevels, ["overclock", "turbo", "rail", "phase", "overclock"]), (protocol) => protocol.id), ["phaseLance", "cometDrive"], "levelling an old component must preserve all synergies");
 
 const neutral = api.combatBonuses({});
 assert.equal(neutral.movingFireRate, 1);
 assert.equal(neutral.chainTargets, 0);
 assert.equal(neutral.pickupRush, 0);
-const full = api.combatBonuses(Object.fromEntries(upgrades.map((upgrade) => [upgrade.id, 1])));
-assert.ok(full.movingFireRate > 1 && full.phaseDamage > 1 && full.seekerTurn > 0);
-assert.ok(full.chainDamage > 1 && full.chainTargets === 1 && full.pickupEnergy > 0);
-assert.ok(full.linkedCharge > 1 && full.beamDamage > 1 && full.beamRadius > 0);
+const comet = api.combatBonuses(multiLevels, ["rail", "phase", "overclock", "turbo"]);
+assert.equal(comet.movingFireRate, 1.08);
+assert.equal(comet.phaseDamage, 1.06, "all completed protocols must grant their effects");
+const phase = api.combatBonuses(multiLevels, ["overclock", "turbo", "rail", "phase"]);
+assert.equal(phase.phaseDamage, 1.06);
+assert.equal(phase.movingFireRate, 1.08);
+const allLevels = Object.fromEntries(upgrades.map((upgrade) => [upgrade.id, upgrade.max]));
+assert.equal(api.activeProtocols(allLevels).length, 7, "every earned protocol must coexist even without pick history");
+const resonant = api.combatBonuses({ resonanceArray: 1, gyro: 1 }, ["resonanceArray", "gyro"]);
+assert.equal(resonant.linkedCharge, 1.2);
+assert.equal(resonant.beamDamage, 1.12);
+assert.equal(resonant.beamRadius, 2);
 
 assert.match(gameSource, /SpaceRelics\.injectProtocolChoice/);
 assert.match(gameSource, /SpaceRelics\.combatBonuses/);
@@ -57,4 +83,4 @@ assert.match(rendererSource, /drawProtocols\(world\)/);
 assert.match(htmlSource, /src="\.\/src\/relics\.js/);
 assert.doesNotMatch(relicSource, /enemyHp|spawnRate|bulletSpeed/, "protocol rules must not raise first-chapter enemy pressure");
 
-console.log("Relic protocols verified: 7 exact pairs, deterministic mate injection, automatic combat bonuses, QA diagnostics, and 3D integration.");
+console.log("Relic protocols verified: 7 coexisting pairs, mate pity, stable display order, cumulative bonuses, QA diagnostics and 3D integration.");

@@ -18,6 +18,16 @@ jobs:
       - run: npm ci
       - run: npm run verify
       - run: npm run package:win
+      - run: npm run smoke:packaged
+        env:
+          SPACECRAFT_SMOKE_OUTPUT: ${{ runner.temp }}/spacecraft-packaged-smoke
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spacecraft-windows-startup-check
+          path: |
+            ${{ runner.temp }}/spacecraft-packaged-smoke/*.png
+            ${{ runner.temp }}/spacecraft-packaged-smoke/*.json
       - run: npm run make:win
       - uses: actions/upload-artifact@v4
         with:

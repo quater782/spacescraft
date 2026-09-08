@@ -61,31 +61,34 @@
 - P1 使用深蓝与青色；P2 使用酒红与珊瑚红。两者共享人类风筝形语法：长鼻、薄翼、清楚尾焰。
 - 模组嵌入背脊、翼根或护盾肩，不悬浮，不给主体增加第三套装饰色；常规状态只露出一个凹入式功能灯。四种模组必须从轮廓位置而非碎块数量辨认。
 - 机体追求少而完整的大块面。单侧翼与尾翼不得靠多层重复小方块堆厚。
-- 护盾只使用四片贴翼表面板，不再使用八颗悬浮白点；共振光链使用低白度青色分节，不得盖过舰体。
+- 护盾使用围绕机体的四片开放弧形护壳，吸收时局部亮起，耗尽时向外碎裂；耐久 ≤60% 出现焦痕和烟迹、≤30% 增加灼红裂痕，维修后随实际耐久恢复；共振光链使用低白度青色分节，不得盖过舰体。
 
 ### 敌军
 
 - 70% 深紫甲壳，20% 血红结构，10% 酸性黄绿眼核/武器尖端。
 - 使用新月、甲壳、分叉颚、触须、眼核和不对称重心；禁止复用玩家机鼻、机翼和尾翼构造器。
 - 酸性颜色只能出现在眼睛、尖端、核心和弹体载荷，不得铺满大翼面。
-- 七类船体先以针刺、甲虫、星镰、水母、双枪、母巢和新月剪影区分职责；五个功能模块改写表面脉络、尾器官、口器、甲壳缝与眼阵，不能表现成散落积木或人类外挂武器。
+- 七类通用船体以针刺、甲虫、星镰、水母、双枪、母巢和新月剪影区分职责；九个生态原生种再分别以蜜露蛾翼、棱晶魟鳍、彗潮撞角、极光吸能须、雷轨甲壳、云礁伞体、蚀影双镰、墓园镜棱和虚空孢囊建立大尺度识别。航行、武器、核心、AI 与载荷模块改写表面脉络、尾器官、口器、甲壳缝与眼阵，不能表现成散落积木或人类外挂武器。
 
 三套 Boss 只看轮廓也必须成立：花瓣母巢使用六瓣放射体，熔炉脊兽使用纵向脊柱与肩塔，虚空冠使用中央裂隙和双镰体。中性画廊负责证明本体差异，telegraph 实战负责证明攻击预告，不能用蓄力泛光掩盖模型。
 
-稳定诊断：`data-faction-language="human-kites-vs-void-organisms"`、`data-player-modules="4-integrated-silhouette-parts"`、`data-enemy-module-language="surface-organs"`、`data-player-material-separation="ceramic-core-engine"`、`data-hull-exposure="matte-ceramic-no-bloom"`、`data-shield-language="four-hugging-plates"`、`data-boss-gallery-view="neutral-silhouette"`。
+稳定诊断：`data-faction-language="human-kites-vs-void-organisms"`、`data-player-modules="4-integrated-silhouette-parts"`、`data-enemy-module-language="surface-organs"`、`data-player-material-separation="ceramic-core-engine"`、`data-hull-exposure="matte-ceramic-no-bloom"`、`data-shield-language="segmented-shell-hit-break"`、`data-boss-gallery-view="neutral-silhouette"`。
 
 ## 弹体
 
 - 玩家普通弹是低亮玩家色短矢，不再携带会连成灯珠轨道的白色核心；相位、追踪和重弹才允许白芯与第二段短拖尾。只有明确的狙击/长枪职责可以使用长轴。
 - 敌弹统一使用珊瑚红主体、紫色倒刺和少量酸性载荷核，形成生物种子、双联颚、旋转叉或狙击刺。
+- 普通射击不得用一条线连接敌机和玩家；口器蓄力、局部警戒环和弹体朝向已经足够。只有瞬发激光可显示跨屏方向预警，使用细窄断续刻度贯穿实际射线方向，不能在玩家处终止成牵引绳，也不能靠加粗或过曝冒充清晰度。实体激光必须沿真实伤害段显示双侧能量边缘、连续热芯与沿方向运动的能量包；有限追踪弹使用偏转尾迹，范围爆破种以对应实际半径的断续危险环区分飞行与引爆阶段，撞角单位则用机鼻前方的短距离冲锋箭头。
+- 死亡机能沿原机体器官语言发射扇片、交叉、种荚或爆震，精英只放大主体和局部能量强度，不允许用全身白光代替危险等级。
 - 弹体要比环境更饱和，但不能用贯穿画面的长光轨制造伪隧道。
 
-稳定诊断：`data-projectile-readability="dim-friendly-hot-hostile"`。
+稳定诊断：`data-projectile-readability="dim-friendly-hot-hostile"`、`data-bullet-grammar="locked-safe-lanes-curves-mines-lasers-seekers-blasts"`。
 
 ## 实机验收
 
-1. `npm run smoke:models`：同屏检查三架玩家与七类敌军的剪影、色组、陶瓷/能量材质分离与表面器官模块归属。
+1. `npm run smoke:models`：同屏检查三架玩家与十六类敌军的剪影、色组、陶瓷/能量材质分离与表面器官模块归属。
 2. `npm run smoke:biomes`：逐一检查九生态是否能仅凭巨型剪影辨认，中心 55% 是否留白，是否存在远景/中景/星云视差与连续分段曲线，同时排除连续地板、护栏或屏幕中心门架。
 3. `npm run smoke:anomalies`：逐一检查九异象是否为偏轴局部天象，且第一章正常速度仍可读、可躲避。
-4. `npm run smoke:electron`：检查真实自动战斗中的敌我弹体、近景机体、选择性 Bloom、SMAA、帧率和控制台。
-5. `npm run verify`：完成静态结构、本地化、渲染契约和依赖验证。
+4. `npm run smoke:arsenal`：分别检查真实激光、追踪、爆破、死亡机能、精英与实体撞击的视觉判定一致性。
+5. `npm run smoke:electron`：检查真实自动战斗中的敌我弹体、近景机体、选择性 Bloom、SMAA、帧率和控制台。
+6. `npm run verify`：完成静态结构、本地化、渲染契约和依赖验证。

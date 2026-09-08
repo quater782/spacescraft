@@ -13,8 +13,16 @@ module.exports = {
       /^\/CHANGELOG\.md$/,
       /^\/dist/,
       /^\/out/,
-      /^\/node_modules\/three\/(?!build(?:$|\/three\.module\.min\.js$)|examples(?:$|\/jsm(?:$|\/(?:postprocessing|shaders)(?:$|\/))))/
-    ]
+      /^\/node_modules\/three\/(?!build(?:$|\/three\.module\.min\.js$|\/three\.core\.min\.js$)|examples(?:$|\/jsm(?:$|\/(?:postprocessing|shaders)(?:$|\/))))/
+    ],
+    afterPrune: [(buildPath, _electronVersion, _platform, _arch, callback) => {
+      try {
+        require('./scripts/verify-package.cjs').verifyPackage(buildPath);
+        callback();
+      } catch (error) {
+        callback(error);
+      }
+    }]
   },
   rebuildConfig: {},
   makers: [

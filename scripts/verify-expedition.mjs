@@ -27,6 +27,8 @@ for (const biome of BIOMES) {
   assert.match(biome.descriptionKey, /^biome\.[^.]+\.description$/);
   for (const color of [biome.sky, biome.haze, biome.grid, biome.star, biome.accent, biome.secondary]) assert.match(color, /^#[0-9a-f]{6}$/i);
   for (const value of [biome.enemyHp, biome.spawnRate, biome.bulletSpeed, biome.bpmOffset, biome.musicShift]) assert.ok(Number.isFinite(value));
+  assert.ok(HULL_MODULES.some((hull) => hull.id === biome.speciesId && hull.nativeBiome === biome.id), `${biome.id} needs a dedicated native species`);
+  assert.ok(WEAPON_MODULES.some((weapon) => weapon.id === biome.preferredWeapon), `${biome.id} needs a valid signature weapon`);
 }
 
 assert.deepEqual([...expedition.generateRoute(20260827)].map((biome) => biome.id), [...expedition.generateRoute(20260827)].map((biome) => biome.id), "same seed must reproduce the ecosystem route");
@@ -103,12 +105,28 @@ assert.equal(expedition.evaluateEncounter(meteorEncounter, { hits: 1, timeRemain
 assert.equal(expedition.evaluateEncounter(meteorEncounter, { hits: 2, timeRemaining: 0 }), "failed");
 
 assert.equal(MOVEMENT_MODULES.length, 4);
-assert.equal(WEAPON_MODULES.length, 4);
+assert.equal(WEAPON_MODULES.length, 7, "laser, seeker and blast weapons must join the four ballistic families");
 assert.equal(CORE_MODULES.length, 4);
-assert.equal(AI_MODULES.length, 4);
+assert.equal(AI_MODULES.length, 6, "pack and ambusher minds must join the four baseline brains");
 assert.equal(PAYLOAD_MODULES.length, 4);
-assert.equal(HULL_MODULES.length, 7, "the integrated foundry must ship seven functional chassis families");
+assert.equal(HULL_MODULES.length, 16, "the integrated foundry must ship seven general chassis and nine native species");
 assert.equal(new Set(HULL_MODULES.map((hull) => hull.role)).size, 7, "every chassis family needs a distinct combat role");
+assert.deepEqual([...HULL_MODULES.slice(0, 7)].map((hull) => hull.hp), [8, 7, 30, 16, 14, 15, 32], "baseline chassis durability must stay above the retired paper-target values");
+const retiredHullRadii = [8, 7, 12, 9, 8, 8.5, 11, 9, 11, 10, 10, 13, 11, 10.5, 11.5, 12];
+const compactHullRadii = [7.4, 6.4, 11, 8.3, 7.4, 7.8, 10.1, 8.3, 10.1, 9.2, 9.2, 12, 10.1, 9.7, 10.6, 11];
+assert.deepEqual([...HULL_MODULES].map((hull) => hull.radius), compactHullRadii, "all sixteen hulls must use the compact battlefield footprint");
+HULL_MODULES.forEach((hull, index) => {
+  const ratio = hull.radius / retiredHullRadii[index];
+  assert.ok(ratio >= .91 && ratio <= .93, `${hull.id} radius must stay near the 0.92 compacting target`);
+});
+const generalRadii = HULL_MODULES.slice(0, 7).map((hull) => hull.radius);
+const nativeRadii = HULL_MODULES.slice(7).map((hull) => hull.radius);
+assert.deepEqual([Math.min(...generalRadii), Math.max(...generalRadii)], [6.4, 11], "general hulls must retain a readable light-to-heavy size range");
+assert.deepEqual([Math.min(...nativeRadii), Math.max(...nativeRadii)], [8.3, 12], "native species must retain a readable hunter-to-bulwark size range");
+const radiusOf = (id) => HULL_MODULES.find((hull) => hull.id === id).radius;
+assert.ok(radiusOf("dart") < radiusOf("scout") && radiusOf("scout") < radiusOf("spinner") && radiusOf("spinner") < radiusOf("tank"), "general hull size hierarchy must survive footprint compacting");
+assert.ok(radiusOf("nectarMoth") < radiusOf("cometRammer") && radiusOf("cometRammer") < radiusOf("prismRay") && radiusOf("prismRay") < radiusOf("railBeetle"), "native hull size hierarchy must survive footprint compacting");
+assert.ok(HULL_MODULES.slice(7).every((hull) => hull.hp >= 10 && hull.speciesPattern && hull.deathrattle), "native species need durable bodies, signature attacks and deathrattles");
 for (const module of [...HULL_MODULES, ...MOVEMENT_MODULES, ...WEAPON_MODULES, ...CORE_MODULES, ...AI_MODULES, ...PAYLOAD_MODULES]) {
   assert.equal(i18nSource.split(`"${module.nameKey}"`).length - 1, 2, `${module.id} must be named in both locales`);
 }
@@ -133,19 +151,54 @@ for (const hull of HULL_MODULES) {
     }
   }
 }
-assert.equal(builds.length, 7168, "seven hulls plus five four-way slots must produce 7168 complete builds");
-assert.equal(new Set(builds.map((build) => build.signature)).size, 7168, "all integrated modular build signatures must be unique");
+const expectedBuildCount = HULL_MODULES.length * MOVEMENT_MODULES.length * WEAPON_MODULES.length * CORE_MODULES.length * AI_MODULES.length * PAYLOAD_MODULES.length;
+assert.equal(builds.length, 43008, "sixteen hulls and expanded weapon/AI organs must produce 43008 complete builds");
+assert.equal(new Set(builds.map((build) => build.signature)).size, expectedBuildCount, "all integrated modular build signatures must be unique");
 
 for (const biome of BIOMES.filter((entry) => entry.stageIndex === 0)) {
   assert.ok(biome.enemyHp <= 1.02, `${biome.id} violates early HP safety`);
   assert.ok(biome.spawnRate <= 1, `${biome.id} violates early density safety`);
-  assert.ok(biome.bulletSpeed <= 1, `${biome.id} violates early projectile safety`);
+  assert.ok(biome.bulletSpeed <= 1.04, `${biome.id} violates chapter-one projectile bounds`);
   for (let i = 0; i < 100; i += 1) {
     const random = createRng(i + 1);
-    assert.equal(expedition.chooseEnemyHull({ stageIndex: 0, progress: .25, biome, random }), "scout");
-    assert.equal(expedition.assembleEnemy({ stageIndex: 0, progress: .25, biome, branch: PATH_PROTOCOLS[i % PATH_PROTOCOLS.length], hullId: "scout", random }).signature, "scout.standard.pulse.light.sentry.clean");
+    assert.equal(expedition.chooseEnemyHull({ stageIndex: 0, progress: .04, biome, random }), "scout");
+    assert.equal(expedition.assembleEnemy({ stageIndex: 0, progress: .04, biome, branch: PATH_PROTOCOLS[i % PATH_PROTOCOLS.length], hullId: "scout", random }).signature, "scout.standard.pulse.light.sentry.clean");
+  }
+  for (let i = 0; i < 100; i += 1) {
+    const hull = expedition.chooseEnemyHull({ stageIndex: 0, progress: .249, biome, random: createRng(2000 + i) });
+    assert.notEqual(hull, biome.speciesId, `${biome.id} native species must wait until the first strategy draft`);
   }
 }
+
+for (let i = 0; i < 120; i += 1) {
+  const biome = BIOMES[i % 3];
+  const build = expedition.assembleEnemy({ stageIndex: 0, progress: .249, biome, branch: PATH_PROTOCOLS[i % PATH_PROTOCOLS.length], hullId: "scout", random: createRng(3000 + i) });
+  assert.equal(build.weaponId, "pulse", "chapter one must defer random weapon organs until the first strategy draft");
+}
+
+const chapterOneVariants = new Set();
+const chapterOneRandom = createRng(500);
+for (let i = 0; i < 200; i += 1) {
+  const biome = BIOMES[i % 3];
+  const hullId = expedition.chooseEnemyHull({ stageIndex: 0, progress: .32, biome, random: chapterOneRandom });
+  const build = expedition.assembleEnemy({ stageIndex: 0, progress: .32, biome, branch: PATH_PROTOCOLS[i % PATH_PROTOCOLS.length], hullId, random: chapterOneRandom });
+  chapterOneVariants.add(build.signature);
+  assert.equal(build.payloadId, "clean", "chapter one may teach tactics but must not add status payloads");
+}
+assert.ok(chapterOneVariants.size >= 18, "chapter one must introduce meaningful movement and weapon variety after the opening beat");
+for (const biome of BIOMES) {
+  const native = HULL_MODULES.find((hull) => hull.id === biome.speciesId);
+  const nativeBuild = expedition.assembleEnemy({ stageIndex: biome.stageIndex, progress: .72, biome, hullId: native.id, random: createRng(770 + biome.stageIndex) });
+  assert.equal(nativeBuild.nativeBiome, biome.id);
+  assert.ok(nativeBuild.speciesPattern && nativeBuild.deathrattle, `${native.id} must have a signature attack and deathrattle`);
+}
+const crystalOrchard = BIOMES.find((biome) => biome.id === "crystalOrchard");
+let naturalPrismOracles = 0;
+for (let i = 0; i < 300; i += 1) {
+  const build = expedition.assembleEnemy({ stageIndex: 0, progress: .82, biome: crystalOrchard, hullId: "prismRay", random: createRng(9100 + i) });
+  if (build.aiId === "oracle") naturalPrismOracles += 1;
+}
+assert.ok(naturalPrismOracles > 120, "crystal-orchard prism rays must naturally reach their oracle doctrine late in chapter one");
 
 const laterSignatures = new Set();
 const laterHulls = new Set();
@@ -172,6 +225,22 @@ for (let i = 0; i < 400; i += 1) {
 }
 assert.ok(rushBuilds > 190, "selected branches must materially bias modular assembly");
 
+const weaponPaths = ["arsenal", "resonance", "prism"].map((id) => PATH_PROTOCOLS.find((path) => path.id === id));
+const expectedRouteWeapons = ["twin", "orbit", "sniper"];
+const routeWeaponCounts = weaponPaths.map((branch) => {
+  const counts = Object.fromEntries(expectedRouteWeapons.map((weapon) => [weapon, 0]));
+  for (let i = 0; i < 600; i += 1) {
+    const build = expedition.assembleEnemy({ stageIndex: 2, progress: .85, biome: laterBiome, branch, hullId: "scout", random: createRng(12000 + i) });
+    if (build.weaponId in counts) counts[build.weaponId] += 1;
+  }
+  return counts;
+});
+routeWeaponCounts.forEach((counts, branchIndex) => {
+  const preferred = expectedRouteWeapons[branchIndex];
+  const offRoutePeak = Math.max(...routeWeaponCounts.filter((_, index) => index !== branchIndex).map((entry) => entry[preferred]));
+  assert.ok(counts[preferred] > 130 && counts[preferred] > offRoutePeak * 1.8, `route ${weaponPaths[branchIndex].id} must materially bias ${preferred}: ${JSON.stringify(routeWeaponCounts)}`);
+});
+
 assert.match(gameSource, /SpaceExpedition\.generateRoute/);
 assert.match(gameSource, /SpaceExpedition\.generateBranchSets/);
 assert.match(gameSource, /SpaceExpedition\.generateEncounterPlans/);
@@ -182,6 +251,7 @@ assert.match(gameSource, /stage\.biome\?\.spawnRate/);
 assert.match(gameSource, /function updateRouteChoice\(dt\)/);
 assert.match(gameSource, /world\.gameMode === "solo" && player\.index === 1/);
 assert.match(gameSource, /Math\.min\(1, world\.activeBranch\?\.bulletSpeed/);
+assert.match(gameSource, /Math\.min\(1, stage\.biome\?\.bulletSpeed/, "the opening beat must clamp ecosystem projectile multipliers");
 assert.match(gameSource, /Math\.min\(1, world\.activeBranch\?\.spawnRate/);
 assert.match(gameSource, /Math\.min\(1, world\.activeEncounter\?\.spawnRate/);
 assert.match(gameSource, /function startEncounter\(plan\)/);
@@ -199,6 +269,9 @@ assert.match(rendererSource, /drawEnemyChassis\(enemy, base, palette\)/);
 assert.match(rendererSource, /drawIntegratedEnemyModules\(enemy, base, palette, moduleColor\)/);
 assert.match(gameSource, /function updateEnemyIntelligence\(enemy, dt\)/);
 assert.match(gameSource, /function applyEnemyDebuff\(player, bullet\)/);
+assert.match(gameSource, /stage === 0 && progress < \.25 \? null : activeStage\(stage\)\.biome\?\.speciesId/, "chapter-one scripted natives must wait until the first strategy draft");
+assert.match(gameSource, /world\.stageIndex === 0 && progress < \.42 \? "" : build\.deathrattle/, "chapter one must teach signature attacks before deathrattles");
+assert.match(gameSource, /elite \? \(QA_FORCE_ELITE \? 20 : 4\.8\) : 1/, "ambient elites must retain the designed 4.8x durability outside the QA pursuit harness");
 assert.match(rendererSource, /drawBiomeFeatures\(biome\)/);
 assert.match(rendererSource, /drawRouteGates\(choice\)/);
 assert.match(rendererSource, /drawEncounter\(encounter\)/);

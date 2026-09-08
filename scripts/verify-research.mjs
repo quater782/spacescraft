@@ -1,0 +1,51 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import vm from "node:vm";
+const context = { window: {} };
+vm.runInNewContext(fs.readFileSync(new URL("../src/research.js", import.meta.url), "utf8"), context);
+const api = context.window.SpaceResearch;
+const plain = (value) => JSON.parse(JSON.stringify(value));
+assert.equal(api.BLUEPRINTS.length, 6);
+assert.equal(api.ROUTES.length, 3);
+for (const source of [null, [], "bad", { focus: "missing", ranks: { guardian: Infinity, breaker: -2, wayfinder: 99, fieldMedic: "2", reclaimer: {} } }]) {
+  const clean = api.sanitize(source);
+  assert.ok(api.ROUTES.some((route) => route.id === clean.focus));
+  assert.ok(Object.values(clean.ranks).every((rank) => Number.isInteger(rank) && rank >= 0 && rank <= 3));
+}
+assert.equal(api.sanitize({ ranks: { wayfinder: 99 } }).ranks.wayfinder, 3);
+assert.equal(api.purchase({}, "invalid", 999).ok, false);
+assert.equal(api.purchase({}, "guardian", 79).ok, false);
+assert.equal(api.purchase({}, "guardian", 80).research.ranks.guardian, 1);
+assert.equal(api.purchase({ ranks: { guardian: 3 } }, "guardian", 999).ok, false);
+assert.equal(api.settle({}, {}, 1).dust, 0);
+assert.equal(api.settle({ kills: 11 }, {}, 1).cacheCount, 0);
+const novice = api.settle({ kills: 12 }, {}, 42);
+assert.equal(novice.dust, 80);
+assert.equal(novice.cacheCount, 1);
+const stats = { kills: 180, sectors: 6, bosses: 2, encounters: 7, pickups: 20, elites: 8 };
+for (const route of api.ROUTES) {
+  const research = { focus: route.id };
+  const settled = api.settle(stats, research, 123, 2);
+  assert.equal(settled.cacheCount, 5);
+  assert.equal(api.BLUEPRINTS.find((node) => node.id === settled.discoveries[0].id).route, route.id);
+  assert.equal(new Set(settled.discoveries.map((entry) => entry.id)).size >= 2, true, "new plans precede repeat ranks");
+  assert.deepEqual(plain(settled), plain(api.settle(stats, research, 123, 2)));
+  assert.ok(settled.dust > novice.dust, "deeper progress must pay more than early farming");
+  assert.equal(api.settle({ ...stats, kills: 90000 }, research, 123).dust, api.settle(stats, research, 123).dust);
+}
+const all = { ranks: Object.fromEntries(api.BLUEPRINTS.map((node) => [node.id, 3])) };
+assert.equal(api.settle(stats, all, 42).discoveries.every((entry) => entry.id === "dust" && entry.amount === 40), true);
+assert.equal(api.effects(all).markEvery, 6);
+assert.equal(api.effects(all).pickupShieldEvery, 4);
+assert.equal(api.effects(all).novaShieldEvery, 1);
+assert.equal(api.effects(all).sectorEnergy, 12);
+assert.ok(Object.values(api.effects(all)).every((effect) => effect > 0), "all six blueprints coexist");
+const diversity = new Set(Array.from({ length: 24 }, (_, seed) => api.settle({ kills: 12 }, {}, seed).discoveries[0].id));
+assert.equal(diversity.size, 2, "both focused discoveries are reachable");
+const repeat = api.settle({ kills: 12 }, novice.research, 43);
+assert.equal(repeat.cacheCount, 0); assert.equal(repeat.dust, 24);
+const partial = api.settle({ sectors: 1, encounters: 1 }, repeat.research, 44);
+assert.equal(partial.research.progress, 2);
+const next = api.settle({ sectors: 1, encounters: 1 }, partial.research, 45);
+assert.equal(next.research.progress, 0); assert.equal(next.cacheCount, 1);
+console.log("Research verified: 3 reward routes, 6 coexisting three-rank blueprints, deterministic discovery, targeted purchase, anti-idle/kill-farm caps and safe migration.");

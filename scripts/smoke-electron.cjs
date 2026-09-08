@@ -76,7 +76,7 @@ async function run() {
   }
   if (state?.activeEncounter !== "relay") throw new Error(`relay encounter did not become active: ${JSON.stringify(state)}`);
   if (state.rushActive !== "true" || state.rushCount !== "1" || Number(state.rushTimer) <= 0) throw new Error(`automatic rush did not activate: ${JSON.stringify(state)}`);
-  if (state.enemyModuleSlots !== "6" || state.enemyBuildCatalog !== "7168" || state.qaEnemyBuild !== "scout.drift.orbit.barrier.oracle.cryo") throw new Error(`six-slot organic enemy forge diagnostics missing: ${JSON.stringify(state)}`);
+  if (state.enemyModuleSlots !== "6" || state.enemyBuildCatalog !== "43008" || state.qaEnemyBuild !== "scout.drift.orbit.barrier.oracle.cryo") throw new Error(`six-slot organic enemy forge diagnostics missing: ${JSON.stringify(state)}`);
   if (!state.playerBuffs.split(",").every((buffs) => ["arsenal", "nanobloom", "aegis", "flux"].every((id) => buffs.includes(id)))) throw new Error(`automatic buff modules missing: ${state.playerBuffs}`);
 
   window.webContents.sendInputEvent({ type: "keyDown", keyCode: "D" });
@@ -114,7 +114,7 @@ async function run() {
   if (rendererState.worldDepthLayers !== "3" || rendererState.biomeDioramas !== "9" || rendererState.projectileVfx !== "segmented-toon-trails") throw new Error(`Neon Diorama Worlds art contract unavailable: ${JSON.stringify(rendererState)}`);
   if (rendererState.pixelGrammar !== "coarse-emissive-012" || rendererState.spaceComposition !== "open-celestial-parallax" || rendererState.factionLanguage !== "human-kites-vs-void-organisms" || rendererState.playerModules !== "4-integrated-silhouette-parts") throw new Error(`visual rebuild contract unavailable: ${JSON.stringify(rendererState)}`);
   if (rendererState.energyBloom !== "unreal-selective-5mip" || rendererState.edgeAA !== "native-smaa" || rendererState.enemyModuleLanguage !== "surface-organs" || rendererState.playerMaterialSeparation !== "ceramic-core-engine" || rendererState.projectileReadability !== "dim-friendly-hot-hostile" || rendererState.ringGrammar !== "continuous-segmented-arcs") throw new Error(`professional visual contract unavailable: ${JSON.stringify(rendererState)}`);
-  if (rendererState.hullExposure !== "matte-ceramic-no-bloom" || rendererState.groundPlane !== "none-open-space" || rendererState.depthScaffolding !== "macro-mid-distant" || rendererState.shieldLanguage !== "four-hugging-plates" || rendererState.macroLayout !== "alternating-edge-anchors" || rendererState.celestialScaffolding !== "opposed-biome-horizon-bodies") throw new Error(`second-pass art polish contract unavailable: ${JSON.stringify(rendererState)}`);
+  if (rendererState.hullExposure !== "matte-ceramic-no-bloom" || rendererState.groundPlane !== "none-open-space" || rendererState.depthScaffolding !== "macro-mid-distant" || rendererState.shieldLanguage !== "segmented-shell-hit-break" || rendererState.macroLayout !== "alternating-edge-anchors" || rendererState.celestialScaffolding !== "opposed-biome-horizon-bodies") throw new Error(`second-pass art polish contract unavailable: ${JSON.stringify(rendererState)}`);
   if (rendererState.ecosystemComposition !== "9-macro-mid-sparse" || rendererState.combatNegativeSpace !== "center-55-clear" || rendererState.nebulaParallax !== "3d-additive-dust" || rendererState.skyAtmosphere !== "layered-soft-voxel-nebula") throw new Error(`deep-space ecosystem composition unavailable: ${JSON.stringify(rendererState)}`);
   const rushState = await window.webContents.executeJavaScript(`(() => {
     const game = document.querySelector('#game');
@@ -145,7 +145,7 @@ async function run() {
     const game = document.querySelector('#game');
     return Object.fromEntries(['mode', 'qa', 'stageTime', 'fps', 'activeBuilds', 'enemyModuleSlots', 'enemyBuildCatalog', 'qaEnemyBuild', 'playerBuffs', 'playerDebuffs'].map((key) => [key, game.dataset[key]]));
   })()`);
-  if (!voxelState.activeBuilds.includes("carrier.drift.orbit.barrier.oracle.cryo") || voxelState.enemyModuleSlots !== "6" || voxelState.enemyBuildCatalog !== "7168") throw new Error(`voxel showcase did not render the forced six-slot organic build: ${JSON.stringify(voxelState)}`);
+  if (!voxelState.activeBuilds.includes("carrier.drift.orbit.barrier.oracle.cryo") || voxelState.enemyModuleSlots !== "6" || voxelState.enemyBuildCatalog !== "43008") throw new Error(`voxel showcase did not render the forced six-slot organic build: ${JSON.stringify(voxelState)}`);
   if (!voxelState.playerBuffs.includes("arsenal|nanobloom|aegis|flux")) throw new Error(`voxel showcase buffs missing: ${JSON.stringify(voxelState)}`);
   if (!voxelState.playerDebuffs.startsWith("chill,")) throw new Error(`voxel showcase debuff missing: ${JSON.stringify(voxelState)}`);
   const voxelImage = await window.webContents.capturePage();
@@ -162,7 +162,7 @@ async function run() {
     const game = document.querySelector('#game');
     return Object.fromEntries(['fps', 'activeBuilds', 'enemyBuildCatalog', 'playerBuffs', 'playerDebuffs'].map((key) => [key, game.dataset[key]]));
   })()`);
-  if (!cleanVoxelState.activeBuilds.includes("lancer.rush.sniper.volatile.hunter.fracture") || cleanVoxelState.enemyBuildCatalog !== "7168" || cleanVoxelState.playerBuffs !== "none,none") throw new Error(`clean airframe showcase invalid: ${JSON.stringify(cleanVoxelState)}`);
+  if (!cleanVoxelState.activeBuilds.includes("lancer.rush.sniper.volatile.hunter.fracture") || cleanVoxelState.enemyBuildCatalog !== "43008" || cleanVoxelState.playerBuffs !== "none,none") throw new Error(`clean airframe showcase invalid: ${JSON.stringify(cleanVoxelState)}`);
   const airframeImage = await window.webContents.capturePage();
   fs.writeFileSync(airframeShowcaseScreenshotPath, airframeImage.toPNG());
   if (errors.length) throw new Error(`renderer console errors after clean airframe showcase: ${errors.join(" | ")}`);

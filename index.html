@@ -8,7 +8,7 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-mD8Apma8Uu0RkJppELk4UcYb7nc8LncdRfqb5GG1zpM='; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none';" />
     <title>SPACECRAFT // 星航双子</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./style.css?v=10" />
+    <link rel="stylesheet" href="./style.css?v=12" />
   </head>
   <body>
     <main class="game-shell" aria-label="SPACECRAFT 双人合作游戏" data-i18n-aria-label="app.label">
@@ -36,7 +36,7 @@
 
       <section class="viewport" id="viewport">
         <canvas id="scene" width="1280" height="720" aria-hidden="true"></canvas>
-        <canvas id="game" width="480" height="270" aria-label="3D 游戏画面" data-i18n-aria-label="canvas.label"></canvas>
+        <canvas id="game" width="480" height="270" aria-label="3D 游戏画面" data-i18n-aria-label="canvas.label" aria-describedby="combatGuide"></canvas>
         <div class="crt" aria-hidden="true"></div>
 
         <section id="menu" class="overlay menu-overlay">
@@ -113,6 +113,13 @@
               <p class="talent-intro" data-i18n="hangar.talentsHint">使用星尘永久点亮机动、武装与共振星链；必须依次解锁。</p>
               <div id="talentOptions" class="talent-grid"></div>
             </section>
+            <section class="hangar-section" aria-labelledby="researchHeading">
+              <div class="hangar-section-heading"><h3 id="researchHeading" data-i18n="research.title">远征研究</h3></div>
+              <p class="hangar-note" data-i18n="research.hint">选择收益路线。有效航行带回随机蓝图，所有已解锁效果永久共存，也可用星尘定向强化。</p>
+              <p id="researchProgress" class="hangar-note" aria-live="polite"></p>
+              <div id="researchRoutes" class="research-routes"></div>
+              <div id="researchOptions" class="research-grid"></div>
+            </section>
             <section class="hangar-section" aria-labelledby="achievementHeading">
               <div class="hangar-section-heading"><h3 id="achievementHeading" data-i18n="hangar.achievements">星航勋章</h3><span id="achievementCount">0 / 8</span></div>
               <div id="achievementOptions" class="achievement-grid"></div>
@@ -128,7 +135,8 @@
             <div class="tutorial-steps">
               <article><b>01</b><strong data-i18n="tutorial.moveTitle">只管移动</strong><span data-i18n="tutorial.moveText">P1 使用 WASD；双人模式下 P2 使用方向键。所有火力自动运行。</span></article>
               <article><b>02</b><strong data-i18n="tutorial.formationTitle">保持队形</strong><span data-i18n="tutorial.formationText">靠近队友会形成共振光链；队友坠毁后，靠近即可自动救援。</span></article>
-              <article><b>03</b><strong data-i18n="tutorial.energyTitle">收集能量</strong><span data-i18n="tutorial.energyText">击破敌机获得能量，蓄满后自动释放超新星并清除附近弹幕。</span></article>
+              <article><b>03</b><strong data-i18n="tutorial.energyTitle">命中换取喘息</strong><span data-i18n="tutorial.energyText">命中为共享超新星充能，满槽且冷却结束时自动清除附近弹幕；不清激光。</span></article>
+              <article><b>04</b><strong data-i18n="tutorial.shieldTitle">护盾与机体</strong><span data-i18n="tutorial.shieldText">1 点护盾抵挡 1 点伤害，溢出扣血。机体受损会出现烟迹和灼红裂痕。</span></article>
             </div>
             <button id="tutorialContinueButton" class="primary-button wide-button" type="button"><span data-i18n="tutorial.continue">明白，开始出航</span><kbd>ENTER</kbd></button>
           </div>
@@ -152,6 +160,7 @@
             <div class="eyebrow">FLIGHT SUSPENDED</div>
             <h2 id="pauseTitle" data-i18n="pause.title">航行暂停</h2>
             <p data-i18n="pause.text">星域时间已冻结。</p>
+            <p id="combatGuide" data-i18n="hud.systemGuide">护盾先按 1:1 抵挡伤害，溢出扣血。命中为共享超新星充能，自动清除附近弹幕；激光仍需躲避。已选强化与遗物跨章保留。</p>
             <div class="dialog-actions">
               <button id="resumeButton" class="primary-button wide-button" type="button"><span data-i18n="pause.resume">继续航行</span><kbd>ESC</kbd></button>
               <button id="pauseSettingsButton" class="secondary-button" type="button" data-i18n="pause.settings">设置</button>
@@ -187,8 +196,9 @@
             <div id="resultEyebrow" class="eyebrow">MISSION REPORT</div>
             <h2 id="resultTitle" data-i18n="result.titleDefeat">航线中断</h2>
             <p id="resultText"></p>
-            <div id="resultBuild" class="result-build"></div>
+            <div id="resultRewards" class="result-rewards" aria-live="polite"></div>
             <div id="resultStats" class="result-stats"></div>
+            <details class="result-details"><summary data-i18n="result.buildDetails">构筑与航行详情</summary><div id="resultBuild" class="result-build"></div></details>
             <div class="result-actions">
               <button id="restartButton" class="primary-button" type="button"><span data-i18n="result.restart">再次出航</span><kbd>ENTER</kbd></button>
               <button id="resultMenuButton" class="secondary-button" type="button" data-i18n="result.menu">返回主菜单</button>
@@ -202,21 +212,26 @@
 
       <footer class="statusbar">
         <span><i class="status-light"></i> <i data-i18n="footer.ready">本地双人系统就绪</i></span>
-        <span>BUILD 3D.24 // <b>LIVING SECTOR ANOMALIES 0.24.0</b></span>
+        <span>BUILD 3D.27 // <b>SHARED REACTOR 0.27.0</b></span>
       </footer>
     </main>
-    <script src="./src/i18n.js?v=6"></script>
-    <script src="./src/roguelike.js?v=1"></script>
+    <script src="./src/i18n.js?v=10"></script>
+    <script src="./src/roguelike.js?v=4"></script>
+    <script src="./src/rng.js?v=1"></script>
     <script src="./src/constellation.js?v=1"></script>
-    <script src="./src/rush.js?v=1"></script>
-    <script src="./src/relics.js?v=1"></script>
-    <script src="./src/director.js?v=1"></script>
-    <script src="./src/threat.js?v=1"></script>
+    <script src="./src/research.js?v=1"></script>
+    <script src="./src/rush.js?v=3"></script>
+    <script src="./src/relics.js?v=2"></script>
+    <script src="./src/director.js?v=2"></script>
+    <script src="./src/threat.js?v=3"></script>
+    <script src="./src/combat.js?v=2"></script>
+    <script src="./src/collision.js?v=1"></script>
+    <script src="./src/loot.js?v=1"></script>
     <script src="./src/anomalies.js?v=1"></script>
-    <script src="./src/expedition.js?v=4"></script>
+    <script src="./src/expedition.js?v=6"></script>
     <script src="./src/status.js?v=1"></script>
   <script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.min.js"}}</script>
-    <script type="module" src="./src/renderer3d.js?v=26"></script>
-  <script type="module" src="./src/game.js?v=30"></script>
+    <script type="module" src="./src/renderer3d.js?v=30"></script>
+  <script type="module" src="./src/game.js?v=35"></script>
   </body>
 </html>

@@ -5,6 +5,7 @@ const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const game = fs.readFileSync(new URL("../src/game.js", import.meta.url), "utf8");
 const roguelike = fs.readFileSync(new URL("../src/roguelike.js", import.meta.url), "utf8");
 const constellation = fs.readFileSync(new URL("../src/constellation.js", import.meta.url), "utf8");
+const research = fs.readFileSync(new URL("../src/research.js", import.meta.url), "utf8");
 const expedition = fs.readFileSync(new URL("../src/expedition.js", import.meta.url), "utf8");
 const i18nSource = fs.readFileSync(new URL("../src/i18n.js", import.meta.url), "utf8");
 
@@ -36,6 +37,7 @@ for (const match of game.matchAll(/\bt\("([^"]+)"/g)) keys.add(match[1]);
 for (const match of game.matchAll(/(?:nameKey|descriptionKey|statsKey|unlockKey|codeKey|subtitleKey|bossKey):\s*"([^"]+)"/g)) keys.add(match[1]);
 for (const match of roguelike.matchAll(/(?:nameKey|descriptionKey):\s*"([^"]+)"/g)) keys.add(match[1]);
 for (const match of constellation.matchAll(/(?:nameKey|descriptionKey):\s*"([^"]+)"/g)) keys.add(match[1]);
+for (const match of research.matchAll(/(?:nameKey|descriptionKey):\s*"([^"]+)"/g)) keys.add(match[1]);
 for (const match of expedition.matchAll(/(?:nameKey|descriptionKey|objectiveKey|riskKey|rewardKey):\s*"([^"]+)"/g)) keys.add(match[1]);
 for (const match of game.matchAll(/"(bossPhase\.\d\.\d)"/g)) keys.add(match[1]);
 

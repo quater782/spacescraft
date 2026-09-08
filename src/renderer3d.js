@@ -11,6 +11,16 @@ const MAX_EMISSIVE_PER_COLOR = 512;
 const MAX_GLOW_PER_COLOR = 512;
 const MIN_PIXEL_EDGE = .12;
 const PIXEL_SCALE_STEP = .04;
+const CAMERA_FOV = 55;
+const PLAYER_MODEL_SCALE = .82;
+const PLAYER_DEMO_SCALE = .9;
+const REGULAR_ENEMY_SCALE = 1.18;
+const ELITE_ENEMY_SCALE = 1.4;
+const BOSS_MODEL_SCALE = 1.32;
+const REGULAR_TELEGRAPH_SCALE = 1.26;
+const ELITE_TELEGRAPH_SCALE = 1.5;
+const BOSS_TELEGRAPH_SCALE = 1.4;
+const HOSTILE_PROJECTILE_SCALE = 1.05;
 const ECOLOGY_ANCHORS = Object.freeze({
   sugarBloom: [-15.2, 1.8, -24],
   crystalOrchard: [14, -.6, -24],
@@ -58,7 +68,7 @@ class SpaceRenderer3D {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color("#030510");
     this.scene.fog = new THREE.FogExp2("#030510", .012);
-    this.camera = new THREE.PerspectiveCamera(52, 16 / 9, .1, 96);
+    this.camera = new THREE.PerspectiveCamera(CAMERA_FOV, 16 / 9, .1, 96);
     this.composer = new EffectComposer(this.renderer);
     this.renderPass = new RenderPass(this.scene, this.camera);
     // The bloom threshold deliberately sits above display white. Only HDR energy
@@ -118,12 +128,17 @@ class SpaceRenderer3D {
     this.canvas.dataset.worldDepthLayers = "3";
     this.canvas.dataset.biomeDioramas = "9";
     this.canvas.dataset.projectileVfx = "segmented-toon-trails";
-    this.canvas.dataset.modelFamilies = "3-player-7-alien";
+    this.canvas.dataset.modelFamilies = "3-player-16-alien";
     this.canvas.dataset.moduleAnatomy = "integrated-large-form";
     this.canvas.dataset.bossFamilies = "3-organic-phase-forms";
     this.canvas.dataset.bossChoreography = "telegraph-state-arena";
     this.canvas.dataset.expeditionSectors = "9-progressive-voxel-gates";
     this.canvas.dataset.adaptiveThreat = "5-tier-telegraphed";
+    this.canvas.dataset.enemyTactics = "role-doctrine-6-state";
+    this.canvas.dataset.enemySpacing = "live-target-standoff";
+    this.canvas.dataset.warningGrammar = "local-charge-laser-sight-ram-chevrons-blast-rings";
+    this.canvas.dataset.laserVfx = "layered-core-edge-packets";
+    this.canvas.dataset.bulletGrammar = "locked-safe-lanes-curves-mines-lasers-seekers-blasts";
     this.canvas.dataset.sectorAnomalies = "9-seeded-gameplay-fields";
     this.canvas.dataset.pixelGrammar = "coarse-emissive-012";
     this.canvas.dataset.spaceComposition = "open-celestial-parallax";
@@ -138,11 +153,13 @@ class SpaceRenderer3D {
     this.canvas.dataset.hullExposure = "matte-ceramic-no-bloom";
     this.canvas.dataset.groundPlane = "none-open-space";
     this.canvas.dataset.depthScaffolding = "macro-mid-distant";
-    this.canvas.dataset.shieldLanguage = "four-hugging-plates";
+    this.canvas.dataset.shieldLanguage = "segmented-shell-hit-break";
+    this.canvas.dataset.hullDamageLanguage = "scorch-cracks-smoke-60-30";
     this.canvas.dataset.bossGalleryView = "neutral-silhouette";
     this.canvas.dataset.macroLayout = "alternating-edge-anchors";
     this.canvas.dataset.celestialScaffolding = "opposed-biome-horizon-bodies";
     this.canvas.dataset.projectileReadability = "dim-friendly-hot-hostile";
+    this.canvas.dataset.playerProjectileDensity = "capstone-low-bloom";
     this.canvas.dataset.ringGrammar = "continuous-segmented-arcs";
     this.canvas.dataset.factionLanguage = "human-kites-vs-void-organisms";
     this.canvas.dataset.playerModules = "4-integrated-silhouette-parts";
@@ -379,6 +396,22 @@ class SpaceRenderer3D {
     }
   }
 
+  voxelEllipse(base, radiusX, radiusZ, height, color, count = 16, phase = 0, emissive = .62, coverage = .75) {
+    const visibleSegments = Math.max(4, Math.round(count * clamp(coverage, .25, 1)));
+    for (let index = 0; index < visibleSegments; index += 1) {
+      const angle = phase + index / count * TAU;
+      const next = angle + TAU / count * .68;
+      this.voxelSegment(
+        base,
+        [Math.cos(angle) * radiusX, height, Math.sin(angle) * radiusZ],
+        [Math.cos(next) * radiusX, height, Math.sin(next) * radiusZ],
+        .08,
+        color,
+        emissive,
+      );
+    }
+  }
+
   voxelSegment(base, start, end, width, color, emissive = .45) {
     const dx = end[0] - start[0];
     const dy = end[1] - start[1];
@@ -507,11 +540,38 @@ class SpaceRenderer3D {
     }
   }
 
-  drawPlayerShield(base, profile, pulse = 1) {
-    const radius = profile.span * .55;
+  drawPlayerShield(base, profile, player) {
+    const hit = clamp((player.shieldHitTimer || 0) / .32, 0, 1);
+    const breaking = player.shield <= 0;
+    const breakProgress = breaking ? 1 - clamp((player.shieldBreakTimer || 0) / .55, 0, 1) : 0;
+    const pulse = 1 + Math.sin(this.time * 5) * .025 + hit * .08 + breakProgress * .45;
+    const radiusX = (profile.span + .12) * pulse;
+    const radiusZ = (profile.bodyLength * .78 + .16) * pulse;
+    const color = hit > .2 ? "#c4fcff" : breaking ? "#679da9" : "#64d6ed";
+    // Four curved panels frame the ship, with open gaps preserving hostile-fire visibility.
+    for (let panel = 0; panel < 4; panel += 1) {
+      const center = panel * Math.PI / 2 + Math.PI / 4;
+      for (let segment = 0; segment < 5; segment += 1) {
+        if (breaking && segment % 2 === 0 && breakProgress > .35) continue;
+        const a = center - .5 + segment * .2;
+        const b = a + .2;
+        this.voxelSegment(base, [Math.cos(a) * radiusX, .15, Math.sin(a) * radiusZ], [Math.cos(b) * radiusX, .15, Math.sin(b) * radiusZ], hit > .2 ? .16 : .12, color, breaking ? .65 : .84);
+      }
+    }
+  }
+
+  drawPlayerDamage(player, base, profile) {
+    const ratio = player.maxHp > 0 ? player.hp / player.maxHp : 1;
+    const hit = (player.hullHitTimer || 0) > 0;
+    if (ratio > .6 && !hit) return;
     for (const side of [-1, 1]) {
-      this.voxel(base, [side * radius, .16, -.38], [.12 * pulse, .12, .44], "#71c8d3", .74, [0, side * .18, 0]);
-      this.voxel(base, [side * radius * 1.08, .14, .28], [.12 * pulse, .1, .34], "#4f899d", .62, [0, side * .28, 0]);
+      const x = side * profile.span * .55;
+      this.voxel(base, [x, .24, .2], [.34, .12, .4], hit ? "#edb993" : "#483f48", .3, [0, side * .24, 0]);
+      this.voxelSegment(base, [x - .1, .32, .04], [x + .1, .32, .3], .12, hit ? "#ffcf8e" : ratio <= .3 ? "#ea7853" : "#a98060", ratio <= .3 || hit ? .86 : .4);
+    }
+    if (ratio <= .3) {
+      this.voxel(base, [0, .4, .46], [.18, .14, .32], "#ff9564", .85);
+      this.voxel(base, [0, .19, .78], [.32, .12, .26], "#4d3541", .3);
     }
   }
 
@@ -570,7 +630,9 @@ class SpaceRenderer3D {
       pulse: { scale: 1.02, bodyWidth: .44, bodyLength: 2, nose: 1.3, span: 1.04, wing: .78, armored: false, engines: [0], tail: .22 },
     };
     const profile = profiles[frameId] || profiles.comet;
-    const base = compose(position, [pitch, player.galleryYaw || 0, roll], [profile.scale, profile.scale, profile.scale]);
+    const presentationScale = demo ? PLAYER_DEMO_SCALE : PLAYER_MODEL_SCALE;
+    const modelScale = profile.scale * presentationScale;
+    const base = compose(position, [pitch, player.galleryYaw || 0, roll], [modelScale, modelScale, modelScale]);
     const pilotPalettes = [
       ["#203e5b", "#39d8d5", "#a9bdc0"],
       ["#513344", "#ed765f", "#c8b7ae"],
@@ -586,11 +648,9 @@ class SpaceRenderer3D {
     for (const side of [-1, 1]) this.sweptWing(base, side, palette, profile.wing, frameId === "pulse" ? .96 : .78, profile.armored);
     this.tailFins(base, palette, profile.tail, frameId === "bulwark" ? .94 : frameId === "pulse" ? .8 : .88);
     for (const engineX of profile.engines) this.voxelThruster(base, engineX, .92, palette[1], flame, frameId === "bulwark" ? .7 : .64, palette[0]);
-    if (!demo && player.shield > 0) {
-      const shieldPulse = 1 + Math.sin(this.time * 8) * .08;
-      this.drawPlayerShield(base, profile, shieldPulse);
-    }
+    if (!demo && (player.shield > 0 || player.shieldBreakTimer > 0)) this.drawPlayerShield(base, profile, player);
     this.drawPlayerModules(player, base, palette, profile);
+    if (!demo) this.drawPlayerDamage(player, base, profile);
   }
 
   alienCrescent(base, palette, span = 1, rake = 1) {
@@ -691,6 +751,90 @@ class SpaceRenderer3D {
         this.voxel(base, [side * .92, .44, .12], [.32, .26, .46], side === handed ? palette[1] : palette[0], .4, [0, side * .2, 0]);
       }
       this.alienEye(base, handed * .26, -.5, palette[2], 1.08);
+    } else if (type === "nectarMoth") {
+      this.voxel(base, [0, .16, -.08], [.48, .36, 1.12], palette[0], .3);
+      this.voxel(base, [handed * .12, .42, -.42], [.34, .2, .54], palette[1], .48);
+      for (const side of [-1, 1]) {
+        this.voxelSegment(base, [side * .22, .12, -.02], [side * .88, .17, .18], .26, palette[1], .4);
+        this.voxelSegment(base, [side * .74, .16, .12], [side * 1.55, .2, .6], .34, palette[0], .3);
+        this.voxel(base, [side * 1.42, .25, .48], [.58, .1, .72], side === handed ? palette[1] : palette[0], .5, [0, side * .52, side * .08]);
+        this.voxelSegment(base, [side * .12, .24, -.48], [side * .46, .34, -1.18], .1, palette[2], .85);
+      }
+      this.alienEye(base, handed * .12, -.5, palette[2], .76);
+    } else if (type === "prismRay") {
+      this.voxel(base, [0, .15, -.04], [.52, .3, 1.5], palette[0], .3);
+      this.voxel(base, [0, .38, -.48], [.32, .24, .64], palette[1], .52, [0, Math.PI / 4, 0]);
+      for (const side of [-1, 1]) {
+        this.voxelSegment(base, [side * .18, .1, -.08], [side * 1.58, .13, .42], .3, palette[1], .4);
+        this.voxel(base, [side * 1.08, .15, .18], [1.12, .12, .78], palette[0], .34, [0, side * .66, 0]);
+        this.voxel(base, [side * 1.68, .2, .55], [.28, .18, .44], palette[2], .76, [0, side * .78, 0]);
+      }
+      this.alienEye(base, 0, -.66, palette[2], .82);
+    } else if (type === "cometRammer") {
+      this.voxel(base, [0, .17, .12], [.72, .48, 1.48], palette[0], .32);
+      this.voxelSegment(base, [0, .18, -.44], [0, .2, -2.05], .3, palette[1], .5);
+      this.voxel(base, [0, .22, -2.14], [.16, .16, .48], palette[2], .9);
+      for (const side of [-1, 1]) {
+        this.voxel(base, [side * .65, .15, .4], [.72, .22, 1.02], palette[1], .36, [0, side * .44, 0]);
+        this.voxelSegment(base, [side * .42, .1, .48], [side * 1.22, .13, 1.24], .22, palette[0], .3);
+      }
+      this.alienEye(base, handed * .24, -.46, palette[2], .76);
+    } else if (type === "auroraLeech") {
+      this.voxel(base, [0, .17, -.02], [.64, .4, 1.36], palette[0], .32);
+      this.voxel(base, [handed * .16, .43, -.38], [.42, .2, .5], palette[1], .5);
+      for (const side of [-1, 1]) {
+        this.alienTendril(base, side, palette, .36, .1, 1.55, palette[2]);
+        this.alienTendril(base, side, palette, .56, .38, .82, side === handed ? palette[2] : null);
+        this.voxelSegment(base, [side * .18, .12, -.44], [side * .42, .24, -1.42], .16, palette[1], .46);
+      }
+      this.alienEye(base, handed * .17, -.58, palette[2], .88);
+    } else if (type === "railBeetle") {
+      this.voxel(base, [0, .18, .08], [1.1, .58, 1.52], palette[0], .3);
+      this.voxel(base, [0, .52, -.18], [.68, .26, .96], palette[1], .48);
+      for (const side of [-1, 1]) {
+        for (let leg = -1; leg <= 1; leg += 1) {
+          this.voxelSegment(base, [side * .66, .06, leg * .45], [side * 1.36, -.02, leg * .68 + .18], .2, leg === 0 ? palette[1] : palette[0], .34);
+        }
+        this.voxel(base, [side * .72, .28, .12], [.5, .32, 1.22], palette[1], .36, [0, side * .12, 0]);
+      }
+      this.voxelSegment(base, [0, .56, -.28], [0, .62, -1.6], .22, palette[2], .76);
+      this.alienEye(base, handed * .3, -.58, palette[2], .88);
+    } else if (type === "reefMedusa") {
+      this.voxel(base, [0, .28, -.1], [1.02, .4, 1.08], palette[0], .3);
+      this.voxel(base, [0, .54, -.2], [.74, .28, .82], palette[1], .5);
+      this.alienCrescent(base, palette, 1.04, .9);
+      for (const side of [-1, -.34, .34, 1]) {
+        const bend = side < 0 ? -1 : 1;
+        this.voxelSegment(base, [side * .66, .08, .38], [side * .78 + bend * .2, -.2, 1.12], .16, palette[1], .42);
+        this.voxelSegment(base, [side * .78 + bend * .2, -.2, 1.12], [side * .5, -.06, 1.68], .11, palette[2], .66);
+      }
+      this.alienEye(base, handed * .2, -.5, palette[2], .94);
+    } else if (type === "eclipseReaper") {
+      this.voxel(base, [0, .18, -.02], [.62, .38, 1.3], palette[0], .32);
+      this.voxel(base, [handed * .14, .44, -.42], [.38, .22, .56], palette[1], .5);
+      for (const side of [-1, 1]) {
+        const points = [[side * .2, .12, .08], [side * .8, .16, -.3], [side * 1.38, .22, -.82], [side * 1.06, .3, -1.55]];
+        for (let segment = 1; segment < points.length; segment += 1) this.voxelSegment(base, points[segment - 1], points[segment], .28 - segment * .05, segment % 2 ? palette[1] : palette[0], .4);
+        this.voxel(base, points.at(-1), [.14, .16, .42], palette[2], .82, [0, side * -.45, 0]);
+      }
+      this.alienEye(base, handed * .12, -.55, palette[2], .88);
+    } else if (type === "graveMirror") {
+      this.voxel(base, [0, .15, .02], [.42, .3, 1.32], palette[0], .3);
+      for (const side of [-1, 1]) {
+        this.voxel(base, [side * .68, .2, -.06], [.72, .18, 1.32], side === handed ? palette[1] : palette[0], .42, [0, side * Math.PI / 4, 0]);
+        this.voxel(base, [side * 1.26, .24, .34], [.46, .14, .72], side === handed ? palette[0] : palette[1], .4, [0, -side * Math.PI / 4, 0]);
+        this.voxelSegment(base, [side * .12, .14, -.48], [side * .48, .18, -1.46], .14, palette[2], .72);
+      }
+      this.alienEye(base, handed * .14, -.62, palette[2], .82);
+    } else if (type === "gardenSpore") {
+      this.voxel(base, [0, .2, .04], [1.04, .54, 1.18], palette[0], .32);
+      for (let pod = 0; pod < 5; pod += 1) {
+        const angle = pod / 5 * Math.PI * 2;
+        this.voxel(base, [Math.sin(angle) * .72, .48 + (pod % 2) * .12, Math.cos(angle) * .62], [.42, .38, .5], pod % 2 ? palette[1] : palette[0], .44, [0, angle, 0]);
+        this.voxel(base, [Math.sin(angle) * .76, .7 + (pod % 2) * .12, Math.cos(angle) * .62], [.14, .1, .18], palette[2], .84);
+      }
+      for (const side of [-1, 1]) this.alienTendril(base, side, palette, .58, .42, 1.12, palette[2]);
+      this.alienEye(base, handed * .2, -.5, palette[2], .9);
     } else {
       this.voxel(base, [0, .16, -.04], [.62, .38, 1.18], palette[0], .3);
       this.voxel(base, [0, .38, -.4], [.44, .28, .64], palette[1], .44);
@@ -731,6 +875,20 @@ class SpaceRenderer3D {
         this.voxelSegment(base, [side * .28, .12, -.26], [side * .82, .16, -.48], .16, palette[0], .28);
         this.voxel(base, [side * .88, .18, -.52], [.16, .12, .18], side === handed ? moduleColor : palette[2], .78);
       }
+    } else if (enemy.weaponModule === "laser") {
+      this.voxelSegment(base, [0, .2, -.36], [0, .28, -1.72], .22, palette[1], .42);
+      this.voxel(base, [0, .31, -1.82], [.12, .1, .42], "#fff3a0", 1);
+      for (const side of [-1, 1]) this.voxel(base, [side * .26, .2, -.72], [.12, .18, .7], moduleColor, .76, [0, side * .08, 0]);
+    } else if (enemy.weaponModule === "seeker") {
+      for (const side of [-1, 1]) {
+        this.voxel(base, [side * .44, .2, -.7], [.34, .3, .64], palette[1], .42, [0, side * .18, 0]);
+        this.alienEye(base, side * .45, -.82, side === handed ? "#ffef78" : moduleColor, .56);
+      }
+    } else if (enemy.weaponModule === "bomb") {
+      const pulse = 1 + Math.sin(this.time * 7 + enemy.seed) * .08;
+      this.voxel(base, [0, .22, -.62], [.62 * pulse, .46, .72], palette[1], .42);
+      this.voxelRing(base, .43 * pulse, .25, "#ff9a58", 8, .8, enemy.seed, .09, .92, .8);
+      this.voxel(base, [0, .42, -.76], [.2, .12, .24], "#ffd66e", .96);
     } else {
       this.voxel(base, [0, .12, -.82], [.2, .16, .72], palette[1], .3);
       this.voxel(base, [0, .16, -1.22], [.12, .1, .2], moduleColor, .88);
@@ -760,6 +918,12 @@ class SpaceRenderer3D {
     } else if (enemy.aiModule === "oracle") {
       this.voxel(base, [0, .36, -.14], [.46, .14, .5], palette[0], .3);
       this.voxel(base, [0, .47, -.34], [.22, .08, .2], palette[2], .94);
+    } else if (enemy.aiModule === "pack") {
+      for (const offset of [-.28, 0, .28]) this.alienEye(base, offset, -.46 + Math.abs(offset) * .18, offset === 0 ? "#fff09a" : palette[2], .54);
+    } else if (enemy.aiModule === "ambusher") {
+      this.alienEye(base, handed * .4, -.48, "#ff6f9e", .68);
+      this.voxelSegment(base, [handed * .3, .22, -.2], [handed * .92, .34, -.78], .13, palette[1], .48);
+      this.voxel(base, [handed * .98, .38, -.84], [.18, .16, .22], palette[2], .9);
     } else {
       this.alienEye(base, handed * .07, -.42, palette[2], .58);
     }
@@ -774,15 +938,127 @@ class SpaceRenderer3D {
     }
   }
 
+  laserTelegraphRays(enemy) {
+    const ray = (sourceX, sourceY, radius, targetX, targetY, angleOffset = 0, color = "#ffd86a") => {
+      const x1 = sourceX;
+      const y1 = sourceY + radius * .45;
+      const angle = Math.atan2(targetY - y1, targetX - x1) + angleOffset;
+      const reach = Math.hypot(this.width, this.height) * 1.45;
+      return {
+        start: this.toWorld(x1, y1, .24),
+        end: this.toWorld(x1 + Math.cos(angle) * reach, y1 + Math.sin(angle) * reach, .24),
+        color,
+      };
+    };
+    if (enemy.boss) {
+      if (enemy.attackId === "sunLance") {
+        const offsets = enemy.phaseLevel >= 3 ? [-.12, .12] : [0];
+        return offsets.map((offset) => ray(enemy.x, enemy.y, enemy.r, enemy.attackTargetX, enemy.attackTargetY, offset));
+      }
+      if (enemy.attackId === "railWall") {
+        return [-1, 0, 1].map((lane) => ray(enemy.x + lane * 28, enemy.y, enemy.r, enemy.attackTargetX + lane * 92, this.height + 20, 0, lane ? "#70eaff" : "#ffe16c"));
+      }
+      if (enemy.attackId === "doubleRail") {
+        return [-1, 1].map((side) => ray(enemy.x + side * 24, enemy.y, enemy.r, enemy.attackTargetX + side * 34, this.height + 16, 0, side > 0 ? "#ffe16c" : "#70eaff"));
+      }
+      return [];
+    }
+    if (!["laserLance", "laserSweep"].includes(enemy.attackPattern)) return [];
+    const offsets = enemy.attackPattern === "laserSweep" ? [-.12, .12] : [0];
+    return offsets.map((offset) => ray(enemy.x, enemy.y, enemy.r, enemy.attackTargetX, enemy.attackTargetY, offset, enemy.payloadColor || "#ffd86a"));
+  }
+
+  drawLaserTelegraph(enemy, charge) {
+    for (const ray of this.laserTelegraphRays(enemy)) {
+      const dx = ray.end[0] - ray.start[0];
+      const dy = ray.end[1] - ray.start[1];
+      const dz = ray.end[2] - ray.start[2];
+      const activeDash = Math.floor((this.time * 7 + enemy.seed) % 10);
+      for (let dash = 0; dash < 10; dash += 1) {
+        const startT = .035 + dash * .096;
+        const endT = startT + .046;
+        const start = [ray.start[0] + dx * startT, ray.start[1] + dy * startT, ray.start[2] + dz * startT];
+        const end = [ray.start[0] + dx * endT, ray.start[1] + dy * endT, ray.start[2] + dz * endT];
+        const highlighted = dash === activeDash;
+        this.voxelSegment(compose(), start, end, .07, highlighted ? "#fff1ad" : ray.color, highlighted ? .82 : .34 + charge * .28);
+      }
+    }
+  }
+
+  drawRamTelegraph(enemy, charge) {
+    const targetX = Number.isFinite(enemy.attackEndX) ? enemy.attackEndX : enemy.attackTargetX;
+    const targetY = Number.isFinite(enemy.attackEndY) ? enemy.attackEndY : enemy.attackTargetY;
+    const sourceY = enemy.y + enemy.r * .35;
+    const dx = targetX - enemy.x;
+    const dy = targetY - sourceY;
+    const range = Math.max(1, Math.hypot(dx, dy));
+    const forwardX = dx / range;
+    const forwardY = dy / range;
+    const sideX = -forwardY;
+    const sideY = forwardX;
+    for (let marker = 0; marker < 3; marker += 1) {
+      const tipDistance = Math.min(range * .56, 24 + marker * 22 + charge * 6);
+      const tailDistance = Math.max(7, tipDistance - 12);
+      const tip = this.toWorld(enemy.x + forwardX * tipDistance, sourceY + forwardY * tipDistance, .22);
+      for (const side of [-1, 1]) {
+        const tail = this.toWorld(enemy.x + forwardX * tailDistance + sideX * side * 7, sourceY + forwardY * tailDistance + sideY * side * 7, .22);
+        this.voxelSegment(compose(), tail, tip, .11, marker === 2 ? "#ffd36a" : "#ff765f", .56 + charge * .26);
+      }
+    }
+  }
+
+  drawRamWake(enemy) {
+    const targetX = Number.isFinite(enemy.attackEndX) ? enemy.attackEndX : enemy.attackTargetX;
+    const targetY = Number.isFinite(enemy.attackEndY) ? enemy.attackEndY : enemy.attackTargetY;
+    const dx = targetX - enemy.x;
+    const dy = targetY - enemy.y;
+    const range = Math.max(1, Math.hypot(dx, dy));
+    const forwardX = dx / range;
+    const forwardY = dy / range;
+    const sideX = -forwardY;
+    const sideY = forwardX;
+    for (const side of [-1, 1]) {
+      const start = this.toWorld(enemy.x - forwardX * 4 + sideX * side * 3.6, enemy.y - forwardY * 4 + sideY * side * 3.6, .2);
+      const end = this.toWorld(enemy.x - forwardX * 18 + sideX * side * 2.2, enemy.y - forwardY * 18 + sideY * side * 2.2, .2);
+      this.voxelSegment(compose(), start, end, .12, side > 0 ? "#ffcb67" : "#ff5f72", .82);
+    }
+  }
+
+  drawEnemyTelegraph(enemy, base) {
+    if (enemy.attackState !== "telegraph") return;
+    const charge = clamp(enemy.attackCharge || 0, 0, 1);
+    const laser = ["laserLance", "laserSweep"].includes(enemy.attackPattern);
+    const ram = enemy.attackPattern === "ramCharge";
+    const blast = ["blastSeed", "proximityBloom"].includes(enemy.attackPattern);
+    const color = laser ? "#ffd86a" : ram ? "#ff765f" : blast ? "#ff9b55" : enemy.payloadColor || "#ff668c";
+    const pulse = 1 + Math.sin(this.time * 20 + enemy.seed) * .08;
+    this.voxel(base, [0, .56, -1.05], [.18 + charge * .26, .14 + charge * .14, .26 + charge * .34], color, 1, [0, this.time * 2.2, 0]);
+    if (laser) {
+      this.voxelRing(base, .62 + charge * .3, .36, color, 8, -.65, enemy.seed, .08 * pulse, .68, .55);
+      this.drawLaserTelegraph(enemy, charge);
+    } else if (ram) {
+      this.voxelRing(base, .7 + charge * .22, .34, color, 8, 1.2, enemy.seed, .11 * pulse, .78, .5);
+      this.drawRamTelegraph(enemy, charge);
+    } else if (blast) {
+      this.voxelRing(base, .58 + charge * .58, .34, color, 10, -.72, enemy.seed, .1 * pulse, .72, .62);
+      this.voxelHalo(base, .48 + charge * .34, .38, "#ffe279", 6, 1.4, enemy.seed, .08 + charge * .025);
+    } else {
+      this.voxelRing(base, .58 + charge * .24, .34, color, 7, .62, enemy.seed, .08 * pulse, .56, .46);
+    }
+  }
+
   drawEnemy(enemy) {
     const position = this.toWorld(enemy.x, enemy.y, .32);
-    const perspectiveBoost = 1 + clamp((this.height * .48 - enemy.y) / this.height, 0, .14);
-    const enemyScale = (enemy.elite ? 1.5 : 1.26) * perspectiveBoost * (enemy.moduleScale || 1);
     const spin = enemy.type === "spinner" ? Math.sin(enemy.age * 2) * .08 : 0;
     const galleryScale = enemy.galleryScale || 1;
-    const base = compose(position, [0, Math.PI + spin + (enemy.galleryYaw || 0), Math.sin(enemy.age * 2 + enemy.seed) * .04], [enemyScale * galleryScale, enemyScale * galleryScale, enemyScale * galleryScale]);
+    const rotation = [0, Math.PI + spin + (enemy.galleryYaw || 0), Math.sin(enemy.age * 2 + enemy.seed) * .04];
+    const moduleScale = enemy.moduleScale || 1;
+    const modelScale = (enemy.boss ? BOSS_MODEL_SCALE : enemy.elite ? ELITE_ENEMY_SCALE : REGULAR_ENEMY_SCALE) * moduleScale * galleryScale;
+    const telegraphScale = (enemy.boss ? BOSS_TELEGRAPH_SCALE : enemy.elite ? ELITE_TELEGRAPH_SCALE : REGULAR_TELEGRAPH_SCALE) * moduleScale * galleryScale;
+    const base = compose(position, rotation, [modelScale, modelScale, modelScale]);
+    const telegraphBase = compose(position, rotation, [telegraphScale, telegraphScale, telegraphScale]);
     if (enemy.boss) {
-      this.drawBoss(enemy, base);
+      this.drawBoss(enemy, base, this.stageIndex, telegraphBase);
       return;
     }
     const palettes = {
@@ -793,11 +1069,22 @@ class SpaceRenderer3D {
       mine: ["#3d1e4d", "#a84183", "#dcff69"],
       lancer: ["#342342", "#b8334d", "#fff070"],
       carrier: ["#322b49", "#7f3c62", "#a8e85d"],
+      nectarMoth: ["#3f214e", "#d34f83", "#ffe16c"],
+      prismRay: ["#291d55", "#8d5ad8", "#7fffe2"],
+      cometRammer: ["#183d5c", "#3094bc", "#ff9acb"],
+      auroraLeech: ["#143f4e", "#27a99b", "#ffe16c"],
+      railBeetle: ["#3b3442", "#9b7b3e", "#ffe45c"],
+      reefMedusa: ["#163c58", "#3f9db2", "#ffb36a"],
+      eclipseReaper: ["#411632", "#c1325d", "#c183ff"],
+      graveMirror: ["#2e1a56", "#8653ba", "#71f5e2"],
+      gardenSpore: ["#163d38", "#3f9b72", "#ff6c94"],
     };
     const palette = palettes[enemy.type] || palettes.scout;
     const moduleColor = enemy.elite ? "#e6c75d" : "#b33b51";
     this.drawEnemyChassis(enemy, base, palette);
     this.drawIntegratedEnemyModules(enemy, base, palette, moduleColor);
+    this.drawEnemyTelegraph(enemy, telegraphBase);
+    if (enemy.attackState === "attack" && enemy.attackPattern === "ramCharge") this.drawRamWake(enemy);
     if (enemy.elite) {
       this.voxel(base, [0, .49, -.18], [1.45, .035, .07], "#fff1a0", 1);
       for (const side of [-1, 1]) {
@@ -896,21 +1183,19 @@ class SpaceRenderer3D {
         this.voxel(base, [side * -.34, .92, 0], [.58, .13 + charge * .05, .46], colors[(row + stage + 1) % 2], .62 + charge * .3);
       }
     }
-    if (boss.attackState === "telegraph") {
-      const target = this.toWorld(boss.attackTargetX || this.width / 2, this.height - 62, .16);
-      for (let segment = 0; segment < 5; segment += 1) this.voxel(compose(target), [0, .04, -segment * 1.25], [.34 + charge * .18, .04, .72], colors[segment % 2], .58 + charge * .38);
-    }
+    if (boss.attackState === "telegraph" && ["sunLance", "railWall", "doubleRail"].includes(boss.attackId)) this.drawLaserTelegraph(boss, charge);
   }
 
-  drawBoss(enemy, base, stageOverride = this.stageIndex) {
+  drawBoss(enemy, base, stageOverride = this.stageIndex, telegraphBase = base) {
     const stage = clamp(stageOverride, 0, 2);
     const palettes = enemy.hitFlash > 0 ? ["#4f7991", "#b74373", "#ffe15d"] : [["#2b1745", "#87325e", "#c99f42"], ["#202b48", "#2e7777", "#b99e3f"], ["#26163d", "#783052", "#b84658"]][stage];
     const scale = [1.08, 1.15, 1.22][stage];
     const bossBase = multiply(base, compose([0, 0, 0], [0, 0, 0], [scale, scale, scale]));
+    const bossTelegraphBase = multiply(telegraphBase, compose([0, 0, 0], [0, 0, 0], [scale, scale, scale]));
     if (stage === 0) this.drawBossBloom(enemy, bossBase, palettes);
     else if (stage === 1) this.drawBossForge(enemy, bossBase, palettes);
     else this.drawBossVoid(enemy, bossBase, palettes);
-    this.drawBossTelegraph(enemy, bossBase, palettes, stage);
+    this.drawBossTelegraph(enemy, bossTelegraphBase, palettes, stage);
     if (enemy.phaseShield > 0) this.voxelCage(bossBase, 2.45 + Math.sin(this.time * 12) * .04, palettes[2], 1.15);
   }
 
@@ -957,9 +1242,18 @@ class SpaceRenderer3D {
       ["mine", "drift", "orbit", "volatile", "flanker", "cryo"],
       ["lancer", "rush", "sniper", "light", "hunter", "fracture"],
       ["carrier", "weave", "twin", "plated", "oracle", "glitch"],
+      ["nectarMoth", "weave", "seeker", "light", "pack", "clean"],
+      ["prismRay", "drift", "laser", "barrier", "oracle", "clean"],
+      ["cometRammer", "rush", "pulse", "volatile", "ambusher", "clean"],
+      ["auroraLeech", "weave", "laser", "light", "hunter", "cryo"],
+      ["railBeetle", "rush", "bomb", "plated", "pack", "fracture"],
+      ["reefMedusa", "drift", "bomb", "barrier", "flanker", "cryo"],
+      ["eclipseReaper", "rush", "seeker", "volatile", "ambusher", "glitch"],
+      ["graveMirror", "weave", "laser", "barrier", "oracle", "glitch"],
+      ["gardenSpore", "drift", "bomb", "plated", "pack", "fracture"],
     ];
-    const moduleColors = ["#ffd454", "#ff6b60", "#70eaff", "#a96cff", "#ff83d7", "#ffb45f", "#63e6a8"];
-    const layout = [[76, 42], [185, 42], [295, 42], [404, 42], [130, 130], [240, 130], [350, 130]];
+    const moduleColors = ["#ffd454", "#ff6b60", "#70eaff", "#a96cff", "#ff83d7", "#ffb45f", "#63e6a8", "#ffca58", "#7fffe2", "#ff9a6c", "#68f4df", "#ffe16c", "#72d5e8", "#ff5d78", "#b57dff", "#63e6a8"];
+    const layout = Array.from({ length: 16 }, (_, index) => [62 + index % 4 * 119, 30 + Math.floor(index / 4) * 62]);
     moduleSets.forEach(([type, movementModule, weaponModule, coreModule, aiModule, payloadModule], index) => {
       const [x, y] = layout[index];
       this.drawEnemy({
@@ -976,7 +1270,7 @@ class SpaceRenderer3D {
         seed: index + 1,
         age: this.time * .25,
         moduleScale: 1,
-        galleryScale: 1.15,
+        galleryScale: .84,
         galleryYaw: (index % 4 - 1.5) * .1,
         hitFlash: 0,
         elite: false,
@@ -1641,12 +1935,43 @@ class SpaceRenderer3D {
     const travelAngle = Math.atan2(bullet.vx, bullet.vy);
     const rotation = [0, travelAngle, 0];
     if (enemy) {
-      const size = .11 + bullet.r * .026;
+      const size = (.11 + bullet.r * .026) * HOSTILE_PROJECTILE_SCALE;
       const color = this.highContrastBullets ? "#fff06a" : "#ff5d88";
       const hostileEdge = this.highContrastBullets ? "#ff7a58" : "#9b4bc2";
       const hostileCore = this.highContrastBullets ? "#ffffff" : (bullet.payloadColor || "#dfff68");
       const base = compose(position, rotation);
-      if (bullet.bossStage === 0) {
+      if (bullet.behavior === "mine") {
+        const pulse = 1 + Math.sin(bullet.age * 12) * .14;
+        this.voxel(base, [0, 0, 0], [size * 2.8 * pulse, size * 1.4, size * 2.8 * pulse], color, 1, [0, bullet.age * 2.8, 0]);
+        for (let arm = 0; arm < 4; arm += 1) this.voxel(base, [0, 0, 0], [size * 4.2, size * .5, size * .72], hostileEdge, .94, [0, bullet.age * 1.8 + arm * Math.PI / 2, 0]);
+        this.voxel(base, [0, .04, 0], [size, size, size], hostileCore, 1);
+      } else if (bullet.behavior === "blast") {
+        const pulse = 1 + Math.sin(bullet.age * 18) * .18;
+        const fuse = clamp(bullet.age / Math.max(.01, bullet.triggerAge || 1), 0, 1);
+        this.voxel(base, [0, 0, 0], [size * 3.3 * pulse, size * 1.8, size * 3.3 * pulse], "#ff744f", 1, [bullet.age * 2.4, bullet.age * 3.2, 0]);
+        for (let arm = 0; arm < 3; arm += 1) this.voxel(base, [0, 0, 0], [size * 4.6, size * .42, size * .72], arm === 1 ? "#ffe06a" : hostileEdge, .9, [0, bullet.age * 2 + arm * TAU / 3, 0]);
+        this.voxel(base, [0, .05, 0], [size * 1.15, size * 1.15, size * 1.15], "#fff0a0", 1);
+        if (bullet.anchored || fuse >= .36) {
+          const warningBase = compose(position);
+          const radiusX = Math.max(.48, (bullet.blastRadius || 34) / 21.5);
+          const radiusZ = Math.max(.48, (bullet.blastRadius || 34) / 13.3);
+          const warningColor = fuse >= .78 ? "#ffe279" : "#ff8059";
+          this.voxelEllipse(warningBase, radiusX, radiusZ, .02, warningColor, 16, bullet.age * 1.1 + bullet.sourceId * .17, .34 + fuse * .42, .68);
+        }
+      } else if (bullet.behavior === "homing") {
+        this.voxel(base, [0, 0, 0], [size * 1.4, size, size * 2.8], "#ff5fa2", 1);
+        for (const side of [-1, 1]) this.voxel(base, [side * size, 0, size * .55], [size * 1.1, size * .52, size * 1.35], hostileEdge, .9, [0, side * .58, 0]);
+        this.voxel(base, [0, .04, -size * .35], [size * .7, size * .7, size], hostileCore, 1);
+        this.projectileTrail(base, "#b967ff", size * .42, size * 2.1, 3);
+      } else if (["laneWall", "commandCross"].includes(bullet.pattern)) {
+        this.voxel(base, [0, 0, 0], [size * 3.2, size * .72, size * 1.2], color, 1, [0, Math.PI / 2, 0]);
+        this.voxel(base, [0, .03, 0], [size * .82, size * .82, size * 1.8], hostileCore, .95);
+        this.projectileTrail(base, hostileEdge, size * .5, size * 1.6, 2);
+      } else if (["pincer", "predictiveFan", "sweep"].includes(bullet.pattern)) {
+        this.voxel(base, [0, 0, 0], [size * 1.6, size, size * 2.3], color, 1, [0, bullet.age * (bullet.curve || 0), 0]);
+        for (const side of [-1, 1]) this.voxel(base, [side * size * .9, 0, size * .2], [size * .9, size * .62, size * 1.3], hostileEdge, .84, [0, side * .48, 0]);
+        this.projectileTrail(base, hostileEdge, size * .5, size * 1.8, 2);
+      } else if (bullet.bossStage === 0) {
         const opening = 1 + (bullet.bossPhase || 1) * .12;
         this.voxel(base, [0, 0, 0], [size * 2.4 * opening, size * .78, size * 1.25], color, 1, [0, .38, 0]);
         this.voxel(base, [0, 0, 0], [size * 2.4 * opening, size * .78, size * 1.25], hostileCore, .9, [0, -.38, 0]);
@@ -1691,9 +2016,9 @@ class SpaceRenderer3D {
         this.voxel(base, [0, .03, -.25], [.3, .14, .2], "#58dfff", .92);
         this.projectileTrail(base, "#58dfff", .12, .32, 2);
       } else if ((bullet.seeker || 0) > 0) {
-        this.voxel(base, [0, 0, -.04], [.16, .16, .4], "#e9ffff", 1);
-        this.voxel(base, [0, .02, .22], [.32, .14, .2], "#a96cff", .9);
-        this.projectileTrail(base, "#a96cff", .12, .26, 2);
+        this.voxel(base, [0, 0, -.04], [.12, .12, .34], "#c8b6ee", .78);
+        this.voxel(base, [0, .02, .18], [.24, .11, .16], "#8f68d7", .74);
+        this.projectileTrail(base, "#7651bd", .085, .2, 2);
       } else if ((bullet.r || 0) > 2.35) {
         this.voxel(base, [0, 0, 0], [.2, .2, .44], "#e9ffff", 1);
         this.voxel(base, [0, .03, -.24], [.16, .16, .2], "#ffd454", .94);
@@ -1755,11 +2080,49 @@ class SpaceRenderer3D {
     }
   }
 
+  drawEnemyBeam(beam) {
+    const a = this.toWorld(beam.x1, beam.y1, .48);
+    const b = this.toWorld(beam.x2, beam.y2, .48);
+    const phase = clamp(beam.age / Math.max(.01, beam.duration), 0, 1);
+    const alpha = clamp(Math.sin(Math.PI * phase) * 1.12, .34, 1);
+    const width = .055 + (beam.width || 5) * .018;
+    const base = compose();
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const dz = b[2] - a[2];
+    const planarLength = Math.max(.001, Math.hypot(dx, dz));
+    const normalX = -dz / planarLength;
+    const normalZ = dx / planarLength;
+    const edgeOffset = width * 1.72;
+    const beamColor = beam.color || "#ffe070";
+    const leftA = [a[0] + normalX * edgeOffset, a[1], a[2] + normalZ * edgeOffset];
+    const leftB = [b[0] + normalX * edgeOffset, b[1], b[2] + normalZ * edgeOffset];
+    const rightA = [a[0] - normalX * edgeOffset, a[1], a[2] - normalZ * edgeOffset];
+    const rightB = [b[0] - normalX * edgeOffset, b[1], b[2] - normalZ * edgeOffset];
+    this.voxelSegment(base, leftA, leftB, width * .34, "#7136a8", .7 * alpha);
+    this.voxelSegment(base, rightA, rightB, width * .34, "#7136a8", .7 * alpha);
+    this.voxelSegment(base, a, b, width * .8, beamColor, .76 * alpha);
+    this.voxelSegment(base, a, b, width * .22, "#fff8d8", .94 * alpha);
+    for (let packet = 0; packet < 3; packet += 1) {
+      const packetT = (.08 + phase * 1.8 + packet / 3) % .92;
+      const startT = Math.max(.02, packetT - .026);
+      const endT = Math.min(.98, packetT + .026);
+      const start = [a[0] + dx * startT, a[1] + dy * startT, a[2] + dz * startT];
+      const end = [a[0] + dx * endT, a[1] + dy * endT, a[2] + dz * endT];
+      const center = [a[0] + dx * packetT, a[1] + dy * packetT, a[2] + dz * packetT];
+      const crossA = [center[0] + normalX * edgeOffset * 1.08, center[1], center[2] + normalZ * edgeOffset * 1.08];
+      const crossB = [center[0] - normalX * edgeOffset * 1.08, center[1], center[2] - normalZ * edgeOffset * 1.08];
+      this.voxelSegment(base, start, end, width * .68, "#ffffff", alpha);
+      this.voxelSegment(base, crossA, crossB, width * .26, packet % 2 ? beamColor : "#ff9f5a", .82 * alpha);
+    }
+    this.voxelHalo(compose(a), width * 2.8, .02, beamColor, 6, 3.4, beam.sourceId * .13, width * .48);
+  }
+
   drawRush(world) {
     const colors = ["#66f6e5", "#ff87ba"];
     const livePlayers = world.players.filter((player) => !player.downed);
     for (const player of livePlayers) {
-      const base = compose(this.toWorld(player.x, player.y, .28));
+      const base = compose(this.toWorld(player.x, player.y, .28), [0, 0, 0], [PLAYER_MODEL_SCALE, PLAYER_MODEL_SCALE, PLAYER_MODEL_SCALE]);
       const color = colors[player.index] || colors[0];
       for (const side of [-1, 1]) {
         this.voxel(base, [side * .94, .18, .22], [.08, .46, .08], color, 1);
@@ -1881,11 +2244,12 @@ class SpaceRenderer3D {
     for (const enemy of world.enemies) this.drawEnemy(enemy);
     for (const bullet of world.bullets) this.drawProjectile(bullet, false);
     for (const bullet of world.enemyBullets) this.drawProjectile(bullet, true);
+    for (const beam of world.enemyBeams || []) this.drawEnemyBeam(beam);
     if (world.linked) this.drawBeam(world.players[0], world.players[1]);
     if (world.rushTimer > 0) this.drawRush(world);
     if (world.activeProtocols?.length) this.drawProtocols(world);
     for (const player of world.players) {
-      if (!player.downed && !(player.invulnerability > 0 && Math.floor(world.time * 14) % 2 === 0)) this.drawShip(player, playerConfigs[player.index]);
+      if (!player.downed) this.drawShip(player, playerConfigs[player.index]);
       else if (player.downed) this.drawShip({ ...player, vx: Math.sin(this.time * 5) * 20, vy: 0 }, { ...playerConfigs[player.index], color: playerConfigs[player.index].dark });
     }
     for (const particle of world.particles.slice(-180)) this.drawParticle(particle);

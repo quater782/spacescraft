@@ -20,6 +20,14 @@
   const buffForPickup = (pickupType) => BUFF_MODULES.find((buff) => buff.pickupType === pickupType) || BUFF_MODULES[0];
   const active = (items, timers = {}) => items.filter((item) => Number(timers[item.id]) > 0);
 
+  function refreshBuffDuration(current, buffOrId) {
+    const buff = typeof buffOrId === "string" ? byId(BUFF_MODULES, buffOrId) : buffOrId;
+    if (!buff) return 0;
+    const remaining = Math.max(0, Number(current) || 0);
+    if (remaining <= 0) return buff.duration;
+    return Math.min(buff.duration + 1, Math.max(remaining, buff.duration) + 1);
+  }
+
   function combatBonuses(buffTimers = {}, debuffTimers = {}) {
     const arsenal = Number(buffTimers.arsenal) > 0;
     const nanobloom = Number(buffTimers.nanobloom) > 0;
@@ -29,10 +37,11 @@
     const jam = Number(debuffTimers.jam) > 0;
     const fracture = Number(debuffTimers.fracture) > 0;
     return Object.freeze({
-      damage: arsenal ? 1.08 : 1,
-      fireRate: (arsenal ? 1.24 : 1) * (jam ? .84 : 1),
+      damage: arsenal ? 1.06 : 1,
+      fireRate: (arsenal ? 1.12 : 1) * (jam ? .84 : 1),
       speed: (nanobloom ? 1.12 : 1) * (chill ? .82 : 1),
-      energyGain: (flux ? 1.3 : 1) * (fracture ? .72 : 1),
+      energyGain: fracture ? .72 : 1,
+      sharedCharge: flux ? 1.15 : 1,
       pickupMagnet: flux ? 70 : 0,
       beamDamage: flux ? 1.12 : 1,
       statusResistance: aegis ? .5 : 1,
@@ -45,6 +54,7 @@
     BUFF_MODULES,
     DEBUFF_MODULES,
     buffForPickup,
+    refreshBuffDuration,
     activeBuffs: (timers) => active(BUFF_MODULES, timers),
     activeDebuffs: (timers) => active(DEBUFF_MODULES, timers),
     combatBonuses,

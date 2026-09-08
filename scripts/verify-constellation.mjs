@@ -40,7 +40,7 @@ assert.ok(player.shield <= player.maxShield, "starting shield must respect the c
 
 assert.match(game, /SpaceConstellation\.sanitizeUnlocks/);
 assert.match(game, /SpaceConstellation\.applyToPlayer/);
-assert.match(game, /version: 5/);
+assert.match(game, /version: 6/);
 assert.match(game, /talents: \[\]/);
 assert.match(game, /function unlockTalent/);
 assert.match(game, /data-talent-id/);

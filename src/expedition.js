@@ -4,39 +4,51 @@
   const freezeAll = (items) => Object.freeze(items.map((item) => Object.freeze(item)));
 
   const BIOMES = freezeAll([
-    { id: "sugarBloom", stageIndex: 0, nameKey: "biome.sugarBloom.name", descriptionKey: "biome.sugarBloom.description", landmark: "bloom", sky: "#0b0b28", haze: "#51245f", grid: "#6b3c7b", star: "#ffc3e5", accent: "#ff78aa", secondary: "#ffcf6e", enemyHp: .96, spawnRate: .96, bulletSpeed: .92, bpmOffset: -4, musicShift: 0, typeBias: "scout", preferredMove: "weave" },
-    { id: "crystalOrchard", stageIndex: 0, nameKey: "biome.crystalOrchard.name", descriptionKey: "biome.crystalOrchard.description", landmark: "crystals", sky: "#100b2e", haze: "#45266e", grid: "#6850a2", star: "#d9c4ff", accent: "#bd8cff", secondary: "#7fffe2", enemyHp: 1.02, spawnRate: .94, bulletSpeed: .96, bpmOffset: 2, musicShift: 2, typeBias: "spinner", preferredMove: "drift" },
-    { id: "cometTide", stageIndex: 0, nameKey: "biome.cometTide.name", descriptionKey: "biome.cometTide.description", landmark: "comets", sky: "#07172d", haze: "#193f68", grid: "#2c6791", star: "#b5efff", accent: "#68d9ff", secondary: "#ff9acb", enemyHp: .94, spawnRate: 1, bulletSpeed: 1, bpmOffset: 5, musicShift: -2, typeBias: "dart", preferredMove: "rush" },
-    { id: "auroraFoundry", stageIndex: 1, nameKey: "biome.auroraFoundry.name", descriptionKey: "biome.auroraFoundry.description", landmark: "aurora", sky: "#061d27", haze: "#165265", grid: "#2e7c7b", star: "#b5fff0", accent: "#68f4df", secondary: "#ffe16c", enemyHp: 1, spawnRate: .98, bulletSpeed: .97, bpmOffset: -3, musicShift: 0, typeBias: "spinner", preferredMove: "weave" },
-    { id: "thunderWorks", stageIndex: 1, nameKey: "biome.thunderWorks.name", descriptionKey: "biome.thunderWorks.description", landmark: "gears", sky: "#101827", haze: "#3b4a58", grid: "#6e735f", star: "#fff1ad", accent: "#f9d65c", secondary: "#79d9ff", enemyHp: 1.04, spawnRate: 1.02, bulletSpeed: 1, bpmOffset: 6, musicShift: -1, typeBias: "tank", preferredMove: "rush" },
-    { id: "cloudReef", stageIndex: 1, nameKey: "biome.cloudReef.name", descriptionKey: "biome.cloudReef.description", landmark: "reef", sky: "#092338", haze: "#25566d", grid: "#39849a", star: "#c8f5ff", accent: "#72d5e8", secondary: "#ffb36a", enemyHp: 1.08, spawnRate: .94, bulletSpeed: .93, bpmOffset: -6, musicShift: 2, typeBias: "mine", preferredMove: "drift" },
-    { id: "eclipseCarnival", stageIndex: 2, nameKey: "biome.eclipseCarnival.name", descriptionKey: "biome.eclipseCarnival.description", landmark: "eclipse", sky: "#12071d", haze: "#461345", grid: "#6c255a", star: "#ffb2d2", accent: "#ff5d78", secondary: "#c183ff", enemyHp: 1.04, spawnRate: 1.02, bulletSpeed: 1, bpmOffset: 2, musicShift: 0, typeBias: "dart", preferredMove: "rush" },
-    { id: "prismGrave", stageIndex: 2, nameKey: "biome.prismGrave.name", descriptionKey: "biome.prismGrave.description", landmark: "prisms", sky: "#0e0a25", haze: "#351b58", grid: "#5a3a84", star: "#e1cdff", accent: "#b57dff", secondary: "#71f5e2", enemyHp: 1.08, spawnRate: .98, bulletSpeed: 1.02, bpmOffset: 7, musicShift: 3, typeBias: "spinner", preferredMove: "weave" },
-    { id: "voidGarden", stageIndex: 2, nameKey: "biome.voidGarden.name", descriptionKey: "biome.voidGarden.description", landmark: "garden", sky: "#07151b", haze: "#183d3b", grid: "#2f655a", star: "#b7ffe0", accent: "#63e6a8", secondary: "#ff6c94", enemyHp: .98, spawnRate: 1.06, bulletSpeed: .96, bpmOffset: -2, musicShift: -3, typeBias: "mine", preferredMove: "drift" },
+    { id: "sugarBloom", stageIndex: 0, nameKey: "biome.sugarBloom.name", descriptionKey: "biome.sugarBloom.description", landmark: "bloom", sky: "#0b0b28", haze: "#51245f", grid: "#6b3c7b", star: "#ffc3e5", accent: "#ff78aa", secondary: "#ffcf6e", enemyHp: .96, spawnRate: .96, bulletSpeed: .96, bpmOffset: -4, musicShift: 0, typeBias: "scout", preferredMove: "weave", speciesId: "nectarMoth", preferredWeapon: "seeker", preferredAi: "pack" },
+    { id: "crystalOrchard", stageIndex: 0, nameKey: "biome.crystalOrchard.name", descriptionKey: "biome.crystalOrchard.description", landmark: "crystals", sky: "#100b2e", haze: "#45266e", grid: "#6850a2", star: "#d9c4ff", accent: "#bd8cff", secondary: "#7fffe2", enemyHp: 1.02, spawnRate: .94, bulletSpeed: 1, bpmOffset: 2, musicShift: 2, typeBias: "spinner", preferredMove: "drift", speciesId: "prismRay", preferredWeapon: "laser", preferredAi: "oracle" },
+    { id: "cometTide", stageIndex: 0, nameKey: "biome.cometTide.name", descriptionKey: "biome.cometTide.description", landmark: "comets", sky: "#07172d", haze: "#193f68", grid: "#2c6791", star: "#b5efff", accent: "#68d9ff", secondary: "#ff9acb", enemyHp: .98, spawnRate: 1, bulletSpeed: 1.04, bpmOffset: 5, musicShift: -2, typeBias: "dart", preferredMove: "rush", speciesId: "cometRammer", preferredWeapon: "pulse", preferredAi: "ambusher" },
+    { id: "auroraFoundry", stageIndex: 1, nameKey: "biome.auroraFoundry.name", descriptionKey: "biome.auroraFoundry.description", landmark: "aurora", sky: "#061d27", haze: "#165265", grid: "#2e7c7b", star: "#b5fff0", accent: "#68f4df", secondary: "#ffe16c", enemyHp: 1.04, spawnRate: .98, bulletSpeed: 1.04, bpmOffset: -3, musicShift: 0, typeBias: "spinner", preferredMove: "weave", speciesId: "auroraLeech", preferredWeapon: "laser", preferredAi: "hunter" },
+    { id: "thunderWorks", stageIndex: 1, nameKey: "biome.thunderWorks.name", descriptionKey: "biome.thunderWorks.description", landmark: "gears", sky: "#101827", haze: "#3b4a58", grid: "#6e735f", star: "#fff1ad", accent: "#f9d65c", secondary: "#79d9ff", enemyHp: 1.08, spawnRate: 1.02, bulletSpeed: 1.08, bpmOffset: 6, musicShift: -1, typeBias: "tank", preferredMove: "rush", speciesId: "railBeetle", preferredWeapon: "bomb", preferredAi: "pack" },
+    { id: "cloudReef", stageIndex: 1, nameKey: "biome.cloudReef.name", descriptionKey: "biome.cloudReef.description", landmark: "reef", sky: "#092338", haze: "#25566d", grid: "#39849a", star: "#c8f5ff", accent: "#72d5e8", secondary: "#ffb36a", enemyHp: 1.1, spawnRate: .94, bulletSpeed: 1, bpmOffset: -6, musicShift: 2, typeBias: "mine", preferredMove: "drift", speciesId: "reefMedusa", preferredWeapon: "bomb", preferredAi: "flanker" },
+    { id: "eclipseCarnival", stageIndex: 2, nameKey: "biome.eclipseCarnival.name", descriptionKey: "biome.eclipseCarnival.description", landmark: "eclipse", sky: "#12071d", haze: "#461345", grid: "#6c255a", star: "#ffb2d2", accent: "#ff5d78", secondary: "#c183ff", enemyHp: 1.1, spawnRate: 1.02, bulletSpeed: 1.1, bpmOffset: 2, musicShift: 0, typeBias: "dart", preferredMove: "rush", speciesId: "eclipseReaper", preferredWeapon: "seeker", preferredAi: "ambusher" },
+    { id: "prismGrave", stageIndex: 2, nameKey: "biome.prismGrave.name", descriptionKey: "biome.prismGrave.description", landmark: "prisms", sky: "#0e0a25", haze: "#351b58", grid: "#5a3a84", star: "#e1cdff", accent: "#b57dff", secondary: "#71f5e2", enemyHp: 1.14, spawnRate: .98, bulletSpeed: 1.12, bpmOffset: 7, musicShift: 3, typeBias: "spinner", preferredMove: "weave", speciesId: "graveMirror", preferredWeapon: "laser", preferredAi: "oracle" },
+    { id: "voidGarden", stageIndex: 2, nameKey: "biome.voidGarden.name", descriptionKey: "biome.voidGarden.description", landmark: "garden", sky: "#07151b", haze: "#183d3b", grid: "#2f655a", star: "#b7ffe0", accent: "#63e6a8", secondary: "#ff6c94", enemyHp: 1.08, spawnRate: 1.06, bulletSpeed: 1.04, bpmOffset: -2, musicShift: -3, typeBias: "mine", preferredMove: "drift", speciesId: "gardenSpore", preferredWeapon: "bomb", preferredAi: "pack" },
   ]);
 
   const HULL_MODULES = freezeAll([
-    { id: "scout", nameKey: "enemyHull.scout", role: "interceptor", hp: 3, radius: 8, score: 120, minStage: 0 },
-    { id: "dart", nameKey: "enemyHull.dart", role: "striker", hp: 2, radius: 7, score: 150, minStage: 0 },
-    { id: "tank", nameKey: "enemyHull.tank", role: "bulwark", hp: 11, radius: 12, score: 350, minStage: 0 },
-    { id: "spinner", nameKey: "enemyHull.spinner", role: "artillery", hp: 6, radius: 9, score: 240, minStage: 0 },
-    { id: "mine", nameKey: "enemyHull.mine", role: "denial", hp: 4, radius: 8, score: 180, minStage: 1 },
-    { id: "lancer", nameKey: "enemyHull.lancer", role: "flanker", hp: 4, radius: 8.5, score: 225, minStage: 1 },
-    { id: "carrier", nameKey: "enemyHull.carrier", role: "command", hp: 9, radius: 11, score: 330, minStage: 2 },
+    { id: "scout", nameKey: "enemyHull.scout", role: "interceptor", hp: 8, radius: 7.4, score: 150, minStage: 0 },
+    { id: "dart", nameKey: "enemyHull.dart", role: "striker", hp: 7, radius: 6.4, score: 180, minStage: 0 },
+    { id: "tank", nameKey: "enemyHull.tank", role: "bulwark", hp: 30, radius: 11, score: 440, minStage: 0 },
+    { id: "spinner", nameKey: "enemyHull.spinner", role: "artillery", hp: 16, radius: 8.3, score: 300, minStage: 0 },
+    { id: "mine", nameKey: "enemyHull.mine", role: "denial", hp: 14, radius: 7.4, score: 230, minStage: 1 },
+    { id: "lancer", nameKey: "enemyHull.lancer", role: "flanker", hp: 15, radius: 7.8, score: 285, minStage: 1 },
+    { id: "carrier", nameKey: "enemyHull.carrier", role: "command", hp: 32, radius: 10.1, score: 420, minStage: 2 },
+    { id: "nectarMoth", nameKey: "enemyHull.nectarMoth", role: "interceptor", hp: 10, radius: 8.3, score: 210, minStage: 0, nativeBiome: "sugarBloom", preferredWeapon: "seeker", preferredAi: "pack", speciesPattern: "hunterSeeker", deathrattle: "seekerBurst", collisionDamage: 2 },
+    { id: "prismRay", nameKey: "enemyHull.prismRay", role: "artillery", hp: 18, radius: 10.1, score: 330, minStage: 0, nativeBiome: "crystalOrchard", preferredWeapon: "laser", preferredAi: "oracle", speciesPattern: "laserSweep", deathrattle: "shardFan", collisionDamage: 3 },
+    { id: "cometRammer", nameKey: "enemyHull.cometRammer", role: "striker", hp: 17, radius: 9.2, score: 300, minStage: 0, nativeBiome: "cometTide", preferredWeapon: "pulse", preferredAi: "ambusher", speciesPattern: "ramCharge", deathrattle: "blast", collisionDamage: 4 },
+    { id: "auroraLeech", nameKey: "enemyHull.auroraLeech", role: "flanker", hp: 21, radius: 9.2, score: 350, minStage: 1, nativeBiome: "auroraFoundry", preferredWeapon: "laser", preferredAi: "hunter", speciesPattern: "laserLance", deathrattle: "arcCross", collisionDamage: 3 },
+    { id: "railBeetle", nameKey: "enemyHull.railBeetle", role: "bulwark", hp: 36, radius: 12, score: 520, minStage: 1, nativeBiome: "thunderWorks", preferredWeapon: "bomb", preferredAi: "pack", speciesPattern: "blastSeed", deathrattle: "blast", collisionDamage: 4 },
+    { id: "reefMedusa", nameKey: "enemyHull.reefMedusa", role: "denial", hp: 24, radius: 10.1, score: 390, minStage: 1, nativeBiome: "cloudReef", preferredWeapon: "bomb", preferredAi: "flanker", speciesPattern: "proximityBloom", deathrattle: "mineRing", collisionDamage: 3 },
+    { id: "eclipseReaper", nameKey: "enemyHull.eclipseReaper", role: "flanker", hp: 24, radius: 9.7, score: 410, minStage: 2, nativeBiome: "eclipseCarnival", preferredWeapon: "seeker", preferredAi: "ambusher", speciesPattern: "hunterSeeker", deathrattle: "crossBurst", collisionDamage: 4 },
+    { id: "graveMirror", nameKey: "enemyHull.graveMirror", role: "artillery", hp: 28, radius: 10.6, score: 460, minStage: 2, nativeBiome: "prismGrave", preferredWeapon: "laser", preferredAi: "oracle", speciesPattern: "laserSweep", deathrattle: "shardFan", collisionDamage: 3 },
+    { id: "gardenSpore", nameKey: "enemyHull.gardenSpore", role: "command", hp: 34, radius: 11, score: 490, minStage: 2, nativeBiome: "voidGarden", preferredWeapon: "bomb", preferredAi: "pack", speciesPattern: "proximityBloom", deathrattle: "seedBurst", collisionDamage: 3 },
   ]);
 
   const MOVEMENT_MODULES = freezeAll([
     { id: "standard", nameKey: "enemyModule.standard", speed: 1, sway: 1, drift: 0 },
-    { id: "weave", nameKey: "enemyModule.weave", speed: 1, sway: 1.45, drift: 0 },
-    { id: "rush", nameKey: "enemyModule.rush", speed: 1.12, sway: .82, drift: 0 },
-    { id: "drift", nameKey: "enemyModule.drift", speed: .92, sway: 1.15, drift: 18 },
+    { id: "weave", nameKey: "enemyModule.weave", speed: 1.04, sway: 1.55, drift: 0 },
+    { id: "rush", nameKey: "enemyModule.rush", speed: 1.18, sway: .88, drift: 0 },
+    { id: "drift", nameKey: "enemyModule.drift", speed: .96, sway: 1.2, drift: 24 },
   ]);
 
   const WEAPON_MODULES = freezeAll([
     { id: "pulse", nameKey: "enemyModule.pulse", bulletSpeed: 1, extraShots: 0, ringBonus: 0, cooldown: 1, spread: 1 },
-    { id: "twin", nameKey: "enemyModule.twin", bulletSpeed: .92, extraShots: 1, ringBonus: 0, cooldown: 1.16, spread: 1.08 },
-    { id: "sniper", nameKey: "enemyModule.sniper", bulletSpeed: 1.15, extraShots: 0, ringBonus: 0, cooldown: 1.28, spread: .48 },
-    { id: "orbit", nameKey: "enemyModule.orbit", bulletSpeed: .88, extraShots: 0, ringBonus: 2, cooldown: 1.18, spread: 1 },
+    { id: "twin", nameKey: "enemyModule.twin", bulletSpeed: .96, extraShots: 1, ringBonus: 0, cooldown: 1.08, spread: 1.06 },
+    { id: "sniper", nameKey: "enemyModule.sniper", bulletSpeed: 1.28, extraShots: 0, ringBonus: 0, cooldown: 1.2, spread: .42 },
+    { id: "orbit", nameKey: "enemyModule.orbit", bulletSpeed: .92, extraShots: 0, ringBonus: 2, cooldown: 1.1, spread: 1 },
+    { id: "laser", nameKey: "enemyModule.laser", bulletSpeed: 1, extraShots: 0, ringBonus: 0, cooldown: 1.24, spread: .3, pattern: "laserLance" },
+    { id: "seeker", nameKey: "enemyModule.seeker", bulletSpeed: 1.1, extraShots: 0, ringBonus: 0, cooldown: .94, spread: .72, pattern: "hunterSeeker" },
+    { id: "bomb", nameKey: "enemyModule.bomb", bulletSpeed: .9, extraShots: 0, ringBonus: 0, cooldown: 1.18, spread: .8, pattern: "blastSeed" },
   ]);
 
   const CORE_MODULES = freezeAll([
@@ -48,9 +60,11 @@
 
   const AI_MODULES = freezeAll([
     { id: "sentry", nameKey: "enemyModule.sentry", targeting: "nearest", steer: 0, flank: 0, lead: 0, evasion: 0, cooldown: 1 },
-    { id: "hunter", nameKey: "enemyModule.hunter", targeting: "weakest", steer: .44, flank: 0, lead: .08, evasion: .08, cooldown: 1.04 },
-    { id: "flanker", nameKey: "enemyModule.flanker", targeting: "isolated", steer: .34, flank: 46, lead: .12, evasion: .16, cooldown: 1.08 },
-    { id: "oracle", nameKey: "enemyModule.oracle", targeting: "leading", steer: .22, flank: 0, lead: .34, evasion: .28, cooldown: 1.12 },
+    { id: "hunter", nameKey: "enemyModule.hunter", targeting: "weakest", steer: .56, flank: 0, lead: .16, evasion: .16, cooldown: .96 },
+    { id: "flanker", nameKey: "enemyModule.flanker", targeting: "isolated", steer: .48, flank: 62, lead: .22, evasion: .24, cooldown: .94 },
+    { id: "oracle", nameKey: "enemyModule.oracle", targeting: "leading", steer: .34, flank: 0, lead: .48, evasion: .34, cooldown: .9 },
+    { id: "pack", nameKey: "enemyModule.pack", targeting: "weakest", steer: .72, flank: 36, lead: .24, evasion: .28, cooldown: .88 },
+    { id: "ambusher", nameKey: "enemyModule.ambusher", targeting: "isolated", steer: .68, flank: 94, lead: .32, evasion: .44, cooldown: .86 },
   ]);
 
   const PAYLOAD_MODULES = freezeAll([
@@ -84,6 +98,15 @@
     const preferred = items.find((item) => item.id === preferredId);
     if (preferred && random() < .46) return preferred;
     return pick(items, random);
+  };
+  const biasedPickMany = (items, preferences, random) => {
+    const weighted = items.map((item) => [item, 1 + preferences.reduce((sum, preference) => sum + (preference.id === item.id ? preference.weight : 0), 0)]);
+    let roll = random() * weighted.reduce((sum, entry) => sum + entry[1], 0);
+    for (const [item, weight] of weighted) {
+      roll -= weight;
+      if (roll <= 0) return item;
+    }
+    return weighted[weighted.length - 1][0];
   };
 
   function generateRoute(seed) {
@@ -172,32 +195,47 @@
   }
 
   function chooseEnemyHull({ stageIndex, progress, biome, random }) {
-    if (stageIndex === 0 && progress < .36) return "scout";
-    const tables = stageIndex === 0
+    if (stageIndex === 0 && progress < .08) return "scout";
+    const table = stageIndex === 0
       ? [["scout", 48], ["dart", 32], ["spinner", progress > .56 ? 10 : 3], ["tank", progress > .7 ? 10 : 0]]
       : stageIndex === 1
         ? [["scout", 16], ["dart", 22], ["spinner", 24], ["tank", 15], ["mine", 8], ["lancer", 15]]
         : [["scout", 6], ["dart", 18], ["spinner", 18], ["tank", 15], ["mine", 14], ["lancer", 18], ["carrier", 11]];
-    return weightedHull(tables.filter((entry) => entry[1] > 0), biome?.typeBias, random);
+    if (biome?.speciesId && !(stageIndex === 0 && progress < .25)) table.push([biome.speciesId, stageIndex === 0 ? 14 : stageIndex === 1 ? 44 : 50]);
+    return weightedHull(table.filter((entry) => entry[1] > 0), biome?.speciesId || biome?.typeBias, random);
   }
 
   function assembleEnemy({ stageIndex, progress, biome, branch, hullId = "scout", elite = false, random }) {
-    const earlySafety = stageIndex === 0 && progress < .4 && !elite;
+    const earlySafety = stageIndex === 0 && progress < .08 && !elite;
     if (earlySafety) return build("standard", "pulse", "light", "sentry", "clean", stageIndex, hullId);
 
-    const budget = Math.min(5, stageIndex + (progress >= .42 ? 1 : 0) + (progress >= .76 ? 1 : 0) + (stageIndex >= 2 ? 1 : 0) + (elite ? 1 : 0));
+    const budget = Math.min(5,
+      (stageIndex === 0 && progress >= .08 ? 1 : stageIndex)
+      + (progress >= (stageIndex === 0 ? .25 : .18) ? 1 : 0)
+      + (progress >= .42 ? 1 : 0)
+      + (progress >= .68 ? 1 : 0)
+      + (stageIndex >= 2 ? 1 : 0)
+      + (elite ? 1 : 0));
+    const hull = byId(HULL_MODULES, hullId);
     const movementPool = budget >= 1 ? MOVEMENT_MODULES : MOVEMENT_MODULES.slice(0, 1);
     const movement = biasedPick(movementPool, branch?.preferredMove || biome?.preferredMove, random);
     let weapon = WEAPON_MODULES[0];
     if (budget >= 2) {
-      const weaponPool = stageIndex === 0 ? WEAPON_MODULES.slice(0, 2) : WEAPON_MODULES;
-      weapon = biasedPick(weaponPool, branch?.preferredWeapon, random);
+      const weaponPool = stageIndex === 0 && progress < .58 ? WEAPON_MODULES.filter((entry) => !["bomb"].includes(entry.id)) : WEAPON_MODULES;
+      weapon = biasedPickMany(weaponPool, [
+        { id: hull.preferredWeapon, weight: 2.6 },
+        { id: biome?.preferredWeapon, weight: 1.8 },
+        { id: branch?.preferredWeapon, weight: 2.2 },
+      ].filter((preference) => preference.id), random);
     }
     let core = CORE_MODULES[0];
     if (elite) core = pick(CORE_MODULES.slice(1, 3), random);
     else if (budget >= 3) core = biasedPick(CORE_MODULES, branch?.preferredCore, random);
-    const ai = budget >= 4 ? pick(AI_MODULES, random) : AI_MODULES[0];
-    const payload = budget >= 5 ? pick(PAYLOAD_MODULES, random) : PAYLOAD_MODULES[0];
+    const aiPool = stageIndex === 0 && progress < .72
+      ? AI_MODULES.filter((entry) => entry.id !== "oracle")
+      : AI_MODULES;
+    const ai = budget >= 4 ? biasedPick(aiPool, hull.preferredAi || biome?.preferredAi, random) : AI_MODULES[0];
+    const payload = stageIndex >= 2 && budget >= 5 ? pick(PAYLOAD_MODULES, random) : PAYLOAD_MODULES[0];
     return build(movement.id, weapon.id, core.id, ai.id, payload.id, stageIndex, hullId);
   }
 
@@ -216,6 +254,7 @@
       movementNameKey: movement.nameKey,
       weaponId: weapon.id,
       weaponNameKey: weapon.nameKey,
+      weaponPattern: weapon.pattern || "",
       coreId: core.id,
       coreNameKey: core.nameKey,
       aiId: ai.id,
@@ -235,6 +274,10 @@
       score: core.score * payload.score,
       barrier: core.barrier ? core.barrier + stageIndex * 1.5 : 0,
       volatileRadius: core.volatileRadius,
+      speciesPattern: hull.speciesPattern || "",
+      deathrattle: hull.deathrattle || "",
+      nativeBiome: hull.nativeBiome || "",
+      collisionDamage: hull.collisionDamage || 2,
       targeting: ai.targeting,
       aiSteer: ai.steer,
       aiFlank: ai.flank,

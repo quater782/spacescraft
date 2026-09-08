@@ -43,12 +43,13 @@
       handling: owned.has("kineticDrift") ? 1.16 : 1,
       pickupMagnet: owned.has("kineticDrift") ? 24 : 0,
       radius: owned.has("phaseAnchor") ? .92 : 1,
-      invulnerability: owned.has("phaseAnchor") ? .22 : 0,
+      invulnerability: owned.has("phaseAnchor") ? .08 : 0,
       damage: owned.has("pulseTuning") ? 1.07 : 1,
       fireRate: owned.has("autoLoader") ? 1.09 : 1,
       projectileSpeed: owned.has("autoLoader") ? 1.06 : 1,
-      energyGain: owned.has("novaMatrix") ? 1.1 : 1,
-      novaDamage: owned.has("novaMatrix") ? 1.24 : 1,
+      energyGain: owned.has("novaMatrix") ? 1.08 : 1,
+      novaChargeRate: owned.has("novaMatrix") ? 1.08 : 1,
+      novaDamage: owned.has("novaMatrix") ? 1.15 : 1,
       linkRange: owned.has("linkCoils") ? 14 : 0,
       beamDamage: owned.has("harmonicWeave") ? 1.2 : 1,
       reviveSpeed: owned.has("harmonicWeave") ? 1.28 : 1,
@@ -62,12 +63,14 @@
     player.speed *= effect.speed;
     player.handling *= effect.handling;
     player.pickupMagnetRadius += effect.pickupMagnet;
-    player.r *= effect.radius;
-    player.hitInvulnerability += effect.invulnerability;
+    player.hurtRadius = (Number(player.hurtRadius) || Number(player.r) || 3.2) * effect.radius;
+    player.r = player.hurtRadius;
+    player.hitInvulnerability = Math.min(.94, player.hitInvulnerability + effect.invulnerability);
     player.damage *= effect.damage;
     player.fireRate *= effect.fireRate;
     player.projectileSpeed *= effect.projectileSpeed;
-    player.energyGain *= effect.energyGain;
+    player.novaChargeRate = (Number(player.novaChargeRate) || Number(player.energyGain) || 1) * effect.novaChargeRate;
+    player.energyGain = player.novaChargeRate;
     player.novaDamage *= effect.novaDamage;
     player.linkRange += effect.linkRange;
     player.beamDamage *= effect.beamDamage;

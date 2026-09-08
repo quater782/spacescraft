@@ -77,10 +77,10 @@ async function run() {
   })()`);
   if (!state.qa.includes("model-gallery") || state.modelGallery !== "active") throw new Error(`model gallery unavailable: ${JSON.stringify(state)}`);
   if (!state.webgl || state.backend !== "three-r185-instanced-voxel") throw new Error(`WebGL renderer unavailable: ${JSON.stringify(state)}`);
-  if (state.artStyle !== "toon-glow-light-blocks" || state.modelPalette !== "saturated-no-black" || state.modelFamilies !== "3-player-7-alien" || state.moduleAnatomy !== "integrated-large-form") throw new Error(`model art contract unavailable: ${JSON.stringify(state)}`);
+  if (state.artStyle !== "toon-glow-light-blocks" || state.modelPalette !== "saturated-no-black" || state.modelFamilies !== "3-player-16-alien" || state.moduleAnatomy !== "integrated-large-form") throw new Error(`model art contract unavailable: ${JSON.stringify(state)}`);
   if (state.pixelGrammar !== "coarse-emissive-012" || state.factionLanguage !== "human-kites-vs-void-organisms" || state.playerModules !== "4-integrated-silhouette-parts") throw new Error(`visual rebuild contract unavailable: ${JSON.stringify(state)}`);
   if (state.energyBloom !== "unreal-selective-5mip" || state.edgeAA !== "native-smaa" || state.enemyModuleLanguage !== "surface-organs" || state.playerMaterialSeparation !== "ceramic-core-engine") throw new Error(`professional model rendering contract unavailable: ${JSON.stringify(state)}`);
-  if (state.hullExposure !== "matte-ceramic-no-bloom" || state.groundPlane !== "none-open-space" || state.shieldLanguage !== "four-hugging-plates") throw new Error(`matte hull/open-space contract unavailable: ${JSON.stringify(state)}`);
+  if (state.hullExposure !== "matte-ceramic-no-bloom" || state.groundPlane !== "none-open-space" || state.shieldLanguage !== "segmented-shell-hit-break") throw new Error(`matte hull/open-space contract unavailable: ${JSON.stringify(state)}`);
   if (state.fps < 50) throw new Error(`model gallery performance below 50 FPS: ${JSON.stringify(state)}`);
   if (errors.length) throw new Error(`renderer console errors: ${errors.join(" | ")}`);
   await window.webContents.executeJavaScript(`

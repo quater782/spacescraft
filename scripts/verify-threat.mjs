@@ -24,17 +24,21 @@ assert.equal(threat.stepTier(0, 4), 1, "tier shifts must climb one step at a tim
 assert.equal(threat.stepTier(4, 0), 3, "tier shifts must fall one step at a time");
 
 const earlyAce = threat.evaluate({ stageIndex: 0, sectorIndex: 2, progress: .3, healthRatio: 1, combo: 40, killsPerMinute: 30, rushActive: true, linked: true, contractPressure: .5 });
-assert.ok(earlyAce.tier <= 1, "the opening safety envelope must prevent early threat spikes");
+assert.ok(earlyAce.tier >= 2 && earlyAce.tier <= 3, "hard contracts allow bounded early pressure");
+assert.equal(threat.evaluate({ stageIndex: 1, progress: .5, combo: 40, killsPerMinute: 30, rushActive: true, linked: true }).score,
+  threat.evaluate({ stageIndex: 1, progress: .5 }).score, "normal play must not punish successful builds, links or rush");
+assert.ok(threat.evaluate({ stageIndex: 0, sectorIndex: 0, progress: .04, healthRatio: 1, combo: 40, killsPerMinute: 30, rushActive: true, linked: true, contractPressure: .5 }).tier <= 1, "the first opening beat must remain learnable");
 assert.equal(threat.evaluate({ stageIndex: 2, sectorIndex: 2, progress: 1, healthRatio: .3, downed: 1, combo: 40, killsPerMinute: 30 }).tier, 0, "a downed team must receive immediate relief");
 assert.ok(threat.evaluate({ stageIndex: 2, sectorIndex: 2, progress: 1, healthRatio: .45, combo: 40, killsPerMinute: 30 }).tier <= 1, "critical hull state must cap pressure");
 assert.equal(threat.evaluate({ stageIndex: 2, sectorIndex: 2, progress: 1, healthRatio: 1, combo: 40, killsPerMinute: 30, rushActive: true, linked: true, contractPressure: .5 }).tier, 4, "a late-game ace team must reach apex threat");
 assert.ok(threat.evaluate({ contractPressure: threat.contractPressure("overdrive") }).score > threat.evaluate({ contractPressure: threat.contractPressure("patrol") }).score, "contracts must feed the adaptive score");
 
-assert.match(indexSource, /src\/threat\.js\?v=1[\s\S]*src\/expedition\.js/);
+assert.match(indexSource, /src\/threat\.js\?v=3[\s\S]*src\/expedition\.js/);
 assert.match(gameSource, /REQUESTED_QA_THREAT = LOCAL_QA_HOST \?/);
 assert.match(gameSource, /SpaceThreat\.evaluate/);
 assert.match(gameSource, /SpaceThreat\.HOLD_SECONDS/);
 assert.match(gameSource, /downedCount > 0 \|\| healthRatio < \.34/);
+assert.match(gameSource, /criticalPilot[\s\S]*?player\.hp \/ Math\.max\(1, player\.maxHp\) <= \.29/, "one focused pilot at critical hull must force team relief");
 assert.match(gameSource, /threatConfig\(\)\.bulletSpeed/);
 assert.match(gameSource, /threatConfig\(\)\.fireRate/);
 assert.match(gameSource, /adaptiveThreat\.enemyHp/);
