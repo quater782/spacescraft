@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
+const surfaces = fs.readFileSync(new URL("../src/render-surfaces.js", import.meta.url), "utf8");
 const renderer = fs.readFileSync(new URL("../src/renderer3d.js", import.meta.url), "utf8");
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const style = fs.readFileSync(new URL("../style.css", import.meta.url), "utf8");
@@ -155,6 +156,9 @@ for (const oldThinBossPart of ["[.09, .38, 1.12]", "[.7, .07, .16]", "[.16, .42,
   assert.ok(!bossSection.includes(oldThinBossPart), `bosses must not regress to thin rods: ${oldThinBossPart}`);
 }
 assert.match(renderer, /drawProjectile\(bullet, enemy = false\)/);
+assert.match(renderer, /projectileArt = "extruded-pixel-stamps"/);
+assert.doesNotMatch(methodBody("drawProjectile", "drawPickup"), /surfaces\.solid|"orb"/, "projectile heads must keep hand-authored pixel silhouettes instead of lens meshes");
+assert.doesNotMatch(methodBody("projectileTrail", "drawProjectile"), /surfaces\.segment/, "projectile trails must not round over the pixel head with additive tubes");
 for (const stage of [0, 1, 2]) assert.match(renderer, new RegExp(`bullet\\.bossStage === ${stage}`), `missing stage ${stage + 1} boss projectile form`);
 assert.match(renderer, /drawLandmark\(stageIndex, biome\)/);
 assert.match(renderer, /drawFlightCorridor\(biome\)/);
@@ -178,7 +182,17 @@ assert.match(renderer, /streamZ\(slot, spacing/);
 assert.match(renderer, /distantEcologyZ\(slot, spacing/);
 assert.match(renderer, /const depthBand = 30/, "background ecology must remain inside a bounded far-depth band");
 assert.match(renderer, /projectileTrail\(base, color/);
-assert.match(renderer, /const beamSegments = clamp\(Math\.ceil\(length \/ \.72\), 3, 8\)/, "the resonance link must remain a chunky segmented pixel beam");
+assert.match(methodBody("drawBeam", "drawEnemyBeam"), /this\.surfaces\.line/, "resonance filaments must use native rendered lines");
+assert.match(methodBody("drawLaserTelegraph", "drawRamTelegraph"), /this\.surfaces\.line/, "laser sights must remain fine native lines");
+assert.doesNotMatch(methodBody("drawLaserTelegraph", "drawRamTelegraph"), /voxelSegment/, "laser sights must not inherit the voxel minimum width");
+assert.match(surfaces, /new THREE\.LatheGeometry/, "burning exhaust must have a curved tapered surface");
+assert.match(surfaces, /new THREE\.LineSegments/);
+assert.match(surfaces, /new THREE\.MeshToonMaterial/, "solid modules must retain stepped pixel shading");
+assert.match(surfaces, /bevelEnabled: false/, "module rings must retain stair-step edges");
+assert.doesNotMatch(surfaces, /new THREE\.(MeshPhysicalMaterial|MeshStandardMaterial|SphereGeometry|TorusGeometry)/, "pixel solids must not drift back to glossy rounded props");
+assert.match(surfaces, /CAPACITY = 1536/);
+assert.match(renderer, /const weapon = enemy\.weaponModule \|\| "pulse"/, "installed module identity must not switch with attack pattern");
+assert.match(renderer, /enemyHardpoints\(enemy\)/);
 const hostileBeam = methodBody("drawEnemyBeam", "drawRush");
 assert.match(hostileBeam, /leftA[\s\S]*rightA/, "hostile lasers need separate edge rails around the damage core");
 assert.match(hostileBeam, /"#fff8d8"/, "hostile lasers need a hot center distinct from their colored edge");
@@ -243,11 +257,6 @@ for (const forbidden of [
   /drawArrays\(/,
   /vertexAttribPointer\(/,
   /bufferData\(/,
-  /PlaneGeometry/,
-  /SphereGeometry/,
-  /TorusGeometry/,
-  /OctahedronGeometry/,
-  /ConeGeometry/,
-]) assert.doesNotMatch(renderer, forbidden, `renderer must not regress to raw face assembly or smooth primitive: ${forbidden}`);
+]) assert.doesNotMatch(renderer, forbidden, `renderer must not regress to raw WebGL face assembly: ${forbidden}`);
 
 console.log("Three.js renderer verified: open celestial parallax, coarse emissive voxels, modular human kites, sixteen readable void organisms, distinct hostile arsenals, nine floating dioramas and no raw face assembly.");

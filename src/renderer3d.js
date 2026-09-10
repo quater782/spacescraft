@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { RenderSurfaces } from "./render-surfaces.js";
+import { PixelProjectileArt } from "./projectile-art.js";
 import { EffectComposer } from "../node_modules/three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "../node_modules/three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "../node_modules/three/examples/jsm/postprocessing/UnrealBloomPass.js";
@@ -81,6 +83,8 @@ class SpaceRenderer3D {
     this.composer.addPass(this.smaaPass);
     this.composer.addPass(this.outputPass);
 
+    this.surfaces = new RenderSurfaces(this.scene);
+    this.projectileArt = new PixelProjectileArt(this.scene);
     this.boxGeometry = new THREE.BoxGeometry(1, 1, 1);
     const toonBands = new Uint8Array([72, 152, 232]);
     this.toonGradient = new THREE.DataTexture(toonBands, 3, 1, THREE.RedFormat);
@@ -149,6 +153,12 @@ class SpaceRenderer3D {
     this.canvas.dataset.energyBloom = "unreal-selective-5mip";
     this.canvas.dataset.edgeAA = "native-smaa";
     this.canvas.dataset.enemyModuleLanguage = "surface-organs";
+    this.canvas.dataset.enemyArtDirection = "pixel-solid-curved-combustion";
+    this.canvas.dataset.energyGeometry = "curved-flame-native-lines-round-beams";
+    this.canvas.dataset.solidMaterial = "four-pixel-toon-ramps";
+    this.canvas.dataset.moduleIdentity = "fixed-six-slot-hardpoints";
+    this.canvas.dataset.enemyAnimation = "articulated-state-driven";
+    this.canvas.dataset.impactGrammar = "hot-chip-cooling-debris";
     this.canvas.dataset.playerMaterialSeparation = "ceramic-core-engine";
     this.canvas.dataset.hullExposure = "matte-ceramic-no-bloom";
     this.canvas.dataset.groundPlane = "none-open-space";
@@ -253,6 +263,8 @@ class SpaceRenderer3D {
   }
 
   beginFrame() {
+    this.surfaces.begin(this.time);
+    this.projectileArt.begin();
     for (const batch of [...this.toonBatches.values(), ...this.glowBatches.values(), ...this.emissiveBatches.values()]) {
       batch.userData.cursor = 0;
       batch.count = 0;
@@ -264,6 +276,14 @@ class SpaceRenderer3D {
       batch.count = batch.userData.cursor;
       batch.instanceMatrix.needsUpdate = true;
     }
+    this.surfaces.end();
+    this.projectileArt.end();
+    this.canvas.dataset.projectileArt = "extruded-pixel-stamps";
+    this.canvas.dataset.projectileBatches = String(this.projectileArt.batches.size);
+    this.canvas.dataset.projectileDropped = String(this.projectileArt.dropped);
+    this.canvas.dataset.surfaceBatches = String(this.surfaces.batches.size);
+    this.canvas.dataset.renderedLineVertices = String(this.surfaces.lineCursor);
+    this.canvas.dataset.surfaceDropped = String(this.surfaces.dropped);
     this.composer.render();
   }
 
@@ -511,32 +531,34 @@ class SpaceRenderer3D {
   }
 
   voxelThruster(base, x, z, color, flame, scale = 1, housing = "#34445d") {
-    this.voxel(base, [x, .04, z], [.3 * scale, .24 * scale, .38], housing, .28);
-    this.voxel(base, [x, .04, z + .34 + flame * .05], [.18 * scale, .18 * scale, .3 + flame * .2], color, .92);
+    this.surfaces.solid(base, [x, .04, z], [.32 * scale, .28 * scale, .34], housing, "metal");
+    this.surfaces.solid(base, [x, .04, z + .18], [.3 * scale, .3 * scale, .16], "#90a5b9", "metal", "ring");
+    this.surfaces.solid(base, [x, .04, z + .22], [.2 * scale, .2 * scale, .1], color, "energy", "orb");
+    this.surfaces.solid(base, [x, .04, z + .24], [.56 * scale, .46 * scale, .64 + flame * .4], color, "flame", "flame");
   }
 
   fighterNose(base, palette, length = 1, canopy = "#dffcff") {
     const [, , light] = palette;
-    this.voxel(base, [0, .07, -.48 * length], [.5, .24, .64 * length], light, .24);
-    this.voxel(base, [0, .06, -.88 * length], [.36, .2, .42 * length], light, .24);
-    this.voxel(base, [0, .04, -1.16 * length], [.2, .14, .24 * length], light, .22);
-    this.voxel(base, [0, .22, -.48 * length], [.28, .16, .48 * length], canopy, .3);
+    this.surfaces.solid(base, [0, .07, -.48 * length], [.5, .24, .64 * length], light, "ceramic");
+    this.surfaces.solid(base, [0, .06, -.88 * length], [.36, .2, .42 * length], light, "ceramic");
+    this.surfaces.solid(base, [0, .04, -1.16 * length], [.2, .14, .24 * length], light, "ceramic");
+    this.surfaces.solid(base, [0, .22, -.48 * length], [.28, .16, .48 * length], canopy, "glass");
   }
 
   sweptWing(base, side, palette, width = 1, rear = .55, armored = false) {
     const [dark, bright, light] = palette;
     const sweep = side * (.22 + rear * .08);
-    this.voxel(base, [side * .46 * width, .03, .08], [.72 * width, .14, .6], light, .25, [0, sweep, 0]);
-    this.voxel(base, [side * .88 * width, .025, .3], [.56 * width, .12, .38], armored ? light : dark, .25, [0, side * (.42 + rear * .1), 0]);
-    this.voxel(base, [side * 1.22 * width, .035, .5], [.34 * width, .1, .22], dark, .24, [0, side * (.58 + rear * .08), 0]);
-    this.voxel(base, [side * 1.4 * width, .07, .58], [.12, .08, .14], bright, .84, [0, side * .62, 0]);
+    this.surfaces.solid(base, [side * .46 * width, .03, .08], [.72 * width, .14, .6], light, "ceramic", "plate", [0, sweep, 0]);
+    this.surfaces.solid(base, [side * .88 * width, .025, .3], [.56 * width, .12, .38], armored ? light : dark, "ceramic", "plate", [0, side * (.42 + rear * .1), 0]);
+    this.surfaces.solid(base, [side * 1.22 * width, .035, .5], [.34 * width, .1, .22], dark, "ceramic", "plate", [0, side * (.58 + rear * .08), 0]);
+    this.surfaces.solid(base, [side * 1.4 * width, .07, .58], [.12, .08, .14], bright, "ceramic", "plate", [0, side * .62, 0]);
   }
 
   tailFins(base, palette, spread = .4, height = 1) {
     const [dark, bright, light] = palette;
     for (const side of [-1, 1]) {
-      this.voxel(base, [side * spread, .22 * height, .68], [.14, .34 * height, .38], dark, .28, [side * -.18, 0, 0]);
-      this.voxel(base, [side * spread, .39 * height, .63], [.1, .1, .16], side > 0 ? bright : light, side > 0 ? .84 : .28, [side * -.18, 0, 0]);
+      this.surfaces.solid(base, [side * spread, .22 * height, .68], [.14, .34 * height, .38], dark, "ceramic", "plate", [side * -.18, 0, 0]);
+      this.surfaces.solid(base, [side * spread, .39 * height, .63], [.1, .1, .16], side > 0 ? bright : light, "ceramic", "plate", [side * -.18, 0, 0]);
     }
   }
 
@@ -581,15 +603,25 @@ class SpaceRenderer3D {
     const moduleLights = { flux: "#a879ff", aegis: "#62dcff", repair: "#74df91", resonance: "#e6c75d" };
     const moduleLight = moduleLights[player.moduleId];
     if (player.moduleId === "flux") {
-      this.voxel(base, [0, .32, .3], [.4 * flash, .14, .68], palette[0], .34);
+      this.surfaces.solid(base, [0, .36, .3], [.36, .28, .6], palette[0], "metal");
+      for (let coil = 0; coil < 3; coil += 1) this.surfaces.solid(base, [0, .4, .12 + coil * .18], [.28, .28, .12], moduleLight, "metal", "ring");
+      this.surfaces.segment(base, [0, .4, .04], [0, .4, .59], .075, moduleLight);
     } else if (player.moduleId === "aegis") {
-      for (const side of [-1, 1]) this.voxel(base, [side * span * .58, .14, .28], [.3, .14, .76], palette[0], .32, [0, side * .22, 0]);
+      for (const side of [-1, 1]) {
+        this.surfaces.solid(base, [side * span * .58, .2, .28], [.3, .23, .62], palette[0], "metal");
+        this.surfaces.solid(base, [side * span * .58, .3, .22], [.23, .18, .38], moduleLight, "glass", "orb");
+      }
     } else if (player.moduleId === "repair") {
-      this.voxel(base, [0, .33, .32], [.44, .14, .56], palette[0], .32);
+      this.surfaces.solid(base, [0, .38, .32], [.48, .2, .55], palette[0], "metal");
+      for (const side of [-1, 1]) {
+        this.surfaces.solid(base, [side * .14, .51, .32], [.19, .12, .32], palette[2], "ceramic");
+        this.surfaces.line(base, [side * .14, .58, .22], [side * .14, .58, .4], moduleLight);
+      }
     } else if (player.moduleId === "resonance") {
-      this.voxel(base, [0, .3, .25], [.88, .14, .26], palette[0], .34);
+      this.surfaces.solid(base, [0, .36, .25], [.7, .12, .22], palette[0], "metal");
+      for (const side of [-1, 1]) this.surfaces.solid(base, [side * .29, .48, .25], [.32, .32, .12], moduleLight, "metal", "ring", [0, side * .35, 0]);
+      this.surfaces.solid(base, [0, .49, .25], [.15, .15, .2], moduleLight, "energy", "orb");
     }
-    if (moduleLight) this.voxel(base, [0, .43, .08], [.16, .08, .34], moduleLight, .9);
     if ((player.buffs?.arsenal || 0) > 0) {
       for (const side of [-1, 1]) {
         this.voxel(base, [side * span * .38, .16, -.28], [.28, .16, .54], palette[0], .38, [0, side * .08, 0]);
@@ -640,9 +672,9 @@ class SpaceRenderer3D {
     const palette = pilotPalettes[player.index] || [colors.color, colors.light, "#8f72ff"];
     const flame = .52 + Math.sin(this.time * 28 + player.index) * .16;
 
-    this.voxel(base, [0, .07, .42], [profile.bodyWidth * 1.04, .28 + (profile.armored ? .06 : 0), .72], palette[2], .24);
-    this.voxel(base, [0, .07, -.12], [profile.bodyWidth, .26 + (profile.armored ? .04 : 0), .66], palette[2], .24);
-    this.voxel(base, [0, .2, .2], [profile.bodyWidth * .48, .16, profile.bodyLength * .74], palette[0], .3);
+    this.surfaces.solid(base, [0, .07, .42], [profile.bodyWidth * 1.04, .28 + (profile.armored ? .06 : 0), .72], palette[2], "ceramic");
+    this.surfaces.solid(base, [0, .07, -.12], [profile.bodyWidth, .26 + (profile.armored ? .04 : 0), .66], palette[2], "ceramic");
+    this.surfaces.solid(base, [0, .2, .2], [profile.bodyWidth * .48, .16, profile.bodyLength * .74], palette[0], "metal");
     this.fighterNose(base, palette, profile.nose, palette[0]);
     this.voxel(base, [0, .32, -.56 * profile.nose], [.12, .07, .22], palette[1], .84);
     for (const side of [-1, 1]) this.sweptWing(base, side, palette, profile.wing, frameId === "pulse" ? .96 : .78, profile.armored);
@@ -650,7 +682,19 @@ class SpaceRenderer3D {
     for (const engineX of profile.engines) this.voxelThruster(base, engineX, .92, palette[1], flame, frameId === "bulwark" ? .7 : .64, palette[0]);
     if (!demo && (player.shield > 0 || player.shieldBreakTimer > 0)) this.drawPlayerShield(base, profile, player);
     this.drawPlayerModules(player, base, palette, profile);
+    this.drawHullFinish(base, palette, profile);
     if (!demo) this.drawPlayerDamage(player, base, profile);
+  }
+
+  drawHullFinish(base, palette, profile) {
+    this.surfaces.solid(base, [0, .29, -.53 * profile.nose], [.31, .22, .64], "#263f57", "glass", "orb");
+    this.surfaces.line(base, [-.08, .39, -.67], [-.08, .36, -.38], "#87b8c9", .65);
+    for (const side of [-1, 1]) {
+      this.surfaces.line(base, [side * .4, .12, -.12], [side * 1.05 * profile.wing, .12, .38], palette[0], .8);
+      this.surfaces.solid(base, [side * .44, .18, .42], [.22, .1, .46], palette[0], "metal");
+      for (let fin = 0; fin < 3; fin += 1) this.surfaces.solid(base, [side * .44, .245, .28 + fin * .12], [.16, .03, .035], "#82939f", "metal");
+      this.surfaces.solid(base, [side * .73 * profile.wing, .13, .24], [.06, .025, .23], palette[1], "ceramic");
+    }
   }
 
   alienCrescent(base, palette, span = 1, rake = 1) {
@@ -671,11 +715,12 @@ class SpaceRenderer3D {
 
   alienTendril(base, side, palette, x = .5, z = .55, curl = 1, glow = null) {
     const handed = side || 1;
+    const sway = Math.sin(this.time * 3.6 + x * 2 + z + handed) * .16;
     const points = [
       [handed * x, .08, z],
       [handed * (x + .22 * curl), .12, z + .42],
-      [handed * (x + .48 * curl), .2, z + .8],
-      [handed * (x + .62 * curl), .3, z + 1.18],
+      [handed * (x + .48 * curl) + sway * .5, .2 + sway * .3, z + .8],
+      [handed * (x + .62 * curl) + sway, .3 + sway * .6, z + 1.18],
     ];
     for (let segment = 1; segment < points.length; segment += 1) {
       const color = glow && segment === points.length - 1 ? glow : palette[(segment - 1) % 2];
@@ -684,12 +729,15 @@ class SpaceRenderer3D {
   }
 
   alienEye(base, x, z, color, scale = 1) {
-    this.voxel(base, [x, .32 * scale, z], [.38 * scale, .24 * scale, .42 * scale], "#6f3f9f", .38);
-    this.voxel(base, [x, .48 * scale, z - .08], [.2 * scale, .16 * scale, .24 * scale], color, 1);
+    this.surfaces.solid(base, [x, .32 * scale, z], [.4 * scale, .26 * scale, .44 * scale], "#58355f", "shell", "orb");
+    this.surfaces.solid(base, [x, .43 * scale, z - .08], [.24 * scale, .19 * scale, .26 * scale], color, "glass", "orb");
+    this.surfaces.solid(base, [x, .51 * scale, z - .1], [.07 * scale, .04 * scale, .15 * scale], color, "energy", "orb");
   }
 
   drawEnemyChassis(enemy, base, palette) {
     const type = enemy.type;
+    const pose = this.enemyArtPose(enemy);
+    const wingBeat = Math.sin(pose.clock * 5 + (enemy.seed || 0)) * .32;
     const handed = Math.sin(Number(enemy.seed) || 1) >= 0 ? 1 : -1;
     if (type === "dart") {
       this.voxel(base, [0, .14, -.08], [.42, .36, 2.05], palette[0], .3);
@@ -712,7 +760,7 @@ class SpaceRenderer3D {
     } else if (type === "spinner") {
       this.voxel(base, [0, .16, 0], [.66, .42, .82], palette[0], .34);
       for (let arm = 0; arm < 4; arm += 1) {
-        const angle = arm * Math.PI / 2 + handed * .16;
+        const angle = arm * Math.PI / 2 + handed * .16 + pose.clock * (pose.charge > 0 ? .7 : .25);
         this.voxel(base, [Math.sin(angle) * .68, .12, Math.cos(angle) * .68], [.34, .28, 1.18], arm % 2 ? palette[0] : palette[1], .34, [0, angle, handed * .08]);
         this.voxel(base, [Math.sin(angle) * 1.24, .18, Math.cos(angle) * 1.24], [.28, .3, .54], palette[1], .46, [0, angle + handed * .35, 0]);
         if (arm % 2 === 0) this.voxel(base, [Math.sin(angle) * 1.48, .24, Math.cos(angle) * 1.48], [.16, .16, .2], palette[2], .96, [0, angle, 0]);
@@ -721,7 +769,12 @@ class SpaceRenderer3D {
     } else if (type === "mine") {
       this.voxel(base, [0, .18, -.12], [.78, .48, .92], palette[0], .34);
       this.voxel(base, [handed * .18, .46, -.28], [.42, .3, .5], palette[1], .52);
-      this.alienCrescent(base, palette, .68, 1.2);
+      this.voxel(base, [0, -.08, .12], [.92, .3, .82], palette[1], .32);
+      this.voxel(base, [0, -.3, .18], [.58, .2, .54], palette[0], .28);
+      for (const side of [-1, 1]) {
+        this.voxel(base, [side * (.5 + pose.charge * .12), .16, -.1], [.24, .4, .7], palette[0], .3);
+        this.voxel(base, [side * .34, -.2, .32], [.16, .16, .24], palette[2], pose.charge > .6 ? .86 : .5);
+      }
       for (const side of [-1, 1]) {
         this.alienTendril(base, side, palette, .42 + (side === handed ? .1 : 0), .46, side === handed ? 1.25 : .76, palette[2]);
       }
@@ -750,15 +803,25 @@ class SpaceRenderer3D {
         this.alienTendril(base, side, palette, .78, .52, side === handed ? 1.25 : .9, palette[2]);
         this.voxel(base, [side * .92, .44, .12], [.32, .26, .46], side === handed ? palette[1] : palette[0], .4, [0, side * .2, 0]);
       }
+      for (const side of [-1, 1]) {
+        this.voxel(base, [side * .76, .46, .12], [.42, .16, .76], palette[0], .28);
+        for (let cell = 0; cell < 2; cell += 1) {
+          this.voxel(base, [side * .76, .56, -.1 + cell * .38], [.22, .12, .22], palette[1], .36);
+          this.voxel(base, [side * (.99 + pose.charge * .1), .47, -.1 + cell * .38], [.16, .16, .24], palette[2], .55);
+        }
+      }
       this.alienEye(base, handed * .26, -.5, palette[2], 1.08);
     } else if (type === "nectarMoth") {
       this.voxel(base, [0, .16, -.08], [.48, .36, 1.12], palette[0], .3);
       this.voxel(base, [handed * .12, .42, -.42], [.34, .2, .54], palette[1], .48);
       for (const side of [-1, 1]) {
-        this.voxelSegment(base, [side * .22, .12, -.02], [side * .88, .17, .18], .26, palette[1], .4);
-        this.voxelSegment(base, [side * .74, .16, .12], [side * 1.55, .2, .6], .34, palette[0], .3);
-        this.voxel(base, [side * 1.42, .25, .48], [.58, .1, .72], side === handed ? palette[1] : palette[0], .5, [0, side * .52, side * .08]);
-        this.voxelSegment(base, [side * .12, .24, -.48], [side * .46, .34, -1.18], .1, palette[2], .85);
+        const wing = multiply(base, compose([side * .2, .16, -.08], [0, side * .15, side * wingBeat]));
+        this.voxel(wing, [side * .48, 0, .14], [.84, .18, .74], palette[0], .28);
+        this.voxel(wing, [side * 1.02, 0, .3], [.48, .14, 1.06], palette[1], .32);
+        this.voxel(wing, [side * 1.36, 0, .48], [.24, .12, .68], palette[0], .28);
+        this.voxel(wing, [side * .78, .12, .12], [.36, .12, .3], palette[0], .3);
+        this.voxel(wing, [side * .78, .2, .12], [.16, .12, .16], palette[2], .65);
+        this.voxelSegment(base, [side * .12, .24, -.48], [side * .46, .34, -1.18], .12, palette[1], .35);
       }
       this.alienEye(base, handed * .12, -.5, palette[2], .76);
     } else if (type === "prismRay") {
@@ -797,16 +860,21 @@ class SpaceRenderer3D {
         }
         this.voxel(base, [side * .72, .28, .12], [.5, .32, 1.22], palette[1], .36, [0, side * .12, 0]);
       }
-      this.voxelSegment(base, [0, .56, -.28], [0, .62, -1.6], .22, palette[2], .76);
+      // This species launches explosive seeds: a recessed mortar, never a laser lance.
+      this.voxel(base, [0, .62, -.28], [.52, .24, .64], palette[0], .28);
+      this.voxel(base, [0, .76, -.3], [.28, .12, .36], palette[1], .4);
+      this.voxel(base, [0, .84, -.3], [.16, .12, .2], palette[2], pose.charge > .5 ? .9 : .55);
       this.alienEye(base, handed * .3, -.58, palette[2], .88);
     } else if (type === "reefMedusa") {
-      this.voxel(base, [0, .28, -.1], [1.02, .4, 1.08], palette[0], .3);
-      this.voxel(base, [0, .54, -.2], [.74, .28, .82], palette[1], .5);
-      this.alienCrescent(base, palette, 1.04, .9);
+      const bell = 1 + Math.sin(pose.clock * 3.4) * .07 + pose.charge * .08;
+      this.voxel(base, [0, .18, -.1], [1.76 * bell, .24, 1.24], palette[0], .28);
+      this.voxel(base, [0, .4, -.16], [1.32 * bell, .24, 1.02], palette[1], .32);
+      this.voxel(base, [0, .6, -.2], [.84, .2, .7], palette[0], .28);
+      this.voxel(base, [0, .74, -.2], [.4, .12, .38], palette[1], .35);
       for (const side of [-1, -.34, .34, 1]) {
         const bend = side < 0 ? -1 : 1;
         this.voxelSegment(base, [side * .66, .08, .38], [side * .78 + bend * .2, -.2, 1.12], .16, palette[1], .42);
-        this.voxelSegment(base, [side * .78 + bend * .2, -.2, 1.12], [side * .5, -.06, 1.68], .11, palette[2], .66);
+        this.voxelSegment(base, [side * .78 + bend * .2, -.2, 1.12], [side * .5 + Math.sin(pose.clock * 3 + side * 2) * .22, -.06, 1.68], .14, palette[1], .38);
       }
       this.alienEye(base, handed * .2, -.5, palette[2], .94);
     } else if (type === "eclipseReaper") {
@@ -830,8 +898,9 @@ class SpaceRenderer3D {
       this.voxel(base, [0, .2, .04], [1.04, .54, 1.18], palette[0], .32);
       for (let pod = 0; pod < 5; pod += 1) {
         const angle = pod / 5 * Math.PI * 2;
-        this.voxel(base, [Math.sin(angle) * .72, .48 + (pod % 2) * .12, Math.cos(angle) * .62], [.42, .38, .5], pod % 2 ? palette[1] : palette[0], .44, [0, angle, 0]);
-        this.voxel(base, [Math.sin(angle) * .76, .7 + (pod % 2) * .12, Math.cos(angle) * .62], [.14, .1, .18], palette[2], .84);
+        const hatch = Math.sin(pose.clock * 2.8 + pod * .8) * .06 + pose.charge * .16;
+        this.voxel(base, [Math.sin(angle) * (.72 + hatch), .48 + (pod % 2) * .12, Math.cos(angle) * (.62 + hatch)], [.42, .38, .5], pod % 2 ? palette[1] : palette[0], .44, [0, angle, 0]);
+        this.voxel(base, [Math.sin(angle) * (.76 + hatch), .7 + (pod % 2) * .12, Math.cos(angle) * (.62 + hatch)], [.14, .1, .18], palette[2], .84);
       }
       for (const side of [-1, 1]) this.alienTendril(base, side, palette, .58, .42, 1.12, palette[2]);
       this.alienEye(base, handed * .2, -.5, palette[2], .9);
@@ -843,98 +912,141 @@ class SpaceRenderer3D {
     }
   }
 
+  enemyArtPose(enemy) {
+    const charge = enemy.attackState === "telegraph" ? clamp(enemy.attackCharge || 0, 0, 1) : 0;
+    const firing = enemy.attackState === "attack";
+    const recovery = enemy.attackState === "recover" ? Math.max(0, 1 - (enemy.aiStateAge || 0) / .28) : 0;
+    return { charge, firing, recoil: firing ? .18 : recovery * .12, clock: Math.floor(this.time * 12) / 12 };
+  }
+
+  drawEnemyArmor(enemy, base, palette) {
+    const pose = this.enemyArtPose(enemy);
+    const heavy = ["tank", "railBeetle", "carrier", "gardenSpore"].includes(enemy.type);
+    const width = heavy ? .62 : .3;
+    // Broad paired scutes leave a dark spinal seam. No noise or new color batches.
+    for (let plate = 0; plate < 3; plate += 1) {
+      const z = -.36 + plate * .36;
+      for (const side of [-1, 1]) {
+        const opening = pose.charge * (heavy ? .1 : .05);
+        this.surfaces.solid(base, [side * (width * .52 + opening), (heavy ? .58 : .42) - plate * .06, z],
+          [width * .88, .16, .28], plate === 0 ? palette[1] : palette[0], "shell", "plate", [0, side * .08, side * opening]);
+      }
+    }
+    if (this.quality !== "low") {
+      for (const side of [-1, 1]) {
+        // Two thick cooling slots, recessed into the rear armor.
+        this.surfaces.solid(base, [side * width * .65, heavy ? .55 : .4, .46], [.12, .12, .28], palette[1], "metal");
+      }
+    }
+  }
+
+  enemyHardpoints(enemy) {
+    // Hull-owned sockets keep all five equipment slots apart even on a narrow body.
+    // [weapon z, rear z, dorsal y, lateral x]; these are presentation data only.
+    const sockets = {
+      scout: [-.65, .72, .51, .5], dart: [-.92, .86, .53, .38],
+      tank: [-.73, .72, .8, .86], spinner: [-.51, .64, .58, .48],
+      mine: [-.61, .71, .7, .66], lancer: [-.62, .7, .6, .42],
+      carrier: [-.8, .94, .75, 1.04], nectarMoth: [-.62, .72, .54, .44],
+      prismRay: [-.85, .85, .59, .65], cometRammer: [-.54, .86, .68, .65],
+      auroraLeech: [-.7, .82, .63, .53], railBeetle: [-.76, .82, .94, .91],
+      reefMedusa: [-.77, .8, .89, .86], eclipseReaper: [-.76, .78, .66, .55],
+      graveMirror: [-.8, .84, .6, .61], gardenSpore: [-.84, .96, .89, .96],
+    };
+    return sockets[enemy.type] || sockets.scout;
+  }
+
   drawIntegratedEnemyModules(enemy, base, palette, moduleColor) {
-    const flame = .38 + Math.sin(this.time * 18 + enemy.seed) * .1;
-    const handed = Math.sin(Number(enemy.seed) || 1) >= 0 ? 1 : -1;
-    if (enemy.movementModule === "weave") {
+    const [nose, rear, dorsal, flank] = this.enemyHardpoints(enemy);
+    const pose = this.enemyArtPose(enemy);
+    const body = (p, size, color = palette[0], finish = "shell", shape = "plate", rotation) => this.surfaces.solid(base, p, size, color, finish, shape, rotation);
+    const wire = (a, b, color = palette[1]) => this.surfaces.segment(base, a, b, .035, color, "metal");
+    // Drive slot: aft paired verniers / flexible vanes / large booster / lateral vector nozzles.
+    for (const side of [-1, 1]) {
+      const x = side * (enemy.movementModule === "drift" ? flank : .26);
+      body([x, .1, rear], [.23, .23, .35], palette[0], "metal");
+      body([x, .1, rear + .19], [.22, .22, .1], palette[1], "metal", "ring");
+      const length = enemy.movementModule === "rush" ? .95 : .43;
+      this.surfaces.solid(base, [x, .1, rear + .22], [.28, .28, length], moduleColor, "flame", "flame", [0, enemy.movementModule === "drift" ? side * -.6 : 0, 0]);
+      if (enemy.movementModule === "weave") body([side * .48, .2, rear], [.42, .1, .38], palette[1], "shell", "plate", [0, side * .4, Math.sin(pose.clock * 5) * .25]);
+    }
+    if (enemy.movementModule === "rush") body([0, .22, rear - .08], [.6, .28, .42], palette[1], "metal");
+
+    // Installed weapon identity is stable. Species abilities live in the chassis;
+    // a different attack pattern must not replace the installed module mid-cycle.
+    const weapon = enemy.weaponModule || "pulse";
+    const mount = multiply(base, compose([0, .23, nose + pose.recoil]));
+    const part = (p, size, color = palette[1], finish = "shell", shape = "plate", rotation) => this.surfaces.solid(mount, p, size, color, finish, shape, rotation);
+    part([0, 0, .13], [.48, .2, .42], palette[0], "metal");
+    if (weapon === "laser" || weapon === "sniper") {
+      const spread = weapon === "laser" ? .2 + pose.charge * .1 : .12;
       for (const side of [-1, 1]) {
-        this.voxelSegment(base, [side * .34, .08, .4], [side * .82, .12, .9], .18, side === handed ? palette[1] : palette[0], .3);
-        this.voxel(base, [side * .86, .14, .94], [.14, .12, .2], moduleColor, .68);
+        part([side * spread, .04, -.32], [.12, .18, .86], palette[1], "metal");
+        if (weapon === "laser") this.surfaces.segment(mount, [side * spread, .14, -.04], [side * spread, .14, -.68], .045, palette[2]);
       }
-    } else if (enemy.movementModule === "rush") {
-      this.voxel(base, [0, .1, .7], [.4, .2, .72], palette[0], .24);
-      for (const side of [-1, 1]) this.voxel(base, [side * .23, .1, 1.03 + flame * .04], [.14, .12, .36], moduleColor, .86);
-    } else if (enemy.movementModule === "drift") {
-      this.voxelSegment(base, [handed * .24, .08, .32], [handed * .92, .12, .9], .2, palette[0], .28);
-      this.voxel(base, [handed * .97, .14, .96], [.16, .12, .28], moduleColor, .76);
+      part([0, .03, -.64], [.22, .22, .16], palette[0], "metal", "ring");
+      part([0, .03, -.73], [.12, .12, .1], palette[2], pose.charge > .5 || pose.firing ? "energy" : "glass", "orb");
+    } else if (weapon === "seeker") {
+      for (const side of [-1, 1]) {
+        part([side * .24, .08, -.2], [.34, .28, .68], palette[0]);
+        for (let tube = 0; tube < 2; tube += 1) {
+          part([side * .24, .04 + tube * .15, -.56], [.14, .14, .08], palette[1], "metal", "ring");
+          part([side * .24, .04 + tube * .15, -.6], [.08, .08, .1], palette[2], "glass", "orb");
+        }
+      }
+    } else if (weapon === "bomb") {
+      part([0, .1, -.16], [.57, .5, .67], palette[1], "glass", "orb");
+      for (const side of [-1, 1]) part([side * (.24 + pose.charge * .12), .18, -.16], [.2, .35, .55], palette[0], "shell", "plate", [0, side * pose.charge * .35, 0]);
+      part([0, .1, -.5], [.3, .3, .12], palette[0], "metal", "ring");
+      part([0, .1, -.57], [.16, .16, .12], "#ffbb68", pose.charge > .5 ? "energy" : "glass", "orb");
+    } else if (weapon === "orbit") {
+      part([0, .1, -.08], [.68, .68, .14], palette[1], "metal", "ring", [Math.PI / 2, 0, 0]);
+      for (let port = 0; port < 4; port += 1) {
+        const a = port * Math.PI / 2 + pose.clock * .8;
+        part([Math.cos(a) * .3, .18, -.08 + Math.sin(a) * .3], [.13, .13, .16], palette[2], "glass", "orb");
+      }
     } else {
-      for (const side of [-1, 1]) this.voxel(base, [side * .24, .08, .72], [.16, .14, .5], palette[0], .24, [0, side * .1, 0]);
-      this.voxel(base, [0, .12, 1.02], [.16, .12, .24 + flame * .08], moduleColor, .8);
+      for (const x of weapon === "twin" ? [-.2, .2] : [0]) {
+        part([x, .02, -.24], [.23, .24, .62], palette[1], "metal");
+        part([x, .02, -.55], [.24, .24, .1], palette[0], "metal", "ring");
+        part([x, .02, -.62], [.11, .11, .08], palette[2], pose.firing ? "energy" : "glass", "orb");
+      }
     }
 
-    if (enemy.weaponModule === "twin") {
-      for (const side of [-1, 1]) {
-        this.voxelSegment(base, [side * .26, .12, -.4], [side * .38, .14, -1.3], .17, palette[1], .32);
-        this.voxel(base, [side * .39, .16, -1.38], [.12, .1, .24], moduleColor, .88);
-      }
-    } else if (enemy.weaponModule === "sniper") {
-      this.voxelSegment(base, [0, .12, -.42], [0, .16, -1.66], .2, palette[1], .34);
-      this.voxel(base, [0, .18, -1.78], [.12, .1, .28], moduleColor, .92);
-    } else if (enemy.weaponModule === "orbit") {
-      for (const side of [-1, 1]) {
-        this.voxelSegment(base, [side * .28, .12, -.26], [side * .82, .16, -.48], .16, palette[0], .28);
-        this.voxel(base, [side * .88, .18, -.52], [.16, .12, .18], side === handed ? moduleColor : palette[2], .78);
-      }
-    } else if (enemy.weaponModule === "laser") {
-      this.voxelSegment(base, [0, .2, -.36], [0, .28, -1.72], .22, palette[1], .42);
-      this.voxel(base, [0, .31, -1.82], [.12, .1, .42], "#fff3a0", 1);
-      for (const side of [-1, 1]) this.voxel(base, [side * .26, .2, -.72], [.12, .18, .7], moduleColor, .76, [0, side * .08, 0]);
-    } else if (enemy.weaponModule === "seeker") {
-      for (const side of [-1, 1]) {
-        this.voxel(base, [side * .44, .2, -.7], [.34, .3, .64], palette[1], .42, [0, side * .18, 0]);
-        this.alienEye(base, side * .45, -.82, side === handed ? "#ffef78" : moduleColor, .56);
-      }
-    } else if (enemy.weaponModule === "bomb") {
-      const pulse = 1 + Math.sin(this.time * 7 + enemy.seed) * .08;
-      this.voxel(base, [0, .22, -.62], [.62 * pulse, .46, .72], palette[1], .42);
-      this.voxelRing(base, .43 * pulse, .25, "#ff9a58", 8, .8, enemy.seed, .09, .92, .8);
-      this.voxel(base, [0, .42, -.76], [.2, .12, .24], "#ffd66e", .96);
-    } else {
-      this.voxel(base, [0, .12, -.82], [.2, .16, .72], palette[1], .3);
-      this.voxel(base, [0, .16, -1.22], [.12, .1, .2], moduleColor, .88);
-    }
-
+    // Core slot is on the back; it never covers the forward weapon or side payload.
+    body([0, dorsal, .16], [.46, .12, .48], palette[0], "metal");
     if (enemy.coreModule === "plated") {
-      for (const side of [-1, 1]) this.voxel(base, [side * .28, .28, .04], [.36, .14, .72], side === handed ? palette[1] : palette[0], .26, [0, side * .1, 0]);
+      for (const side of [-1, 1]) body([side * .24, dorsal + .1, .16], [.29, .2, .56], palette[1], "shell");
     } else if (enemy.coreModule === "barrier") {
-      for (const side of [-1, 1]) this.voxel(base, [side * .42, .24, .02], [.14, .12, .86], palette[2], .62, [0, side * .12, 0]);
-      if (enemy.moduleBarrier > 0) {
-        const pulse = 1 + Math.sin(this.time * 9 + enemy.seed) * .04;
-        this.voxel(base, [0, .43, -.24], [1.02 * pulse, .08, .14], moduleColor, 1);
-      }
+      body([0, dorsal + .18, .16], [.46, .46, .13], palette[1], "metal", "ring", [Math.PI / 2, 0, 0]);
+      body([0, dorsal + .2, .16], [.25, .25, .3], enemy.moduleBarrier > 0 ? "#77dcf0" : palette[0], enemy.moduleBarrier > 0 ? "energy" : "metal", "orb");
     } else if (enemy.coreModule === "volatile") {
-      const pulse = 1 + Math.sin(this.time * 10 + enemy.seed) * .12;
-      this.voxel(base, [0, .29, .02], [.32 * pulse, .14, .46], palette[1], .34);
-      this.voxel(base, [0, .4, -.02], [.14 * pulse, .08, .26], moduleColor, .88);
-    } else {
-      this.voxel(base, [0, .3, -.02], [.24, .1, .38], palette[1], .42);
-    }
+      body([0, dorsal + .2, .16], [.36, .3, .4], "#d56d45", "glass", "orb");
+      for (const x of [-.18, .18]) body([x, dorsal + .22, .16], [.07, .32, .46], palette[0], "metal");
+    } else body([0, dorsal + .1, .16], [.25, .16, .3], palette[1], "shell");
 
-    if (enemy.aiModule === "hunter") {
-      for (const side of [-1, 1]) this.alienEye(base, side * .2, -.48, palette[2], .62);
-    } else if (enemy.aiModule === "flanker") {
-      this.alienEye(base, handed * .34, -.4, palette[2], .7);
-      this.voxel(base, [handed * .62, .18, -.14], [.42, .12, .34], palette[1], .46, [0, handed * .28, 0]);
-    } else if (enemy.aiModule === "oracle") {
-      this.voxel(base, [0, .36, -.14], [.46, .14, .5], palette[0], .3);
-      this.voxel(base, [0, .47, -.34], [.22, .08, .2], palette[2], .94);
-    } else if (enemy.aiModule === "pack") {
-      for (const offset of [-.28, 0, .28]) this.alienEye(base, offset, -.46 + Math.abs(offset) * .18, offset === 0 ? "#fff09a" : palette[2], .54);
-    } else if (enemy.aiModule === "ambusher") {
-      this.alienEye(base, handed * .4, -.48, "#ff6f9e", .68);
-      this.voxelSegment(base, [handed * .3, .22, -.2], [handed * .92, .34, -.78], .13, palette[1], .48);
-      this.voxel(base, [handed * .98, .38, -.84], [.18, .16, .22], palette[2], .9);
-    } else {
-      this.alienEye(base, handed * .07, -.42, palette[2], .58);
+    // AI slot: single sentry, paired hunter, lateral flanker, dish oracle,
+    // linked three-lens pack, and hooded ambusher all have independent silhouettes.
+    const sensor = multiply(base, compose([0, dorsal - .08, -.42]));
+    const lenses = enemy.aiModule === "pack" ? [-.2, 0, .2] : enemy.aiModule === "hunter" ? [-.15, .15] : enemy.aiModule === "flanker" ? [.3] : [0];
+    for (const x of lenses) {
+      this.surfaces.solid(sensor, [x, .08, 0], [.18, .17, .24], palette[0], "metal", "orb");
+      this.surfaces.solid(sensor, [x, .15, -.06], [.1, .09, .13], palette[2], "glass", "orb");
     }
+    if (enemy.aiModule === "oracle") this.surfaces.solid(sensor, [0, .16, 0], [.4, .32, .12], palette[1], "metal", "ring", [.3, 0, 0]);
+    if (enemy.aiModule === "ambusher") this.surfaces.solid(sensor, [0, .2, .03], [.34, .12, .34], palette[0], "shell");
+    if (enemy.aiModule === "flanker") wire([.22, dorsal, -.4], [.44, dorsal + .12, -.34]);
+    if (enemy.aiModule === "pack") wire([-.25, dorsal + .08, -.38], [.25, dorsal + .08, -.38]);
 
-    if (enemy.payloadModule === "cryo") {
-      this.voxel(base, [handed * .36, .2, .44], [.14, .1, .54], "#70eaff", .68, [0, handed * .14, 0]);
-    } else if (enemy.payloadModule === "glitch") {
-      const color = Math.floor(this.time * 14 + enemy.seed) % 2 ? "#ff83d7" : "#7f8cff";
-      this.voxel(base, [handed * .18, .2, .48], [.58, .1, .14], color, .76, [0, handed * .14, 0]);
-    } else if (enemy.payloadModule === "fracture") {
-      this.voxel(base, [handed * .42, .2, .38], [.14, .1, .46], "#ff9d4f", .72, [0, handed * .2, 0]);
+    // Payload cartridge: a cooling cell, split jammer, or three-tooth penetrator.
+    if (enemy.payloadModule && enemy.payloadModule !== "clean") {
+      const x = flank * 1.08;
+      const socketY = dorsal * .65;
+      const color = enemy.payloadModule === "cryo" ? "#70eaff" : enemy.payloadModule === "glitch" ? "#d176da" : "#ffb45f";
+      body([x, socketY, .24], [.25, .24, .5], palette[0], "metal");
+      if (enemy.payloadModule === "cryo") body([x, socketY + .15, .24], [.21, .2, .4], color, "glass", "orb");
+      else for (let cell = 0; cell < (enemy.payloadModule === "glitch" ? 2 : 3); cell += 1) body([x, socketY + .18, .09 + cell * .13], [.23, .15, .085], color, "metal");
+      wire([x, socketY + .04, .02], [.24, .24, nose + .2], color);
     }
   }
 
@@ -980,7 +1092,7 @@ class SpaceRenderer3D {
         const start = [ray.start[0] + dx * startT, ray.start[1] + dy * startT, ray.start[2] + dz * startT];
         const end = [ray.start[0] + dx * endT, ray.start[1] + dy * endT, ray.start[2] + dz * endT];
         const highlighted = dash === activeDash;
-        this.voxelSegment(compose(), start, end, .07, highlighted ? "#fff1ad" : ray.color, highlighted ? .82 : .34 + charge * .28);
+        this.surfaces.line(compose(), start, end, highlighted ? "#fff1ad" : ray.color, highlighted ? 1 : .55 + charge * .35);
       }
     }
   }
@@ -1082,8 +1194,9 @@ class SpaceRenderer3D {
     const palette = palettes[enemy.type] || palettes.scout;
     const moduleColor = enemy.elite ? "#e6c75d" : "#b33b51";
     this.drawEnemyChassis(enemy, base, palette);
+    this.drawEnemyArmor(enemy, base, palette);
     this.drawIntegratedEnemyModules(enemy, base, palette, moduleColor);
-    this.drawEnemyTelegraph(enemy, telegraphBase);
+    if (!enemy.galleryScale) this.drawEnemyTelegraph(enemy, telegraphBase);
     if (enemy.attackState === "attack" && enemy.attackPattern === "ramCharge") this.drawRamWake(enemy);
     if (enemy.elite) {
       this.voxel(base, [0, .49, -.18], [1.45, .035, .07], "#fff1a0", 1);
@@ -1265,6 +1378,8 @@ class SpaceRenderer3D {
         coreModule,
         aiModule,
         payloadModule,
+        attackState: "telegraph",
+        attackCharge: (Math.sin(this.time * 2 + index) + 1) * .5,
         moduleColor: moduleColors[index],
         moduleBarrier: coreModule === "barrier" ? 4 : 0,
         seed: index + 1,
@@ -1922,110 +2037,80 @@ class SpaceRenderer3D {
   }
 
   projectileTrail(base, color, width, length, segments = 3, offsetX = 0) {
-    const count = this.quality === "low" ? 1 : Math.min(2, segments);
-    for (let segment = 0; segment < count; segment += 1) {
-      const falloff = 1 - segment * .22;
-      this.voxel(base, [offsetX, 0, -length * (.55 + segment * .58)], [width * falloff, width * falloff, length * .32], color, .84 - segment * .16);
-    }
+    // Only a short, dim native line behind special ammunition; never a round tube.
+    this.surfaces.line(base, [offsetX, 0, -length * .6], [offsetX, 0, -length * 1.5], color, .45);
   }
 
   drawProjectile(bullet, enemy = false) {
     const position = this.toWorld(bullet.x, bullet.y, enemy ? .42 : .52);
-    if (!enemy) position[0] += Math.sin((bullet.y || 0) * .11 + (bullet.owner || 0) * 2.4) * .055;
     const travelAngle = Math.atan2(bullet.vx, bullet.vy);
-    const rotation = [0, travelAngle, 0];
+    const base = compose(position, [0, travelAngle, 0]);
     if (enemy) {
       const size = (.11 + bullet.r * .026) * HOSTILE_PROJECTILE_SCALE;
-      const color = this.highContrastBullets ? "#fff06a" : "#ff5d88";
-      const hostileEdge = this.highContrastBullets ? "#ff7a58" : "#9b4bc2";
-      const hostileCore = this.highContrastBullets ? "#ffffff" : (bullet.payloadColor || "#dfff68");
-      const base = compose(position, rotation);
+      const age = bullet.age || 0;
+      const tick = Math.floor(age * 12) / 12;
+      const fuse = clamp(age / Math.max(.01, bullet.triggerAge || 1), 0, 1);
+      const loaded = bullet.payloadModule && bullet.payloadModule !== "clean";
+      const payload = { cryo: "#70eaff", glitch: "#ff83d7", fracture: "#ffb45f" };
+      const color = this.highContrastBullets ? "#fff06a" : "#fa6788";
+      const edge = this.highContrastBullets ? "#b34b42" : "#803e72";
+      const core = this.highContrastBullets ? "#ffffff" : loaded ? (payload[bullet.payloadModule] || "#dfff68") : "#ffbf98";
+      let shape = "seed", angle = travelAngle, unit = size * .62;
       if (bullet.behavior === "mine") {
-        const pulse = 1 + Math.sin(bullet.age * 12) * .14;
-        this.voxel(base, [0, 0, 0], [size * 2.8 * pulse, size * 1.4, size * 2.8 * pulse], color, 1, [0, bullet.age * 2.8, 0]);
-        for (let arm = 0; arm < 4; arm += 1) this.voxel(base, [0, 0, 0], [size * 4.2, size * .5, size * .72], hostileEdge, .94, [0, bullet.age * 1.8 + arm * Math.PI / 2, 0]);
-        this.voxel(base, [0, .04, 0], [size, size, size], hostileCore, 1);
+        shape = fuse >= .65 ? "mineArmed" : "mine";
+        angle += tick * 1.8;
+        unit = size * .72;
       } else if (bullet.behavior === "blast") {
-        const pulse = 1 + Math.sin(bullet.age * 18) * .18;
-        const fuse = clamp(bullet.age / Math.max(.01, bullet.triggerAge || 1), 0, 1);
-        this.voxel(base, [0, 0, 0], [size * 3.3 * pulse, size * 1.8, size * 3.3 * pulse], "#ff744f", 1, [bullet.age * 2.4, bullet.age * 3.2, 0]);
-        for (let arm = 0; arm < 3; arm += 1) this.voxel(base, [0, 0, 0], [size * 4.6, size * .42, size * .72], arm === 1 ? "#ffe06a" : hostileEdge, .9, [0, bullet.age * 2 + arm * TAU / 3, 0]);
-        this.voxel(base, [0, .05, 0], [size * 1.15, size * 1.15, size * 1.15], "#fff0a0", 1);
+        shape = fuse >= .65 ? "blastArmed" : "blast";
+        unit = size * .6;
         if (bullet.anchored || fuse >= .36) {
           const warningBase = compose(position);
           const radiusX = Math.max(.48, (bullet.blastRadius || 34) / 21.5);
           const radiusZ = Math.max(.48, (bullet.blastRadius || 34) / 13.3);
           const warningColor = fuse >= .78 ? "#ffe279" : "#ff8059";
-          this.voxelEllipse(warningBase, radiusX, radiusZ, .02, warningColor, 16, bullet.age * 1.1 + bullet.sourceId * .17, .34 + fuse * .42, .68);
+          this.voxelEllipse(warningBase, radiusX, radiusZ, .02, warningColor, 16, age * 1.1 + (bullet.sourceId || 0) * .17, .34 + fuse * .42, .68);
         }
       } else if (bullet.behavior === "homing") {
-        this.voxel(base, [0, 0, 0], [size * 1.4, size, size * 2.8], "#ff5fa2", 1);
-        for (const side of [-1, 1]) this.voxel(base, [side * size, 0, size * .55], [size * 1.1, size * .52, size * 1.35], hostileEdge, .9, [0, side * .58, 0]);
-        this.voxel(base, [0, .04, -size * .35], [size * .7, size * .7, size], hostileCore, 1);
-        this.projectileTrail(base, "#b967ff", size * .42, size * 2.1, 3);
+        shape = age <= (bullet.homingDuration || 0) ? "seeker" : "seekerSpent";
+        this.projectileTrail(base, edge, size, size * 2.4);
       } else if (["laneWall", "commandCross"].includes(bullet.pattern)) {
-        this.voxel(base, [0, 0, 0], [size * 3.2, size * .72, size * 1.2], color, 1, [0, Math.PI / 2, 0]);
-        this.voxel(base, [0, .03, 0], [size * .82, size * .82, size * 1.8], hostileCore, .95);
-        this.projectileTrail(base, hostileEdge, size * .5, size * 1.6, 2);
+        shape = "wall";
       } else if (["pincer", "predictiveFan", "sweep"].includes(bullet.pattern)) {
-        this.voxel(base, [0, 0, 0], [size * 1.6, size, size * 2.3], color, 1, [0, bullet.age * (bullet.curve || 0), 0]);
-        for (const side of [-1, 1]) this.voxel(base, [side * size * .9, 0, size * .2], [size * .9, size * .62, size * 1.3], hostileEdge, .84, [0, side * .48, 0]);
-        this.projectileTrail(base, hostileEdge, size * .5, size * 1.8, 2);
+        shape = "shard";
       } else if (bullet.bossStage === 0) {
-        const opening = 1 + (bullet.bossPhase || 1) * .12;
-        this.voxel(base, [0, 0, 0], [size * 2.4 * opening, size * .78, size * 1.25], color, 1, [0, .38, 0]);
-        this.voxel(base, [0, 0, 0], [size * 2.4 * opening, size * .78, size * 1.25], hostileCore, .9, [0, -.38, 0]);
-        this.projectileTrail(base, hostileEdge, size * .62, size * 1.7, 3);
+        shape = "bloom";
       } else if (bullet.bossStage === 1) {
-        this.voxel(base, [0, 0, 0], [size * 1.3, size * 1.05, size * 4.4], color, 1);
-        for (const side of [-1, 1]) this.voxel(base, [side * size * 1.25, 0, size * .25], [size * 1.1, size * .62, size * 1.8], "#ffe45c", .78, [0, side * .32, 0]);
-        this.projectileTrail(base, hostileEdge, size * .55, size * 2.4, 3);
+        shape = "forge";
       } else if (bullet.bossStage === 2) {
-        const spin = bullet.age * 4.6;
-        for (let arm = 0; arm < 3; arm += 1) this.voxel(base, [0, 0, 0], [size * 2.7, size * .8, size * 1.25], arm === 1 ? "#ff6680" : color, 1, [0, spin + arm * TAU / 3, 0]);
-        this.projectileTrail(base, hostileCore, size * .66, size * 1.7, 3);
-      } else if (bullet.weaponModule === "sniper") {
-        this.voxel(base, [0, 0, 0], [size, size, size * 4.4], color, 1);
-        this.voxel(base, [0, 0, size * 2.35], [size * .7, size * .7, size * 1.8], hostileCore, .94);
-        for (const side of [-1, 1]) this.voxel(base, [side * size * 1.1, 0, size * .4], [size * 1.4, size * .72, size * .62], hostileEdge, .8, [0, side * .55, 0]);
-        this.projectileTrail(base, hostileEdge, size * .38, size * 2.2, 3);
-      } else if (bullet.weaponModule === "orbit") {
-        this.voxel(base, [0, 0, 0], [size * 2.8, size, size], color, 1, [0, bullet.age * 5, 0]);
-        this.voxel(base, [0, 0, 0], [size, size, size * 2.8], hostileEdge, 1, [0, bullet.age * 5, 0]);
-        this.voxel(base, [0, .04, 0], [size, size, size], hostileCore, 1);
-        this.projectileTrail(base, hostileEdge, size * .56, size * 1.6, 2);
+        shape = "void";
+        angle += tick * 4.6;
+      } else if (bullet.weaponModule === "sniper" || ["lance", "twinLance"].includes(bullet.pattern)) {
+        shape = "needle";
+        this.projectileTrail(base, edge, size, size * 3);
+      } else if (bullet.weaponModule === "orbit" || ["spiral", "counterSpiral"].includes(bullet.pattern)) {
+        shape = "orbit";
+        angle += tick * (bullet.curve < 0 ? -4.6 : 4.6);
       } else if (bullet.weaponModule === "twin") {
-        this.voxel(base, [-size * 1.15, 0, 0], [size, size, size * 2.1], color, 1);
-        this.voxel(base, [size * 1.15, 0, 0], [size, size, size * 2.1], color, 1);
-        this.voxel(base, [0, .04, size * .18], [size * 2.8, size * .72, size * .72], hostileCore, .9);
-        this.projectileTrail(base, hostileEdge, size * .48, size * 1.4, 2, -size);
-        this.projectileTrail(base, hostileEdge, size * .48, size * 1.4, 2, size);
-      } else {
-        this.voxel(base, [0, 0, 0], [size * 1.3, size * 1.1, size * 1.9], color, 1);
-        for (const side of [-1, 1]) this.voxel(base, [side * size, 0, size * .28], [size * 1.2, size * .72, size * .6], hostileEdge, .82, [0, side * .58, 0]);
-        this.voxel(base, [0, .05, -size * .15], [size * .72, size * .72, size], hostileCore, 1);
-        this.projectileTrail(base, hostileEdge, size * .52, size * 1.4, 2);
+        shape = "twin";
       }
-      if (bullet.payloadModule !== "clean") {
-        this.voxel(base, [0, 0, size * 1.45], [size * .86, size * .86, size * .86], hostileCore, .94);
-      }
+      // Inset payload ink stays inside the projectile, rather than a detached false hitbox.
+      this.projectileArt.draw(shape, [color, edge, core], position, angle, unit);
     } else {
-      const base = compose(position, rotation);
+      let shape = "bolt", unit = .09;
+      let palette = bullet.owner === 1 ? ["#e47d69", "#8b435c", "#f1b58e"] : ["#46cdbb", "#246b77", "#85e3cf"];
       if (bullet.phaseBarrier) {
-        this.voxel(base, [0, 0, 0], [.18, .16, .54], "#e9ffff", 1);
-        this.voxel(base, [0, .03, -.25], [.3, .14, .2], "#58dfff", .92);
-        this.projectileTrail(base, "#58dfff", .12, .32, 2);
+        shape = "phase"; unit = .1;
+        palette = ["#61cede", "#32668a", "#c3e8eb"];
+        this.projectileTrail(base, palette[0], .1, .3);
       } else if ((bullet.seeker || 0) > 0) {
-        this.voxel(base, [0, 0, -.04], [.12, .12, .34], "#c8b6ee", .78);
-        this.voxel(base, [0, .02, .18], [.24, .11, .16], "#8f68d7", .74);
-        this.projectileTrail(base, "#7651bd", .085, .2, 2);
+        shape = "drone"; unit = .085;
+        palette = ["#a382d3", "#514574", "#d1b5eb"];
+        this.projectileTrail(base, palette[0], .1, .25);
       } else if ((bullet.r || 0) > 2.35) {
-        this.voxel(base, [0, 0, 0], [.2, .2, .44], "#e9ffff", 1);
-        this.voxel(base, [0, .03, -.24], [.16, .16, .2], "#ffd454", .94);
-        this.projectileTrail(base, "#ffd454", .12, .3, 2);
-      } else {
-        this.voxel(base, [0, 0, 0], [.14, .12, .48], bullet.color, .72);
+        shape = "heavy"; unit = .1;
+        palette = ["#dfac58", "#936045", "#f3d697"];
       }
+      this.projectileArt.draw(shape, palette, position, travelAngle, unit);
     }
   }
 
@@ -2053,13 +2138,14 @@ class SpaceRenderer3D {
   drawParticle(particle) {
     const position = this.toWorld(particle.x, particle.y, .25 + particle.size * .08);
     const alpha = clamp(particle.life / particle.maxLife, 0, 1);
-    const size = .035 + particle.size * .025;
+    const size = (.035 + particle.size * .025) * (.55 + alpha * .45);
     const speed = Math.hypot(particle.vx || 0, particle.vy || 0);
     const angle = Math.atan2(particle.vx || 0, particle.vy || 1);
     const length = size * (1.35 + Math.min(2.4, speed * .012)) * (.72 + alpha * .42);
     const base = compose(position, [0, angle, particle.life * 3.2]);
-    this.voxel(base, [0, 0, 0], [size, size, length], particle.color, alpha > .42 ? .82 : .24);
-    if (particle.size >= 2.4 && this.quality !== "low") {
+    const cooling = alpha < .3;
+    this.voxel(base, [0, 0, 0], [size, size, cooling ? size * 1.4 : length], cooling ? "#483f48" : particle.color, alpha > .65 ? .86 : .24);
+    if (particle.size >= 2.4 && alpha > .68 && this.quality !== "low") {
       this.voxel(base, [0, 0, -length * .68], [size * .55, size * .55, length * .52], "#fff4b5", .72);
     }
   }
@@ -2067,16 +2153,18 @@ class SpaceRenderer3D {
   drawBeam(playerA, playerB) {
     const a = this.toWorld(playerA.x, playerA.y, .34);
     const b = this.toWorld(playerB.x, playerB.y, .34);
-    const dx = b[0] - a[0];
-    const dz = b[2] - a[2];
-    const length = Math.hypot(dx, dz);
-    const middle = [(a[0] + b[0]) / 2, .34, (a[2] + b[2]) / 2];
-    const base = compose(middle, [0, Math.atan2(dx, dz), 0]);
-    const beamSegments = clamp(Math.ceil(length / .72), 3, 8);
-    const segmentLength = length / beamSegments * .58;
-    for (let segment = 0; segment < beamSegments; segment += 1) {
-      const z = -length / 2 + (segment + .5) * length / beamSegments;
-      this.voxel(base, [0, 0, z], [.12, .12, segmentLength], segment % 3 === 1 ? "#bde9e6" : "#55beba", .84);
+    const base = compose();
+    // The bright center follows the actual straight collision segment. Side filaments
+    // only oscillate in height, so they do not imply a different damage footprint.
+    this.surfaces.segment(base, a, b, .035, "#55beba");
+    for (const side of [-1, 1]) {
+      let previous = a;
+      for (let point = 1; point <= 20; point += 1) {
+        const t = point / 20;
+        const next = [lerp(a[0], b[0], t), .34 + Math.sin(Math.PI * t) * Math.sin(t * 16 - this.time * 6 + side) * .08, lerp(a[2], b[2], t)];
+        this.surfaces.line(base, previous, next, side > 0 ? "#83ddd2" : "#428b9c", .7);
+        previous = next;
+      }
     }
   }
 
@@ -2085,7 +2173,7 @@ class SpaceRenderer3D {
     const b = this.toWorld(beam.x2, beam.y2, .48);
     const phase = clamp(beam.age / Math.max(.01, beam.duration), 0, 1);
     const alpha = clamp(Math.sin(Math.PI * phase) * 1.12, .34, 1);
-    const width = .055 + (beam.width || 5) * .018;
+    const width = (.055 + (beam.width || 5) * .018) * (.8 + alpha * .2);
     const base = compose();
     const dx = b[0] - a[0];
     const dy = b[1] - a[1];
@@ -2099,10 +2187,10 @@ class SpaceRenderer3D {
     const leftB = [b[0] + normalX * edgeOffset, b[1], b[2] + normalZ * edgeOffset];
     const rightA = [a[0] - normalX * edgeOffset, a[1], a[2] - normalZ * edgeOffset];
     const rightB = [b[0] - normalX * edgeOffset, b[1], b[2] - normalZ * edgeOffset];
-    this.voxelSegment(base, leftA, leftB, width * .34, "#7136a8", .7 * alpha);
-    this.voxelSegment(base, rightA, rightB, width * .34, "#7136a8", .7 * alpha);
-    this.voxelSegment(base, a, b, width * .8, beamColor, .76 * alpha);
-    this.voxelSegment(base, a, b, width * .22, "#fff8d8", .94 * alpha);
+    this.surfaces.segment(base, leftA, leftB, width * .34, "#7136a8");
+    this.surfaces.segment(base, rightA, rightB, width * .34, "#7136a8");
+    this.surfaces.segment(base, a, b, width * .8, beamColor);
+    this.surfaces.segment(base, a, b, width * .22, "#fff8d8");
     for (let packet = 0; packet < 3; packet += 1) {
       const packetT = (.08 + phase * 1.8 + packet / 3) % .92;
       const startT = Math.max(.02, packetT - .026);
@@ -2112,10 +2200,10 @@ class SpaceRenderer3D {
       const center = [a[0] + dx * packetT, a[1] + dy * packetT, a[2] + dz * packetT];
       const crossA = [center[0] + normalX * edgeOffset * 1.08, center[1], center[2] + normalZ * edgeOffset * 1.08];
       const crossB = [center[0] - normalX * edgeOffset * 1.08, center[1], center[2] - normalZ * edgeOffset * 1.08];
-      this.voxelSegment(base, start, end, width * .68, "#ffffff", alpha);
-      this.voxelSegment(base, crossA, crossB, width * .26, packet % 2 ? beamColor : "#ff9f5a", .82 * alpha);
+      this.surfaces.segment(base, start, end, width * .68, "#ffffff");
+      this.surfaces.segment(base, crossA, crossB, width * .26, packet % 2 ? beamColor : "#ff9f5a");
     }
-    this.voxelHalo(compose(a), width * 2.8, .02, beamColor, 6, 3.4, beam.sourceId * .13, width * .48);
+    this.surfaces.solid(base, a, [width * 2.2, width * 2.2, width * 2.2], beamColor, "energy", "orb");
   }
 
   drawRush(world) {
