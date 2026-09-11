@@ -4,12 +4,12 @@
   const PROTOCOLS = [
     { id: "cometDrive", required: ["overclock", "turbo"], color: "#69f7e4", nameKey: "protocol.cometDrive.name", descriptionKey: "protocol.cometDrive.description" },
     { id: "phaseLance", required: ["rail", "phase"], color: "#9ed8ff", nameKey: "protocol.phaseLance.name", descriptionKey: "protocol.phaseLance.description" },
-    { id: "prismChoir", required: ["prism", "drone"], color: "#ff8fd2", nameKey: "protocol.prismChoir.name", descriptionKey: "protocol.prismChoir.description" },
+    { id: "prismChoir", required: ["drone", "prism"], color: "#ff8fd2", nameKey: "protocol.prismChoir.name", descriptionKey: "protocol.prismChoir.description" },
     { id: "stormCircuit", required: ["piercing", "chain"], color: "#ffe56d", nameKey: "protocol.stormCircuit.name", descriptionKey: "protocol.stormCircuit.description" },
     { id: "aegisNova", required: ["aegisCycle", "novaCore"], color: "#82b8ff", nameKey: "protocol.aegisNova.name", descriptionKey: "protocol.aegisNova.description" },
     { id: "salvageReactor", required: ["magnet", "capacitor"], color: "#91ff9d", nameKey: "protocol.salvageReactor.name", descriptionKey: "protocol.salvageReactor.description" },
     { id: "resonantGyro", required: ["resonanceArray", "gyro"], color: "#c993ff", nameKey: "protocol.resonantGyro.name", descriptionKey: "protocol.resonantGyro.description" },
-  ].map((protocol) => Object.freeze({ ...protocol, required: Object.freeze(protocol.required) }));
+  ].map((protocol) => Object.freeze({ ...protocol, required: Object.freeze(protocol.required), ranks: Object.freeze([2, 1]) }));
 
   function owns(levels, upgradeId) {
     return (levels?.[upgradeId] || 0) > 0;
@@ -17,20 +17,20 @@
 
   function completionIndex(protocol, history = []) {
     const picks = Array.isArray(history) ? history : [];
-    const indices = protocol.required.map((upgradeId) => picks.indexOf(upgradeId));
+    const indices = protocol.required.map((upgradeId, slot) => picks.map((id, i) => id === upgradeId ? i : -1).filter((i) => i >= 0)[protocol.ranks[slot] - 1] ?? -1);
     return indices.every((index) => index >= 0) ? Math.max(...indices) : -1;
   }
 
   function activeProtocols(levels = {}, history = []) {
-    const completed = PROTOCOLS.filter((protocol) => protocol.required.every((upgradeId) => owns(levels, upgradeId)));
+    const completed = PROTOCOLS.filter((protocol) => protocol.required.every((upgradeId, slot) => (levels[upgradeId] || 0) >= protocol.ranks[slot]));
     // Completion order only affects presentation; every earned synergy stays active.
     return completed.sort((a, b) => completionIndex(b, history) - completionIndex(a, history));
   }
 
   function protocolUnlockedByChoice(levels = {}, upgradeId) {
-    return PROTOCOLS.find((protocol) => protocol.required.includes(upgradeId)
-      && !protocol.required.every((requiredId) => owns(levels, requiredId))
-      && protocol.required.every((requiredId) => requiredId === upgradeId || owns(levels, requiredId))) || null;
+    const before = new Set(activeProtocols(levels).map((entry) => entry.id));
+    return activeProtocols({ ...levels, [upgradeId]: (levels[upgradeId] || 0) + 1 })
+      .find((entry) => !before.has(entry.id)) || null;
   }
 
   function eligibleMates(levels = {}, upgrades = []) {
@@ -83,21 +83,21 @@
     const active = new Set(activeProtocols(levels, history).map((protocol) => protocol.id));
     return Object.freeze({
       cometDrive: active.has("cometDrive"),
-      movingFireRate: active.has("cometDrive") ? 1.08 : 1,
+      movingFireRate: active.has("cometDrive") ? 1.1 : 1,
       phaseLance: active.has("phaseLance"),
-      phaseDamage: active.has("phaseLance") ? 1.06 : 1,
+      phaseDamage: 1,
       prismChoir: active.has("prismChoir"),
-      seekerTurn: active.has("prismChoir") ? 3.4 : 0,
+      seekerTurn: 0,
       stormCircuit: active.has("stormCircuit"),
-      chainDamage: active.has("stormCircuit") ? 1.2 : 1,
-      chainTargets: active.has("stormCircuit") ? 1 : 0,
+      chainDamage: 1,
+      chainTargets: 0,
       aegisNova: active.has("aegisNova"),
       salvageReactor: active.has("salvageReactor"),
       pickupEnergy: active.has("salvageReactor") ? 8 : 0,
-      pickupRush: active.has("salvageReactor") ? 3 : 0,
+      pickupRush: active.has("salvageReactor") ? 6 : 0,
       resonantGyro: active.has("resonantGyro"),
-      linkedCharge: active.has("resonantGyro") ? 1.2 : 1,
-      beamDamage: active.has("resonantGyro") ? 1.12 : 1,
+      linkedCharge: 1,
+      beamDamage: active.has("resonantGyro") ? 1.2 : 1,
       beamRadius: active.has("resonantGyro") ? 2 : 0,
     });
   }

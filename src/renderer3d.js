@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { RenderSurfaces } from "./render-surfaces.js";
 import { PixelProjectileArt } from "./projectile-art.js";
+import { PixelEffects } from "./pixel-effects.js";
 import { EffectComposer } from "../node_modules/three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "../node_modules/three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "../node_modules/three/examples/jsm/postprocessing/UnrealBloomPass.js";
@@ -85,6 +86,8 @@ class SpaceRenderer3D {
 
     this.surfaces = new RenderSurfaces(this.scene);
     this.projectileArt = new PixelProjectileArt(this.scene);
+    this.pixelEffects = new PixelEffects(this.scene);
+    this.ramTrails = new WeakMap();
     this.boxGeometry = new THREE.BoxGeometry(1, 1, 1);
     const toonBands = new Uint8Array([72, 152, 232]);
     this.toonGradient = new THREE.DataTexture(toonBands, 3, 1, THREE.RedFormat);
@@ -265,6 +268,7 @@ class SpaceRenderer3D {
   beginFrame() {
     this.surfaces.begin(this.time);
     this.projectileArt.begin();
+    this.pixelEffects.begin(this.renderer.domElement.height, this.camera.fov);
     for (const batch of [...this.toonBatches.values(), ...this.glowBatches.values(), ...this.emissiveBatches.values()]) {
       batch.userData.cursor = 0;
       batch.count = 0;
@@ -278,6 +282,10 @@ class SpaceRenderer3D {
     }
     this.surfaces.end();
     this.projectileArt.end();
+    this.pixelEffects.end();
+    this.canvas.dataset.combatEffects = "pixel-sparks-directional-shields-flow-link";
+    this.canvas.dataset.effectParticles = String(this.pixelEffects.count);
+    this.canvas.dataset.effectDropped = String(this.pixelEffects.dropped);
     this.canvas.dataset.projectileArt = "extruded-pixel-stamps";
     this.canvas.dataset.projectileBatches = String(this.projectileArt.batches.size);
     this.canvas.dataset.projectileDropped = String(this.projectileArt.dropped);
@@ -565,19 +573,29 @@ class SpaceRenderer3D {
   drawPlayerShield(base, profile, player) {
     const hit = clamp((player.shieldHitTimer || 0) / .32, 0, 1);
     const breaking = player.shield <= 0;
-    const breakProgress = breaking ? 1 - clamp((player.shieldBreakTimer || 0) / .55, 0, 1) : 0;
-    const pulse = 1 + Math.sin(this.time * 5) * .025 + hit * .08 + breakProgress * .45;
-    const radiusX = (profile.span + .12) * pulse;
-    const radiusZ = (profile.bodyLength * .78 + .16) * pulse;
-    const color = hit > .2 ? "#c4fcff" : breaking ? "#679da9" : "#64d6ed";
-    // Four curved panels frame the ship, with open gaps preserving hostile-fire visibility.
-    for (let panel = 0; panel < 4; panel += 1) {
-      const center = panel * Math.PI / 2 + Math.PI / 4;
-      for (let segment = 0; segment < 5; segment += 1) {
-        if (breaking && segment % 2 === 0 && breakProgress > .35) continue;
-        const a = center - .5 + segment * .2;
-        const b = a + .2;
-        this.voxelSegment(base, [Math.cos(a) * radiusX, .15, Math.sin(a) * radiusZ], [Math.cos(b) * radiusX, .15, Math.sin(b) * radiusZ], hit > .2 ? .16 : .12, color, breaking ? .65 : .84);
+    const progress = breaking ? 1 - clamp((player.shieldBreakTimer || 0) / .55, 0, 1) : 1 - hit;
+    const radiusX = profile.span + .2, radiusZ = profile.bodyLength * .78 + .2;
+    const directed = Math.hypot(player.shieldImpactX || 0, player.shieldImpactY || 0) > .01;
+    const impactAngle = Math.atan2((player.shieldImpactY || 0) / 13.3, (player.shieldImpactX || 0) / 21.5);
+    const count = this.quality === "low" ? 32 : 56;
+    // Sparse field motes expose the ship; only the actual impact sector lights up.
+    for (let index = 0; index < count; index += 1) {
+      const angle = index / count * TAU + this.time * .15;
+      const latitude = Math.sin(index * 2.4 + this.time * .65) * .5;
+      const alignment = directed ? Math.max(0, Math.cos(angle - impactAngle)) ** 8 : .3;
+      const spread = breaking ? progress * (.3 + (index % 4) * .12) : 0;
+      const radius = Math.sqrt(1 - latitude * latitude) + spread;
+      this.pixelEffects.spark(base, [Math.cos(angle) * radiusX * radius, .16 + latitude * .8 + spread * .2, Math.sin(angle) * radiusZ * radius],
+        .12 + alignment * hit * .2, alignment * hit > .2 ? "#c5f8ff" : "#56bfdc", breaking ? (1 - progress) * .65 : .16 + alignment * hit * .7);
+    }
+    if (hit > 0 || breaking) {
+      for (let index = 0; index < 18; index += 1) {
+        const offset = (index / 17 - .5) * (directed ? 1.5 : TAU);
+        const angle = impactAngle + offset * (.4 + progress);
+        const scatter = progress * (breaking ? 1.1 : .3) * (.4 + index % 3 * .3);
+        const radius = 1 + scatter;
+        this.pixelEffects.spark(base, [Math.cos(angle) * radiusX * radius, .18 + Math.sin(index * 2.4) * (.12 + progress * .55), Math.sin(angle) * radiusZ * radius],
+          .11 + (1 - progress) * .1, index % 4 ? "#77dfff" : "#e0fcff", (1 - progress) * .6);
       }
     }
   }
@@ -1080,19 +1098,20 @@ class SpaceRenderer3D {
     return offsets.map((offset) => ray(enemy.x, enemy.y, enemy.r, enemy.attackTargetX, enemy.attackTargetY, offset, enemy.payloadColor || "#ffd86a"));
   }
 
+  warningFlash(enemy, charge) {
+    // Integral of a rising 1.1–7.1 Hz rate: no clock-reset jitter as charge changes.
+    const duration = Math.max(.1, enemy.aiStateDuration || enemy.attackDuration || 1.28);
+    const phase = duration * (1.1 * charge + 2 * charge ** 3);
+    return phase % 1 < .42 ? 1 : .18;
+  }
+
   drawLaserTelegraph(enemy, charge) {
+    const flash = this.warningFlash(enemy, charge);
     for (const ray of this.laserTelegraphRays(enemy)) {
-      const dx = ray.end[0] - ray.start[0];
-      const dy = ray.end[1] - ray.start[1];
-      const dz = ray.end[2] - ray.start[2];
-      const activeDash = Math.floor((this.time * 7 + enemy.seed) % 10);
-      for (let dash = 0; dash < 10; dash += 1) {
-        const startT = .035 + dash * .096;
-        const endT = startT + .046;
-        const start = [ray.start[0] + dx * startT, ray.start[1] + dy * startT, ray.start[2] + dz * startT];
-        const end = [ray.start[0] + dx * endT, ray.start[1] + dy * endT, ray.start[2] + dz * endT];
-        const highlighted = dash === activeDash;
-        this.surfaces.line(compose(), start, end, highlighted ? "#fff1ad" : ray.color, highlighted ? 1 : .55 + charge * .35);
+      this.surfaces.line(compose(), ray.start, ray.end, "#fb394e", .16 + flash * .65);
+      for (let index = 0; index < 16; index += 1) {
+        const t = index / 16;
+        this.pixelEffects.spark(null, ray.start.map((value, axis) => lerp(value, ray.end[axis], t)), .09 + charge * .05, "#ff4a60", flash * (.2 + charge * .6));
       }
     }
   }
@@ -1100,39 +1119,36 @@ class SpaceRenderer3D {
   drawRamTelegraph(enemy, charge) {
     const targetX = Number.isFinite(enemy.attackEndX) ? enemy.attackEndX : enemy.attackTargetX;
     const targetY = Number.isFinite(enemy.attackEndY) ? enemy.attackEndY : enemy.attackTargetY;
-    const sourceY = enemy.y + enemy.r * .35;
-    const dx = targetX - enemy.x;
-    const dy = targetY - sourceY;
-    const range = Math.max(1, Math.hypot(dx, dy));
-    const forwardX = dx / range;
-    const forwardY = dy / range;
-    const sideX = -forwardY;
-    const sideY = forwardX;
-    for (let marker = 0; marker < 3; marker += 1) {
-      const tipDistance = Math.min(range * .56, 24 + marker * 22 + charge * 6);
-      const tailDistance = Math.max(7, tipDistance - 12);
-      const tip = this.toWorld(enemy.x + forwardX * tipDistance, sourceY + forwardY * tipDistance, .22);
-      for (const side of [-1, 1]) {
-        const tail = this.toWorld(enemy.x + forwardX * tailDistance + sideX * side * 7, sourceY + forwardY * tailDistance + sideY * side * 7, .22);
-        this.voxelSegment(compose(), tail, tip, .11, marker === 2 ? "#ffd36a" : "#ff765f", .56 + charge * .26);
-      }
+    const a = this.toWorld(enemy.x, enemy.y, .24);
+    const b = this.toWorld(targetX, targetY, .24);
+    const flash = this.warningFlash(enemy, charge);
+    this.surfaces.line(compose(), a, b, "#ff4257", .12 + flash * .7);
+    for (let index = 0; index < 12; index += 1) {
+      const t = index / 12;
+      this.pixelEffects.spark(null, a.map((value, axis) => lerp(value, b[axis], t)), .11, "#ff5964", flash * .6);
     }
   }
 
   drawRamWake(enemy) {
-    const targetX = Number.isFinite(enemy.attackEndX) ? enemy.attackEndX : enemy.attackTargetX;
-    const targetY = Number.isFinite(enemy.attackEndY) ? enemy.attackEndY : enemy.attackTargetY;
-    const dx = targetX - enemy.x;
-    const dy = targetY - enemy.y;
-    const range = Math.max(1, Math.hypot(dx, dy));
-    const forwardX = dx / range;
-    const forwardY = dy / range;
-    const sideX = -forwardY;
-    const sideY = forwardX;
-    for (const side of [-1, 1]) {
-      const start = this.toWorld(enemy.x - forwardX * 4 + sideX * side * 3.6, enemy.y - forwardY * 4 + sideY * side * 3.6, .2);
-      const end = this.toWorld(enemy.x - forwardX * 18 + sideX * side * 2.2, enemy.y - forwardY * 18 + sideY * side * 2.2, .2);
-      this.voxelSegment(compose(), start, end, .12, side > 0 ? "#ffcb67" : "#ff5f72", .82);
+    let trail = this.ramTrails.get(enemy);
+    const attacking = enemy.attackState === "attack" && enemy.attackPattern === "ramCharge";
+    if (!trail && !attacking) return;
+    if (!trail) { trail = []; this.ramTrails.set(enemy, trail); }
+    if (attacking && (!trail.length || this.time - trail[trail.length - 1].time >= 1 / 65)) {
+      trail.push({ x: enemy.x, y: enemy.y, time: this.time });
+    }
+    while (trail.length && (this.time - trail[0].time > .38 || trail.length > 28)) trail.shift();
+    // History follows the path actually travelled, including turn/stop transitions.
+    for (let index = 0; index < trail.length; index += 1) {
+      const sample = trail[index], age = this.time - sample.time, life = 1 - age / .38;
+      for (let mote = 0; mote < (this.quality === "low" ? 2 : 4); mote += 1) {
+        const spread = .1 + age * 1.2;
+        const p = this.toWorld(sample.x, sample.y, .28);
+        p[0] += Math.sin(index * 3.8 + mote * 2.4) * spread;
+        p[1] += Math.cos(index * 2.3 + mote) * spread * .5;
+        p[2] += Math.sin(mote * 4.2 + index) * spread;
+        this.pixelEffects.spark(null, p, .14 + life * .2, mote === 0 ? "#ffba87" : "#f83d62", life * .7);
+      }
     }
   }
 
@@ -1142,16 +1158,22 @@ class SpaceRenderer3D {
     const laser = ["laserLance", "laserSweep"].includes(enemy.attackPattern);
     const ram = enemy.attackPattern === "ramCharge";
     const blast = ["blastSeed", "proximityBloom"].includes(enemy.attackPattern);
-    const color = laser ? "#ffd86a" : ram ? "#ff765f" : blast ? "#ff9b55" : enemy.payloadColor || "#ff668c";
+    const color = laser ? "#ff5964" : ram ? "#ff765f" : blast ? "#ff9b55" : enemy.payloadColor || "#ff668c";
+    if (laser || ram) {
+      const flash = this.warningFlash(enemy, charge);
+      for (let index = 0; index < 20; index += 1) {
+        const t = (index / 20 + this.time * .65) % 1;
+        const angle = index * 2.4;
+        const r = (1 - t) * (.65 - charge * .2);
+        this.pixelEffects.spark(base, [Math.cos(angle) * r, .4 + Math.sin(angle) * r, -.95], .1 + t * .12, color, t * (.3 + flash * .6));
+      }
+      if (laser) this.drawLaserTelegraph(enemy, charge);
+      else this.drawRamTelegraph(enemy, charge);
+      return;
+    }
     const pulse = 1 + Math.sin(this.time * 20 + enemy.seed) * .08;
     this.voxel(base, [0, .56, -1.05], [.18 + charge * .26, .14 + charge * .14, .26 + charge * .34], color, 1, [0, this.time * 2.2, 0]);
-    if (laser) {
-      this.voxelRing(base, .62 + charge * .3, .36, color, 8, -.65, enemy.seed, .08 * pulse, .68, .55);
-      this.drawLaserTelegraph(enemy, charge);
-    } else if (ram) {
-      this.voxelRing(base, .7 + charge * .22, .34, color, 8, 1.2, enemy.seed, .11 * pulse, .78, .5);
-      this.drawRamTelegraph(enemy, charge);
-    } else if (blast) {
+    if (blast) {
       this.voxelRing(base, .58 + charge * .58, .34, color, 10, -.72, enemy.seed, .1 * pulse, .72, .62);
       this.voxelHalo(base, .48 + charge * .34, .38, "#ffe279", 6, 1.4, enemy.seed, .08 + charge * .025);
     } else {
@@ -1197,7 +1219,7 @@ class SpaceRenderer3D {
     this.drawEnemyArmor(enemy, base, palette);
     this.drawIntegratedEnemyModules(enemy, base, palette, moduleColor);
     if (!enemy.galleryScale) this.drawEnemyTelegraph(enemy, telegraphBase);
-    if (enemy.attackState === "attack" && enemy.attackPattern === "ramCharge") this.drawRamWake(enemy);
+    this.drawRamWake(enemy);
     if (enemy.elite) {
       this.voxel(base, [0, .49, -.18], [1.45, .035, .07], "#fff1a0", 1);
       for (const side of [-1, 1]) {
@@ -2060,13 +2082,14 @@ class SpaceRenderer3D {
         shape = fuse >= .65 ? "mineArmed" : "mine";
         angle += tick * 1.8;
         unit = size * .72;
+        if (bullet.blastRadius > 0) this.voxelEllipse(compose(position), bullet.blastRadius / 21.5, bullet.blastRadius / 13.3, .02, "#ff9665", 16, 0, .3 + fuse * .3, .6);
       } else if (bullet.behavior === "blast") {
         shape = fuse >= .65 ? "blastArmed" : "blast";
         unit = size * .6;
-        if (bullet.anchored || fuse >= .36) {
+        if (bullet.blastRadius > 0) {
           const warningBase = compose(position);
-          const radiusX = Math.max(.48, (bullet.blastRadius || 34) / 21.5);
-          const radiusZ = Math.max(.48, (bullet.blastRadius || 34) / 13.3);
+          const radiusX = (bullet.blastRadius || 34) / 21.5;
+          const radiusZ = (bullet.blastRadius || 34) / 13.3;
           const warningColor = fuse >= .78 ? "#ffe279" : "#ff8059";
           this.voxelEllipse(warningBase, radiusX, radiusZ, .02, warningColor, 16, age * 1.1 + (bullet.sourceId || 0) * .17, .34 + fuse * .42, .68);
         }
@@ -2110,7 +2133,82 @@ class SpaceRenderer3D {
         shape = "heavy"; unit = .1;
         palette = ["#dfac58", "#936045", "#f3d697"];
       }
+      const tier = Math.min(3, Math.max(0, bullet.tier || 0));
+      if (bullet.source === "heavy") { shape = tier >= 3 ? "heavy3" : tier === 2 ? "heavy2" : "heavy"; unit = .095; }
+      else if (bullet.source === "fan") { shape = `fan${Math.max(1, tier)}`; unit = .075; palette = ["#59d8c9", "#3b6998", "#a3eee3"]; }
+      else if (bullet.source === "seeker") { shape = tier >= 3 ? "drone3" : tier === 2 ? "drone2" : "drone"; unit = .085; }
+      else if (bullet.source === "overloadPulse") { shape = tier >= 2 ? "overload2" : "overload1"; unit = .095; palette = ["#bc8df0", "#695da8", "#e3c8fb"]; }
+      else if (bullet.source === "primary" && tier) { shape = tier >= 2 ? "bolt3" : "bolt2"; unit = .075; }
+      const spent = (bullet.hitIds?.length || 0) > 0;
+      if (spent) unit *= .78;
       this.projectileArt.draw(shape, palette, position, travelAngle, unit);
+      const maxed = tier >= (bullet.source === "overloadPulse" || bullet.source === "primary" ? 2 : 3);
+      if (maxed && !spent) {
+        const step = Math.floor((bullet.age || 0) * 18) % 3;
+        for (const side of [-1, 1]) {
+          this.voxel(base, [side * .18, .02, -.38 - step * .07], [.07, .06, .13], palette[0], .32);
+          this.surfaces.line(base, [side * .18, 0, -.3], [side * .11, 0, -.67], palette[2], .48);
+        }
+      }
+    }
+  }
+
+  drawPowerEffects(world) {
+    for (const effect of world.power?.effects || []) {
+      const progress = clamp(effect.age / effect.duration, 0, 1);
+      const base = compose(this.toWorld(effect.x, effect.y, .48));
+      if (effect.kind === "arc" && effect.target) {
+        const a = this.toWorld(effect.x, effect.y, .5), b = this.toWorld(effect.target.x, effect.target.y, .5);
+        let previous = [0, 0, 0];
+        for (let i = 1; i <= 5; i += 1) {
+          const next = [(b[0] - a[0]) * i / 5, 0, (b[2] - a[2]) * i / 5 + (i === 5 ? 0 : (i % 2 ? .13 : -.13))];
+          this.surfaces.line(compose(a), previous, next, effect.color, 1 - progress);
+          previous = next;
+        }
+        continue;
+      }
+      const radius = effect.radius || 5;
+      const size = effect.kind === "blast" ? 1 : .3 + progress * .7;
+      const count = effect.kind === "blast" ? 28 : 8 + effect.tier * 2;
+      this.voxelEllipse(base, radius / 21.5 * size, radius / 13.3 * size, 0, effect.color, count, 0, (1 - progress) * .7, .7);
+      if (effect.kind === "blast") {
+        // Outer contour is the actual instantaneous damage area; inner pixels expand within it.
+        this.voxelEllipse(base, radius / 21.5 * progress, radius / 13.3 * progress, .04, "#ffd18d", 20, .15, (1 - progress) * .6, .65);
+      }
+      for (let i = 0; i < Math.min(12, 4 + effect.tier * 2); i += 1) {
+        const angle = i * TAU / (4 + effect.tier * 2);
+        const reach = radius * progress * .75;
+        this.voxel(base, [Math.cos(angle) * reach / 21.5, .02, Math.sin(angle) * reach / 13.3],
+          [.065, .065, .13], effect.color, (1 - progress) * .5, [0, angle, 0]);
+      }
+    }
+    if (world.linked && world.upgrades?.rushGuard) {
+      const [a, b] = world.players;
+      for (let index = 0; index < 3; index += 1) {
+        const fraction = (index + 1) / 4;
+        const base = compose(this.toWorld(lerp(a.x, b.x, fraction), lerp(a.y, b.y, fraction), .65));
+        const full = index < (world.power?.guardNodes || 0);
+        const color = full ? "#a6e5ff" : "#415374";
+        this.pixelEffects.spark(base, [0, 0, 0], full ? .3 : .14, color, full ? .9 : .22);
+        if (full) for (let mote = 0; mote < 6; mote += 1) {
+          const angle = mote / 6 * TAU + this.time * 1.6;
+          this.pixelEffects.spark(base, [Math.cos(angle) * .14, Math.sin(angle) * .14, 0], .1, color, .5);
+        }
+      }
+    }
+  }
+
+  drawWeaponPods(player) {
+    if (player.downed) return;
+    const base = compose(this.toWorld(player.x, player.y, .64), [0, Math.PI, 0], [PLAYER_MODEL_SCALE, PLAYER_MODEL_SCALE, PLAYER_MODEL_SCALE]);
+    const levels = player.upgradeRanks || {};
+    for (const [id, offset, color] of [["rail", .2, "#e8b867"], ["prism", .63, "#66d9cb"], ["drone", .9, "#af91e9"]]) {
+      if (!levels[id]) continue;
+      for (const side of [-1, 1]) {
+        this.voxel(base, [side * offset, .04, .22], [.14, .12, .3 + levels[id] * .035], "#526a84", .06);
+        this.voxel(base, [side * offset, .12, .4], [.09, .08, .16], color, .35);
+        if (levels[id] === 3) this.voxel(base, [side * (offset + .09), .08, .31], [.07, .07, .22], color, .28);
+      }
     }
   }
 
@@ -2150,21 +2248,28 @@ class SpaceRenderer3D {
     }
   }
 
-  drawBeam(playerA, playerB) {
-    const a = this.toWorld(playerA.x, playerA.y, .34);
-    const b = this.toWorld(playerB.x, playerB.y, .34);
-    const base = compose();
-    // The bright center follows the actual straight collision segment. Side filaments
-    // only oscillate in height, so they do not imply a different damage footprint.
-    this.surfaces.segment(base, a, b, .035, "#55beba");
-    for (const side of [-1, 1]) {
-      let previous = a;
-      for (let point = 1; point <= 20; point += 1) {
-        const t = point / 20;
-        const next = [lerp(a[0], b[0], t), .34 + Math.sin(Math.PI * t) * Math.sin(t * 16 - this.time * 6 + side) * .08, lerp(a[2], b[2], t)];
-        this.surfaces.line(base, previous, next, side > 0 ? "#83ddd2" : "#428b9c", .7);
-        previous = next;
-      }
+  drawBeam(playerA, playerB, world = {}) {
+    const a = this.toWorld(playerA.x, playerA.y, .42);
+    const b = this.toWorld(playerB.x, playerB.y, .42);
+    const overloaded = (world.rushTimer || 0) > 0;
+    const charge = clamp((world.rushCharge || 0) / 100, 0, 1);
+    const cooling = (world.rushCooldown || 0) > 0;
+    const color = overloaded ? "#b69aff" : "#5ccfc8";
+    const speed = overloaded ? 1.8 : cooling ? .28 : .55 + charge * .4;
+    this.surfaces.line(compose(), a, b, color, overloaded ? .65 : .22);
+    const count = this.quality === "low" ? 18 : overloaded ? 44 : 28;
+    // Two streams converge on the actual link; no solid cable or lateral fake hit lane.
+    for (let index = 0; index < count; index += 1) {
+      const flow = (index / count + this.time * speed) % 1;
+      const t = index % 2 ? 1 - flow * .5 : flow * .5;
+      const p = a.map((value, axis) => lerp(value, b[axis], t));
+      p[1] += Math.sin(index * 2.4 + this.time * 3) * .065 * Math.sin(t * Math.PI);
+      this.pixelEffects.spark(null, p, overloaded ? .19 : .1 + charge * .035,
+        overloaded && index % 6 === 0 ? "#ecdaff" : color, cooling ? .22 : .36 + flow * .4);
+    }
+    for (const point of [a, b]) for (let index = 0; index < 6; index += 1) {
+      const angle = index / 6 * TAU + this.time;
+      this.pixelEffects.spark(null, [point[0] + Math.cos(angle) * .19, point[1] + Math.sin(angle) * .16, point[2]], .12, color, .4);
     }
   }
 
@@ -2172,61 +2277,41 @@ class SpaceRenderer3D {
     const a = this.toWorld(beam.x1, beam.y1, .48);
     const b = this.toWorld(beam.x2, beam.y2, .48);
     const phase = clamp(beam.age / Math.max(.01, beam.duration), 0, 1);
-    const alpha = clamp(Math.sin(Math.PI * phase) * 1.12, .34, 1);
-    const width = (.055 + (beam.width || 5) * .018) * (.8 + alpha * .2);
+    const alpha = .45 + Math.sin(Math.PI * phase) * .55;
+    const dx = beam.x2 - beam.x1, dy = beam.y2 - beam.y1;
+    const length = Math.max(.001, Math.hypot(dx, dy));
+    // Compute transverse offsets in logical collision space before projecting to 3D.
+    const nx = -dy / length * (beam.width || 5) / 21.5;
+    const nz = dx / length * (beam.width || 5) / 13.3;
     const base = compose();
-    const dx = b[0] - a[0];
-    const dy = b[1] - a[1];
-    const dz = b[2] - a[2];
-    const planarLength = Math.max(.001, Math.hypot(dx, dz));
-    const normalX = -dz / planarLength;
-    const normalZ = dx / planarLength;
-    const edgeOffset = width * 1.72;
-    const beamColor = beam.color || "#ffe070";
-    const leftA = [a[0] + normalX * edgeOffset, a[1], a[2] + normalZ * edgeOffset];
-    const leftB = [b[0] + normalX * edgeOffset, b[1], b[2] + normalZ * edgeOffset];
-    const rightA = [a[0] - normalX * edgeOffset, a[1], a[2] - normalZ * edgeOffset];
-    const rightB = [b[0] - normalX * edgeOffset, b[1], b[2] - normalZ * edgeOffset];
-    this.surfaces.segment(base, leftA, leftB, width * .34, "#7136a8");
-    this.surfaces.segment(base, rightA, rightB, width * .34, "#7136a8");
-    this.surfaces.segment(base, a, b, width * .8, beamColor);
-    this.surfaces.segment(base, a, b, width * .22, "#fff8d8");
-    for (let packet = 0; packet < 3; packet += 1) {
-      const packetT = (.08 + phase * 1.8 + packet / 3) % .92;
-      const startT = Math.max(.02, packetT - .026);
-      const endT = Math.min(.98, packetT + .026);
-      const start = [a[0] + dx * startT, a[1] + dy * startT, a[2] + dz * startT];
-      const end = [a[0] + dx * endT, a[1] + dy * endT, a[2] + dz * endT];
-      const center = [a[0] + dx * packetT, a[1] + dy * packetT, a[2] + dz * packetT];
-      const crossA = [center[0] + normalX * edgeOffset * 1.08, center[1], center[2] + normalZ * edgeOffset * 1.08];
-      const crossB = [center[0] - normalX * edgeOffset * 1.08, center[1], center[2] - normalZ * edgeOffset * 1.08];
-      this.surfaces.segment(base, start, end, width * .68, "#ffffff");
-      this.surfaces.segment(base, crossA, crossB, width * .26, packet % 2 ? beamColor : "#ff9f5a");
+    this.surfaces.line(base, a, b, "#fff8d8", alpha * .85);
+    for (const side of [-1, 1]) {
+      this.surfaces.line(base, [a[0] + nx * side, a[1], a[2] + nz * side],
+        [b[0] + nx * side, b[1], b[2] + nz * side], "#ff4f69", .27);
     }
-    this.surfaces.solid(base, a, [width * 2.2, width * 2.2, width * 2.2], beamColor, "energy", "orb");
+    const count = Math.min(this.quality === "low" ? 90 : 200, Math.max(28, Math.ceil(length * .35)));
+    for (let index = 0; index < count; index += 1) {
+      const t = (index / count + beam.age * 1.6) % 1;
+      const offset = Math.sin(index * 12.3 + Math.floor(beam.age * 24)) * .8;
+      const p = [lerp(a[0], b[0], t) + nx * offset, .48 + Math.cos(index * 4.1) * .035, lerp(a[2], b[2], t) + nz * offset];
+      this.pixelEffects.spark(null, p, .13 + (index % 4) * .055, index % 4 ? "#ff5964" : "#ffe4b0", alpha * .8);
+    }
+    for (let index = 0; index < 18; index += 1) {
+      const t = (index / 18 + beam.age * 2) % 1, angle = index * 2.4;
+      this.pixelEffects.spark(null, [a[0] + Math.cos(angle) * t * .32, a[1] + Math.sin(angle) * t * .25, a[2]],
+        .18 + (1 - t) * .22, "#ffac83", (1 - t) * alpha);
+    }
   }
 
   drawRush(world) {
-    const colors = ["#66f6e5", "#ff87ba"];
-    const livePlayers = world.players.filter((player) => !player.downed);
-    for (const player of livePlayers) {
+    for (const player of world.players.filter((entry) => !entry.downed)) {
       const base = compose(this.toWorld(player.x, player.y, .28), [0, 0, 0], [PLAYER_MODEL_SCALE, PLAYER_MODEL_SCALE, PLAYER_MODEL_SCALE]);
-      const color = colors[player.index] || colors[0];
-      for (const side of [-1, 1]) {
-        this.voxel(base, [side * .94, .18, .22], [.08, .46, .08], color, 1);
-        this.voxel(base, [side * .78, .5, -.18], [.36, .06, .08], "#fff4a8", 1);
+      for (let index = 0; index < 24; index += 1) {
+        const t = (index / 24 + this.time * 1.3) % 1;
+        const side = index % 2 ? -1 : 1;
+        this.pixelEffects.spark(base, [side * (.72 + t * .22), .1 + Math.sin(index * 2.4) * .18, .2 + t * 1.4],
+          .12 + (1 - t) * .1, index % 5 ? "#a388f4" : "#b7f4ef", (1 - t) * .6);
       }
-      for (let index = 0; index < 6; index += 1) {
-        const angle = this.time * (2.2 + player.index * .25) + index / 6 * TAU;
-        this.voxel(base, [Math.cos(angle) * .88, .48 + Math.sin(index * 2.1 + this.time * 3) * .12, Math.sin(angle) * .88], [.09, .09, .09], index % 2 ? color : "#fff4a8", 1);
-      }
-    }
-    if (livePlayers.length === 2) {
-      const a = this.toWorld(livePlayers[0].x, livePlayers[0].y, .38);
-      const b = this.toWorld(livePlayers[1].x, livePlayers[1].y, .38);
-      const midpoint = [(a[0] + b[0]) / 2, .56, (a[2] + b[2]) / 2];
-      const pulse = .18 + Math.sin(this.time * 16) * .025;
-      this.pushVoxel(compose(midpoint, [this.time * 2.8, this.time * 4.2, 0], [pulse, pulse, pulse]), "#fff4a8", 1);
     }
   }
 
@@ -2333,14 +2418,17 @@ class SpaceRenderer3D {
     for (const bullet of world.bullets) this.drawProjectile(bullet, false);
     for (const bullet of world.enemyBullets) this.drawProjectile(bullet, true);
     for (const beam of world.enemyBeams || []) this.drawEnemyBeam(beam);
-    if (world.linked) this.drawBeam(world.players[0], world.players[1]);
+    this.drawPowerEffects(world);
+    if (world.linked) this.drawBeam(world.players[0], world.players[1], world);
     if (world.rushTimer > 0) this.drawRush(world);
     if (world.activeProtocols?.length) this.drawProtocols(world);
     for (const player of world.players) {
+      this.drawWeaponPods(player);
       if (!player.downed) this.drawShip(player, playerConfigs[player.index]);
       else if (player.downed) this.drawShip({ ...player, vx: Math.sin(this.time * 5) * 20, vy: 0 }, { ...playerConfigs[player.index], color: playerConfigs[player.index].dark });
     }
     for (const particle of world.particles.slice(-180)) this.drawParticle(particle);
+    this.canvas.dataset.powerVfx = "ranked-pixel-ammo-exact-blast-radius";
     this.endFrame();
     return true;
   }

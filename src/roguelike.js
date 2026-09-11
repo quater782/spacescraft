@@ -26,8 +26,38 @@
     { id: "rushSalvage", category: "system", path: "rush", rarity: "common", max: 2, nameKey: "upgrade.rushSalvage.name", descriptionKey: "upgrade.rushSalvage.description" },
     { id: "rushOverdrive", category: "system", path: "rush", rarity: "rare", max: 2, nameKey: "upgrade.rushOverdrive.name", descriptionKey: "upgrade.rushOverdrive.description" },
     { id: "rushGuard", category: "system", path: "rush", rarity: "legendary", max: 1, nameKey: "upgrade.rushGuard.name", descriptionKey: "upgrade.rushGuard.description" },
-  ].map((upgrade) => Object.freeze(upgrade));
+  ].map((upgrade) => Object.freeze({ ...upgrade,
+    max: ({ overclock: 2, drone: 3, turbo: 2, gyro: 2, nanites: 2, rushGuard: 2 })[upgrade.id] || upgrade.max,
+    rarity: ({ rail: "common", drone: "rare", chain: "rare", resonanceArray: "common", rushGuard: "rare" })[upgrade.id] || upgrade.rarity,
+  }));
   const UPGRADE_BY_ID = new Map(UPGRADE_DEFS.map((upgrade) => [upgrade.id, upgrade]));
+
+  const TIERS = Object.freeze({
+    overclock: [{ rate: 15 }, { rate: 30 }],
+    rail: [{ interval: 1.4, damage: 2 }, { interval: 1.1, damage: 2 }, { interval: .9, damage: 2.4 }],
+    prism: [{ interval: .55, damage: .35 }, { interval: .45, damage: .35 }, { interval: .35, damage: .35 }],
+    piercing: [{ targets: 2, second: 55, third: 0 }, { targets: 3, second: 65, third: 40 }],
+    drone: [{ interval: 1.6, damage: .75 }, { interval: 1.25, damage: .75 }, { interval: 1, damage: .75 }],
+    chain: [{ hits: 4, damage: .6 }, { hits: 3, damage: .75 }],
+    turbo: [{ speed: 10 }, { speed: 20 }], gyro: [{ handling: 20, rescue: 15 }, { handling: 40, rescue: 30 }],
+    phase: [{ radius: 6, invulnerability: .07 }, { radius: 12, invulnerability: .14 }],
+    aegisCycle: [{ interval: 24, capacity: 0 }, { interval: 18, capacity: 1 }],
+    nanites: [{ hp: 1, repair: 2 }, { hp: 2, repair: 2 }],
+    magnet: [{ radius: 45, energy: 0 }, { radius: 80, energy: 0 }, { radius: 105, energy: 2 }],
+    capacitor: [{ charge: 15 }, { charge: 30 }, { charge: 45 }],
+    novaCore: [{ radius: 12, damage: 15 }, { radius: 24, damage: 30 }, { radius: 36, damage: 45 }],
+    novaHarvester: [{ hit: .2, budget: 1.2 }, { hit: .4, budget: 2.4 }],
+    novaAegis: [{ shield: 3, rescue: 8 }, { shield: 5, rescue: 12 }], novaPurifier: [{ penalty: 15 }],
+    resonanceArray: [{ radius: 12, charge: 20 }, { radius: 24, charge: 40 }, { radius: 36, charge: 60 }],
+    rushRelay: [{ hit: .3, budget: .8 }, { hit: .5, budget: 1.4 }],
+    rushSalvage: [{ pickup: 4, encounter: 4 }, { pickup: 7, encounter: 7 }],
+    rushOverdrive: [{ rate: 35, interval: 1, damage: 4 }, { rate: 50, interval: .75, damage: 6 }],
+    rushGuard: [{ interval: 5, nodes: 3 }, { interval: 3.5, nodes: 3 }],
+  });
+  for (const ranks of Object.values(TIERS)) { ranks.forEach(Object.freeze); Object.freeze(ranks); }
+  const tierStats = (id, level) => TIERS[id]?.[Math.max(0, Math.min(TIERS[id].length - 1, level - 1))] || {};
+  const eligibleUpgrade = (upgrade, levels) => (levels[upgrade.id] || 0) < upgrade.max
+    && (upgrade.id !== "novaPurifier" || (levels.novaCore || 0) >= 1);
 
   function createRng(seed) {
     let state = (Number(seed) >>> 0) || 0x6d2b79f5;
@@ -96,7 +126,7 @@
   function rollDraftOptions({ levels = {}, stageIndex = 0, draftIndex, offerHistory = [], pickHistory = [], random }) {
     if (typeof random !== "function") throw new TypeError("rollDraftOptions requires a random function");
     const index = Math.max(0, Number.isInteger(draftIndex) ? draftIndex : historyIds(pickHistory).length);
-    const eligible = UPGRADE_DEFS.filter((upgrade) => (levels[upgrade.id] || 0) < upgrade.max);
+    const eligible = UPGRADE_DEFS.filter((upgrade) => eligibleUpgrade(upgrade, levels));
     const choices = [];
     const addFrom = (items, forcedRarity = null) => {
       const pool = items.filter((item) => !choices.includes(item) && (!forcedRarity || item.rarity === forcedRarity));
@@ -113,17 +143,17 @@
     }
 
     if (index === 0) {
-      addPath("armament", "common");
+      addFrom(eligible.filter((upgrade) => ["rail", "prism", "drone"].includes(upgrade.id)));
       addFrom(eligible.filter((upgrade) => OPENING_SURVIVAL_IDS.includes(upgrade.id)));
       addPath("nova", "common");
     } else if (index === 1) {
       addPath("rush");
-      addPath(focus || "armament");
+      addFrom(eligible.filter((upgrade) => (levels[upgrade.id] || 0) > 0)) || addPath(focus || "armament");
       const coverage = PATHS.filter((path) => path !== "rush" && path !== focus)
         .sort((a, b) => pathCounts[a] - pathCounts[b]);
       addPath(coverage[0] || "mobility");
     } else {
-      addPath(focus || "armament");
+      addFrom(eligible.filter((upgrade) => (levels[upgrade.id] || 0) > 0 && upgrade.path === focus)) || addPath(focus || "armament");
       const hedge = PATHS.filter((path) => path !== focus)
         .sort((a, b) => pathCounts[a] - pathCounts[b] || PATHS.indexOf(a) - PATHS.indexOf(b))[0];
       addPath(hedge || "mobility");
@@ -137,7 +167,7 @@
       const inviteLegendary = index >= 4 && index <= 5 && !hasWindowLegendary && random() < (index === 4 ? .22 : .45);
       const lastDiscoveryId = historyIds(offerHistory[index - 1])[2];
       const discoveryPool = eligible.filter((upgrade) => upgrade.id !== lastDiscoveryId);
-      if (forceLegendary || inviteLegendary) addFrom(discoveryPool, "legendary");
+      if (forceLegendary || inviteLegendary) addFrom(discoveryPool, "legendary") || addFrom(discoveryPool.filter((upgrade) => upgrade.rarity === "rare"));
       else if (needsRare) addFrom(discoveryPool.filter((upgrade) => upgrade.rarity !== "common"));
       else addFrom(discoveryPool);
     }
@@ -159,78 +189,62 @@
   };
 
   function applyUpgradeToPlayer(player, upgradeId, level) {
-    const tier = Math.max(1, Number(level) || 1);
+    const definition = UPGRADE_BY_ID.get(upgradeId);
+    if (!definition) throw new RangeError(`Unknown upgrade: ${upgradeId}`);
+    player.upgradeRanks ||= {};
+    const before = player.upgradeRanks[upgradeId] || 0;
+    const tier = Math.max(1, Math.min(definition.max, Math.floor(Number(level) || 1)));
+    if (tier <= before) return player;
+    const stats = tierStats(upgradeId, tier);
+    const previous = before ? tierStats(upgradeId, before) : {};
+    const scale = (field, key) => {
+      player[field] = (Number(player[field]) || 1) * (1 + stats[key] / 100) / (1 + (previous[key] || 0) / 100);
+    };
+    const add = (field, key) => { player[field] = (Number(player[field]) || 0) + stats[key] - (previous[key] || 0); };
     if (upgradeId === "overclock") {
-      player.fireRate *= targetRatio([1.06, 1.12, 1.19], tier);
-      if (tier >= 3) player.burstCadence = 8;
+      player.primaryRateBonus = stats.rate / 100;
     } else if (upgradeId === "rail") {
-      player.damage *= targetRatio([1.08, 1.17, 1.27], tier);
-      player.projectileSpeed *= targetRatio([1.04, 1.09, 1.15], tier);
+      player.heavyInterval = stats.interval; player.heavyDamage = stats.damage;
+      player.heavyTimer = Math.min(player.heavyTimer ?? stats.interval, stats.interval);
+      player.burstCadence = tier === definition.max ? 1 : 0;
     } else if (upgradeId === "prism") {
-      if (tier !== 2) player.weaponFloor = Math.min(2, player.weaponFloor + 1);
-      player.weapon = Math.min(3, Math.max(player.weapon, 1 + player.weaponFloor));
-      if (tier === 2) player.projectileSpeed *= 1.08;
-      if (tier >= 3) player.prismEcho = 1;
+      player.fanInterval = stats.interval;
+      player.fanTimer = Math.min(player.fanTimer ?? stats.interval, stats.interval);
+      player.prismEcho = tier;
     } else if (upgradeId === "piercing") {
-      player.pierce += 1;
-      player.damage *= .96;
+      player.pierce = tier;
     } else if (upgradeId === "drone") {
-      player.droneLevel += 1;
-      if (tier >= 2) player.droneVolley = 1;
+      player.droneLevel = tier; player.droneVolley = tier === definition.max ? 1 : 0;
+      player.seekerInterval = stats.interval;
+      player.seekerTimer = Math.min(player.seekerTimer ?? stats.interval, stats.interval);
     } else if (upgradeId === "chain") {
-      player.chainDamage += tier >= 2 ? 4 : 5;
-    } else if (upgradeId === "turbo") {
-      player.speed *= targetRatio([1.06, 1.12, 1.19], tier);
-    } else if (upgradeId === "gyro") {
-      player.handling *= targetRatio([1.1, 1.22, 1.36], tier);
-      if (tier >= 3) {
-        player.hurtRadius = (Number(player.hurtRadius) || Number(player.r) || 3.2) * .96;
-        player.r = player.hurtRadius;
-      }
-    } else if (upgradeId === "phase") {
-      player.hurtRadius = (Number(player.hurtRadius) || Number(player.r) || 3.2) * .95;
+      player.chainDamage = stats.damage; player.chainHits = stats.hits;
+    } else if (upgradeId === "turbo") scale("speed", "speed");
+    else if (upgradeId === "gyro") { scale("handling", "handling"); scale("reviveSpeed", "rescue"); }
+    else if (upgradeId === "phase") {
+      player.hurtRadius = (Number(player.hurtRadius) || Number(player.r) || 3.2) * (1 - stats.radius / 100) / (1 - (previous.radius || 0) / 100);
       player.r = player.hurtRadius;
-      player.hitInvulnerability = Math.min(.94, player.hitInvulnerability + .07);
+      player.hitInvulnerability = Math.min(.94, player.hitInvulnerability + stats.invulnerability - (previous.invulnerability || 0));
     } else if (upgradeId === "aegisCycle") {
-      player.shieldRegenInterval = tier >= 2 ? 27 : 34;
-      player.shieldRegenTimer = Math.min(player.shieldRegenTimer, player.shieldRegenInterval);
-      if (tier >= 2) { player.maxShield += 1; player.shield = Math.min(player.maxShield, player.shield + 1); }
+      player.shieldRegenInterval = stats.interval;
+      player.shieldRegenTimer = Math.min(player.shieldRegenTimer, stats.interval);
+      add("maxShield", "capacity");
+      if (!player.downed) player.shield = Math.min(player.maxShield, player.shield + tier - before);
     } else if (upgradeId === "nanites") {
-      if (tier !== 2) player.maxHp += 1;
-      player.hp = Math.min(player.maxHp, player.hp + 1);
-    } else if (upgradeId === "magnet") {
-      player.pickupMagnetRadius += [45, 35, 25][Math.min(2, tier - 1)];
-    } else if (upgradeId === "capacitor") {
-      player.novaChargeRate = (player.novaChargeRate || 1) * targetRatio([1.15, 1.35, 1.6], tier);
-    } else if (upgradeId === "novaCore") {
-      player.novaDamage *= targetRatio([1.12, 1.28, 1.48], tier);
-      player.novaRadiusBonus = (player.novaRadiusBonus || 0) + 12;
-    } else if (upgradeId === "novaHarvester") {
-      player.novaHitChargeBonus = (player.novaHitChargeBonus || 0) + .2;
-      player.novaHitBudgetBonus = (player.novaHitBudgetBonus || 0) + 1.2;
-    } else if (upgradeId === "novaAegis") {
-      player.novaShieldCharge = (player.novaShieldCharge || 0) + 3;
-      player.novaRescueCharge = (player.novaRescueCharge || 0) + 8;
-    } else if (upgradeId === "novaPurifier") {
-      player.novaClearAll = true;
-      player.novaDamage *= .85;
-    } else if (upgradeId === "resonanceArray") {
-      player.rushLinkedChargeRate = (player.rushLinkedChargeRate || 1) * targetRatio([1.12, 1.25, 1.4], tier);
-      player.linkRange += 6;
-    } else if (upgradeId === "rushRelay") {
-      player.rushKillCharge = (player.rushKillCharge || 0) + (tier >= 2 ? .45 : .55);
-      player.rushEliteCharge = (player.rushEliteCharge || 0) + 1.5;
-    } else if (upgradeId === "rushSalvage") {
-      player.rushPickupCharge = (player.rushPickupCharge || 0) + 3;
-      player.rushEncounterCharge = (player.rushEncounterCharge || 0) + 4;
-    } else if (upgradeId === "rushOverdrive") {
-      player.rushFireRate = (player.rushFireRate || 1) * targetRatio([1.06, 1.12], tier);
-      player.rushDamage = (player.rushDamage || 1) * targetRatio([1.04, 1.08], tier);
-    } else if (upgradeId === "rushGuard") {
-      player.rushGuard = true;
-      player.rushGuardInterval = .28;
-      player.rushGuardLimit = 20;
-    } else throw new RangeError(`Unknown upgrade: ${upgradeId}`);
+      add("maxHp", "hp");
+      if (!player.downed) player.hp = Math.min(player.maxHp, player.hp + 2 * (tier - before));
+    } else if (upgradeId === "magnet") { add("pickupMagnetRadius", "radius"); player.pickupNovaBonus = stats.energy; }
+    else if (upgradeId === "capacitor") scale("novaChargeRate", "charge");
+    else if (upgradeId === "novaCore") { scale("novaDamage", "damage"); add("novaRadiusBonus", "radius"); }
+    else if (upgradeId === "novaHarvester") { player.novaHitChargeBonus = stats.hit; player.novaHitBudgetBonus = stats.budget; }
+    else if (upgradeId === "novaAegis") { player.novaShieldCharge = stats.shield; player.novaRescueCharge = stats.rescue; }
+    else if (upgradeId === "novaPurifier") { player.novaClearAll = true; player.novaDamage *= .85; }
+    else if (upgradeId === "resonanceArray") { scale("rushLinkedChargeRate", "charge"); add("linkRange", "radius"); }
+    else if (upgradeId === "rushRelay") { player.rushHitCharge = stats.hit; player.rushHitBudget = stats.budget; }
+    else if (upgradeId === "rushSalvage") { player.rushPickupCharge = stats.pickup; player.rushEncounterCharge = stats.encounter; }
+    else if (upgradeId === "rushOverdrive") { player.rushFireRate = 1 + stats.rate / 100; player.overloadInterval = stats.interval; player.overloadDamage = stats.damage; }
+    else if (upgradeId === "rushGuard") { player.rushGuard = true; player.rushGuardInterval = stats.interval; player.rushGuardLimit = stats.nodes; }
+    player.upgradeRanks[upgradeId] = tier;
     return player;
   }
 
@@ -252,6 +266,9 @@
     focusPath,
     rollDraftOptions,
     applyUpgradeToPlayer,
+    TIERS,
+    tierStats,
+    eligibleUpgrade,
     growthScore,
   });
 })();

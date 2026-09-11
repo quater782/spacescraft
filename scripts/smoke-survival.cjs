@@ -68,7 +68,7 @@ async function run() {
       for (const allCards of [false, true]) {
         resetWorld(); world.mode = 'inspection'; world.gameMode = mode;
         const picks = allCards ? UPGRADE_DEFS.flatMap(card => Array(card.max).fill(card.id))
-          : ['rail', 'phase', 'overclock', 'turbo', 'capacitor', 'novaCore', 'novaHarvester', 'aegisCycle'];
+          : ['rail', 'rail', 'phase', 'overclock', 'overclock', 'turbo', 'capacitor', 'novaCore'];
         for (const id of picks) applyRunUpgrade(UPGRADE_DEFS.find(card => card.id === id));
         world.players.forEach(player => { player.weapon = 3; player.buffs.arsenal = 5; });
         world.novaCharge = 77; world.novaCooldown = 7; syncNovaMirrors();
@@ -93,7 +93,7 @@ async function run() {
     assert.equal(sample.stage, 2);
     assert.deepEqual(sample.second, sample.before, `${sample.mode} chapter 2 must retain actual effects`);
     assert.deepEqual(sample.third, sample.before, `${sample.mode} chapter 3 must retain actual effects`);
-    assert.equal(sample.before.protocols.length, sample.allCards ? 7 : 3);
+    assert.equal(sample.before.protocols.length, sample.allCards ? 7 : 2);
   }
 
   const mechanics = await win.webContents.executeJavaScript(`(() => {

@@ -145,7 +145,7 @@ const COMBAT = SpaceCombat;
 const ANOMALIES = SpaceAnomalies.ANOMALIES;
 const QA_GROWTH_PLANS = Object.freeze({
   mid: Object.freeze({ overclock: 2, prism: 1, drone: 1 }),
-  capstone: Object.freeze({ overclock: 3, prism: 3, drone: 2 }),
+  capstone: Object.freeze({ overclock: 2, prism: 3, drone: 3 }),
 });
 
 ctx.imageSmoothingEnabled = false;
@@ -940,6 +940,20 @@ class AudioEngine {
   sfx(name, owner = 0) {
     if (!this.context) return;
     const now = this.context.currentTime;
+    if (name.startsWith("power")) {
+      const sounds = { powerHeavy: [43, 67, .12, "square"], powerFan: [74, 81, .045, "triangle"],
+        powerSeeker: [69, 76, .08, "square"], powerArc: [91, 79, .055, "square"],
+        powerIntercept: [96, 84, .09, "triangle"], powerOverload: [55, 74, .15, "square"] };
+      const spec = sounds[name];
+      if (!spec) return;
+      this.powerSoundTimes ||= {};
+      if (now - (this.powerSoundTimes[name] || -1) < .06) return;
+      this.powerSoundTimes[name] = now;
+      this.tone(spec[0] + owner, spec[2], spec[3], .035, now, this.sfxBus, -4);
+      this.tone(spec[1] + owner, spec[2] * .7, "triangle", .024, now + .025, this.sfxBus, 3);
+      if (["powerHeavy", "powerOverload"].includes(name)) this.noise(.045, .018, now, 950);
+      return;
+    }
     if (name === "shoot") {
       if (now - this.lastShot[owner] < 0.055) return;
       this.lastShot[owner] = now;
@@ -1260,6 +1274,7 @@ const world = {
   rushGuardClearsThisRush: 0,
   rushStartClears: 0,
   rushLastBonus: 0,
+  power: makePowerState(),
   activeProtocols: [],
   protocolProcs: 0,
   protocolFlashTimer: 0,
@@ -1468,7 +1483,15 @@ function aiPilotControls(player) {
         player.aiIntent = "resupply";
       }
     }
-    if (partner && distance(player, partner) > 88) targetX = lerp(targetX, partner.x + 24, 0.55);
+    if (partner && !partner.downed && !["objective", "salvage", "siege", "resupply"].includes(player.aiIntent)) {
+      const range = Math.max(player.linkRange, partner.linkRange);
+      const separation = distance(player, partner);
+      if (separation > range * .8 || player.aiLinkReturning) {
+        player.aiLinkReturning = separation > range * .62;
+        targetX = lerp(targetX, partner.x + (partner.x > W / 2 ? -1 : 1) * range * .55, .7);
+        targetY = lerp(targetY, partner.y - range * .22, .55);
+      }
+    }
     if (player.hp <= 2 && partner) {
       targetX = lerp(targetX, partner.x, 0.68);
       targetY = Math.min(H - 30, partner.y + 14);
@@ -1687,7 +1710,8 @@ function renderBuildTray() {
     const upgrade = UPGRADE_DEFS.find((entry) => entry.id === id);
     if (!upgrade) return "";
     const level = upgradeLevel(id);
-    return `<span class="build-chip ${upgrade.rarity}" aria-label="${localizedName(upgrade)} Lv.${level}">${upgradeIcon(id)}<b>${level}</b></span>`;
+    const description = t(upgrade.descriptionKey, SpaceRoguelike.tierStats(id, level));
+    return `<span class="build-chip ${upgrade.rarity}" tabindex="0" title="${description}" aria-label="${localizedName(upgrade)} Lv.${level}. ${description}">${upgradeIcon(id)}<b>${level}</b></span>`;
   }).join("");
   const protocolChips = protocols.map((protocol) => `<span class="build-chip protocol-chip protocol-${protocol.id}" aria-label="${t("hud.protocolOnline", { protocol: localizedName(protocol) })}">${protocolIcon(protocol.id)}</span>`).join("");
   buildTray.innerHTML = upgrades + protocolChips;
@@ -1732,9 +1756,12 @@ function renderUpgradeDraft(focusSelected = false) {
   upgradeOptions.innerHTML = world.draftOptions.map((upgrade, index) => {
     const selected = index === world.draftIndex;
     const nextLevel = upgradeLevel(upgrade.id) + 1;
+    const before = nextLevel > 1 ? t(upgrade.descriptionKey, SpaceRoguelike.tierStats(upgrade.id, nextLevel - 1)) : t("draft.new");
+    const after = t(upgrade.descriptionKey, SpaceRoguelike.tierStats(upgrade.id, nextLevel));
+    const recipe = PROTOCOLS.filter((entry) => entry.required.includes(upgrade.id)).map((entry) => t("draft.recipe", { recipe: entry.required.map((id, i) => `${localizedName(UPGRADE_DEFS.find((card) => card.id === id))} ${entry.ranks[i]}`).join(" + ") })).join(" · ");
     const protocol = SpaceRelics.protocolUnlockedByChoice(world.upgrades, upgrade.id);
     const protocolBadge = protocol ? `<span class="protocol-ready-badge protocol-${protocol.id}">${protocolIcon(protocol.id)}${t("draft.protocolReady", { protocol: localizedName(protocol) })}</span>` : "";
-    return `<button class="upgrade-choice ${upgrade.rarity} ${protocol ? `protocol-ready protocol-${protocol.id}` : ""} ${selected ? "selected" : ""}" type="button" role="listitem" data-upgrade-id="${upgrade.id}" aria-pressed="${selected}" aria-label="${t("draft.choose", { name: localizedName(upgrade) })}"><span class="upgrade-icon">${upgradeIcon(upgrade.id)}</span><span class="upgrade-kicker"><i>${t(`draft.path.${upgrade.path}`)}</i><b>${t(`draft.rarity.${upgrade.rarity}`)}</b></span><strong>${localizedName(upgrade)}</strong><p>${localizedDescription(upgrade)}</p>${protocolBadge}<span class="upgrade-level">${t("draft.level", { current: nextLevel, max: upgrade.max })}</span></button>`;
+    return `<button class="upgrade-choice ${upgrade.rarity} ${protocol ? `protocol-ready protocol-${protocol.id}` : ""} ${selected ? "selected" : ""}" type="button" role="listitem" data-upgrade-id="${upgrade.id}" aria-pressed="${selected}" aria-label="${t("draft.choose", { name: localizedName(upgrade) })}. ${after}"><span class="upgrade-icon">${upgradeIcon(upgrade.id)}</span><span class="upgrade-kicker"><i>${t(`draft.path.${upgrade.path}`)}</i><b>${t(`draft.rarity.${upgrade.rarity}`)}</b></span><strong>${localizedName(upgrade)}</strong><p><span class="upgrade-before">${t("draft.before")} · ${before}</span><span class="upgrade-after">${t("draft.after")} · ${after}</span><small class="upgrade-recipe">${recipe}</small></p>${protocolBadge}<span class="upgrade-level">${t("draft.level", { current: nextLevel, max: upgrade.max })}</span></button>`;
   }).join("");
   if (focusSelected) upgradeOptions.querySelector(`[data-upgrade-id="${world.draftOptions[world.draftIndex]?.id}"]`)?.focus();
 }
@@ -1771,6 +1798,7 @@ function applyRunUpgrade(upgrade) {
   for (const player of world.players) {
     SpaceRoguelike.applyUpgradeToPlayer(player, upgrade.id, level);
   }
+  if (upgrade.id === "rushGuard" && level === 1) world.power.guardNodes = 3;
   world.activeProtocols = SpaceRelics.activeProtocols(world.upgrades, world.upgradeHistory);
   const activated = world.activeProtocols.find((protocol) => !previousProtocols.has(protocol.id));
   if (activated) {
@@ -2046,6 +2074,15 @@ function pauseGame() {
   if (world.mode !== "playing") return;
   world.mode = "paused";
   pauseMenu.hidden = false;
+  renderPowerSummary();
+}
+
+function renderPowerSummary() {
+  const power = world.power;
+  const damage = Math.round(Object.entries(power.damage).reduce((sum, [source, value]) => sum + (source === "pierce" ? 0 : value), 0));
+  const summary = t("power.summary", { damage, pierce: power.pierceHits, guard: world.rushGuardClears });
+  const link = t("power.linkState", { state: t(linkedNow() ? "power.linked" : "power.unlinked"), nodes: power.guardNodes });
+  document.querySelector("#powerSummary").textContent = summary + " · " + link;
 }
 
 function resumeGame() {
@@ -2186,6 +2223,8 @@ function createPlayer(index) {
     invulnerability: 2,
     shield: module.startShield || 0,
     shieldHitTimer: 0,
+    shieldImpactX: 0,
+    shieldImpactY: 0,
     shieldBreakTimer: 0,
     hullHitTimer: 0,
     damageVfxTimer: 0,
@@ -2389,6 +2428,7 @@ function resetWorld() {
   world.rushGuardClearsThisRush = 0;
   world.rushStartClears = 0;
   world.rushLastBonus = 0;
+  world.power = makePowerState();
   world.activeProtocols = [];
   world.protocolProcs = 0;
   world.protocolFlashTimer = 0;
@@ -2535,10 +2575,12 @@ function resetWorld() {
   if (QA_STATUS_ID) world.players[0].debuffs[QA_STATUS_ID] = 30;
   if (QA_PROTOCOL_ID) {
     const protocol = PROTOCOLS.find((entry) => entry.id === QA_PROTOCOL_ID);
-    for (const upgradeId of protocol.required) {
-      world.upgrades[upgradeId] = 1;
-      world.upgradeHistory.push(upgradeId);
-      for (const player of world.players) SpaceRoguelike.applyUpgradeToPlayer(player, upgradeId, 1);
+    for (const [slot, upgradeId] of protocol.required.entries()) {
+      for (let rank = (world.upgrades[upgradeId] || 0) + 1; rank <= protocol.ranks[slot]; rank += 1) {
+        world.upgrades[upgradeId] = rank;
+        world.upgradeHistory.push(upgradeId);
+        for (const player of world.players) SpaceRoguelike.applyUpgradeToPlayer(player, upgradeId, rank);
+      }
     }
     world.activeProtocols = SpaceRelics.activeProtocols(world.upgrades, world.upgradeHistory);
   }
@@ -2605,6 +2647,30 @@ function burst(x, y, color, count = 8, speed = 55) {
 const relicBonuses = () => SpaceRelics.combatBonuses(world.upgrades, world.upgradeHistory);
 const statusBonuses = (player) => SpaceStatus.combatBonuses(player?.buffs, player?.debuffs);
 
+function makePowerState() {
+  return { effects: [], damage: {}, shots: {}, hits: {}, pierceHits: 0, blastCount: 0,
+    guardNodes: 0, guardRecovery: 0, guardCooldown: 0, guardFlash: 0,
+    chargeBudget: 0, hitBudget: 0, unlinkedTime: 0, pulseElapsed: 0, pulseCount: 0,
+    shieldBudget: 6, rescueCooldown: 0, aegisCooldown: 0, salvageCount: 0,
+    fragments: [], blastDamage: 0, novaEarned: 0 };
+}
+
+function powerEffect(kind, x, y, radius, color, tier = 1, target = null) {
+  const duration = kind === "blast" ? .46 : kind === "arc" ? .22 : .28;
+  if (world.power.effects.length >= 56) world.power.effects.shift();
+  world.power.effects.push({ kind, x, y, radius, color, tier, target, age: 0, duration });
+}
+
+function creditDamage(source, damage) {
+  const amount = Math.max(0, damage.hull || 0) + Math.max(0, damage.barrier || 0);
+  world.power.damage[source] = (world.power.damage[source] || 0) + amount;
+  return amount;
+}
+
+const interceptable = (bullet) => !["blast", "mine"].includes(bullet.behavior);
+const linkedNow = () => world.players.length === 2 && world.players.every((p) => !p.downed)
+  && distance(world.players[0], world.players[1]) < Math.max(...world.players.map((p) => p.linkRange)) * (world.activeBranch?.reward.link || 1);
+
 function teamAverage(field, fallback = 0) {
   const players = world.players.filter((player) => !player.downed);
   if (!players.length) return fallback;
@@ -2631,7 +2697,7 @@ function teamRushBonuses() {
     rushLinkedChargeRate: clamp(teamAverage("rushLinkedChargeRate", 1) * (relic.linkedCharge || 1), 1, 2),
     rushKillCharge: teamAverage("rushKillCharge"),
     rushEliteCharge: teamAverage("rushEliteCharge"),
-    rushPickupCharge: teamAverage("rushPickupCharge") + Math.min(3, Math.max(0, relic.pickupRush || 0)),
+    rushPickupCharge: teamAverage("rushPickupCharge"),
     rushEncounterCharge: teamAverage("rushEncounterCharge"),
     rushFireRate: teamAverage("rushFireRate", 1),
     rushDamage: teamAverage("rushDamage", 1),
@@ -2739,19 +2805,17 @@ function markProtocolProc(protocolId, x, y) {
 }
 
 function triggerAegisNova(player) {
-  if (!relicBonuses().aegisNova || player.protocolCooldown > 0) return;
-  player.protocolCooldown = 4;
-  const threats = world.enemyBullets
-    .filter((bullet) => !bullet.dead && distance(player, bullet) <= 42)
-    .sort((a, b) => distance(player, a) - distance(player, b))
-    .slice(0, 8);
+  if (!relicBonuses().aegisNova || world.power.aegisCooldown > 0) return;
+  world.power.aegisCooldown = 6;
+  const threats = world.enemyBullets.filter((bullet) => !bullet.dead && interceptable(bullet) && distance(player, bullet) <= 36)
+    .sort((a, b) => distance(player, a) - distance(player, b)).slice(0, 3);
   for (const bullet of threats) bullet.dead = true;
   for (const enemy of world.enemies) {
-    if (enemy.dead || distance(player, enemy) > 52) continue;
-    damageEnemy(enemy, enemy.boss ? 4 : 8);
-    if (enemy.hp <= 0) killEnemy(enemy, player.index);
+    if (enemy.dead || distance(player, enemy) > 36) continue;
+    creditDamage("aegisNova", damageEnemy(enemy, baseShotDamage(player) * .8));
+    if (enemy.hp <= 0) killEnemy(enemy, player.index, { derived: true });
   }
-  burst(player.x, player.y, "#82b8ff", 28, 112);
+  powerEffect("impact", player.x, player.y, 36, "#82b8ff", 3);
   markProtocolProc("aegisNova", player.x, player.y);
 }
 
@@ -2766,11 +2830,16 @@ function addRushCharge(type) {
     }
     return;
   }
-  world.rushCharge = SpaceRush.addEventCharge(world.rushCharge, type, world.linked, teamRushBonuses());
+  addRushAmount(SpaceRush.chargeForEvent(type, linkedNow(), teamRushBonuses()));
 }
 
 function startRush() {
-  if (rushActive() || world.rushCooldown > 0) return;
+  if (rushActive() || world.rushCooldown > 0 || !linkedNow()) return;
+  world.power.pulseElapsed = 0;
+  world.power.pulseCount = 0;
+  world.power.chargeBudget = 0;
+  world.power.hitBudget = 0;
+  if (upgradeLevel("rushGuard")) { world.power.guardNodes = 3; world.power.guardRecovery = 0; }
   world.rushCharge = RUSH_CONFIG.threshold;
   world.rushTimer = RUSH_CONFIG.duration;
   world.rushChain = 0;
@@ -2799,33 +2868,85 @@ function finishRush() {
   showToast(t("toast.rushEnd", { chain: world.rushChain }));
 }
 
+function addRushAmount(amount) {
+  if (rushActive() || world.rushCooldown > 0 || world.introTimer > 0 || world.clearTimer > 0 || world.routeChoice) return 0;
+  const earned = Math.min(Math.max(0, amount), world.power.chargeBudget, RUSH_CONFIG.threshold - world.rushCharge);
+  world.power.chargeBudget -= earned; world.rushCharge += earned;
+  return earned;
+}
+
+function addRushHitCharge() {
+  if (!linkedNow()) return;
+  const earned = addRushAmount(Math.min(teamAverage("rushHitCharge"), world.power.hitBudget));
+  world.power.hitBudget -= earned;
+}
+
 function updateRush(dt) {
+  const state = world.power;
+  const wasCooling = world.rushCooldown > 0;
   world.rushCooldown = Math.max(0, world.rushCooldown - dt);
-  if (rushActive()) {
-    world.rushTimer -= dt;
-    world.rushPulseTimer -= dt;
-    const bonuses = teamRushBonuses();
-    if (bonuses.rushGuard && world.rushPulseTimer <= 0 && world.players.length >= 2 && world.players.every((player) => !player.downed)
-      && world.rushGuardClearsThisRush < bonuses.rushGuardLimit) {
-      world.rushPulseTimer = bonuses.rushGuardInterval;
-      const [p1, p2] = world.players;
-      const bullet = world.enemyBullets
-        .filter((entry) => !entry.dead && pointToSegmentDistance(entry.x, entry.y, p1.x, p1.y, p2.x, p2.y) <= 13)
-        .sort((a, b) => pointToSegmentDistance(a.x, a.y, p1.x, p1.y, p2.x, p2.y) - pointToSegmentDistance(b.x, b.y, p1.x, p1.y, p2.x, p2.y))[0];
+  state.shieldBudget = Math.min(6, state.shieldBudget + 6 * dt);
+  state.rescueCooldown = Math.max(0, state.rescueCooldown - dt);
+  state.aegisCooldown = Math.max(0, state.aegisCooldown - dt);
+  state.guardCooldown = Math.max(0, state.guardCooldown - dt);
+  state.guardFlash = Math.max(0, state.guardFlash - dt);
+  const connected = linkedNow();
+  const bonuses = teamRushBonuses();
+  if (connected && bonuses.rushGuard) {
+    if (state.guardNodes < 3) {
+      state.guardRecovery += dt;
+      if (state.guardRecovery >= bonuses.rushGuardInterval) {
+        state.guardRecovery -= bonuses.rushGuardInterval; state.guardNodes += 1;
+      }
+    } else state.guardRecovery = 0;
+    if (state.guardNodes > 0 && state.guardCooldown <= 0) {
+      const [a, b] = world.players;
+      const threatTime = (entry) => Math.min(...world.players.map((p) => distance(p, entry) / Math.max(1, Math.hypot(entry.vx || 0, entry.vy || 0))));
+      const bullet = world.enemyBullets.filter((entry) => !entry.dead && interceptable(entry)
+        && pointToSegmentDistance(entry.x, entry.y, a.x, a.y, b.x, b.y) <= 10)
+        .sort((x, y) => threatTime(x) - threatTime(y) || (x.serial || 0) - (y.serial || 0))[0];
       if (bullet) {
-        bullet.dead = true;
+        bullet.dead = true; state.guardNodes -= 1; state.guardCooldown = .25; state.guardFlash = .3;
         world.rushGuardClears += 1;
-        world.rushGuardClearsThisRush += 1;
-        burst(bullet.x, bullet.y, "#fff2a6", 3, 24);
+        if (rushActive()) world.rushGuardClearsThisRush += 1;
+        powerEffect("intercept", bullet.x, bullet.y, 9, "#b9efff", 2);
+        audio.sfx("powerIntercept");
       }
     }
-    if (world.rushTimer <= 0) finishRush();
+  }
+  if (rushActive()) {
+    const nextElapsed = Math.min(6, state.pulseElapsed + dt);
+    const rank = upgradeLevel("rushOverdrive");
+    if (rank) {
+      const stats = SpaceRoguelike.tierStats("rushOverdrive", rank);
+      const due = Math.floor((nextElapsed + 1e-8) / stats.interval);
+      while (state.pulseCount < due) {
+        state.pulseCount += 1;
+        if (!connected) continue;
+        for (const player of world.players) {
+          const target = world.enemies.filter((e) => !e.dead && !(e.boss && e.phaseShield > 0) && e.y < player.y && distance(e, player) <= 180)
+            .sort((a, b) => distance(a, player) - distance(b, player) || a.id - b.id)[0];
+          if (!target) continue;
+          emitPlayerShot(player, "overloadPulse", { damage: stats.damage, angle: Math.atan2(target.x - player.x, player.y - 9 - target.y) });
+          audio.sfx("powerOverload", player.index);
+        }
+      }
+    }
+    state.pulseElapsed = nextElapsed;
+    world.rushTimer = Math.max(0, 6 - nextElapsed);
+    if (world.rushTimer <= 1e-8) finishRush();
     return;
   }
-  const eligible = world.introTimer <= 0 && world.clearTimer <= 0 && !world.routeChoice && world.rushCooldown <= 0;
-  const bonuses = teamRushBonuses();
-  world.rushCharge = SpaceRush.advanceCharge(world.rushCharge, dt, world.linked, eligible, bonuses.rushLinkedChargeRate);
-  if (world.rushCharge >= RUSH_CONFIG.threshold && world.rushCooldown <= 0) startRush();
+  if (wasCooling || world.rushCooldown > 0) { state.chargeBudget = 0; state.hitBudget = 0; return; }
+  const eligible = world.introTimer <= 0 && world.clearTimer <= 0 && !world.routeChoice;
+  if (!eligible) return;
+  state.chargeBudget = Math.min(10, state.chargeBudget + 10 * dt);
+  const budget = teamAverage("rushHitBudget");
+  state.hitBudget = Math.min(budget, state.hitBudget + budget * dt);
+  state.unlinkedTime = connected ? 0 : state.unlinkedTime + dt;
+  if (connected) addRushAmount(RUSH_CONFIG.linkedChargePerSecond * bonuses.rushLinkedChargeRate * dt);
+  else if (state.unlinkedTime > 3) world.rushCharge = Math.max(0, world.rushCharge - dt);
+  if (connected && world.rushCharge >= RUSH_CONFIG.threshold && world.enemies.some((e) => !e.dead && !(e.boss && e.phaseShield > 0))) startRush();
 }
 
 function enemyTarget(source) {
@@ -2875,7 +2996,8 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
   const combat = COMBAT.curveFor(world.stageIndex, progress);
   const anomaly = anomalyConfig();
   const eliteHealth = elite ? (QA_FORCE_ELITE ? 20 : 4.8) : 1;
-  const maxHp = stats.hp * eliteHealth * contractHealth * build.hp * adaptiveThreat.enemyHp;
+  const powerHealth = [lerp(1, .68, clamp(progress / .3, 0, 1)), .62, .58][world.stageIndex];
+  const maxHp = stats.hp * eliteHealth * contractHealth * build.hp * adaptiveThreat.enemyHp * powerHealth;
   const enemyRadius = stats.r * (elite ? 1.4 : 1) * build.scale;
   const enemyId = ++world.enemySerial;
   const formationId = options.formationId || 0;
@@ -2923,7 +3045,7 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     weaponRingBonus: build.ringBonus,
     weaponCooldown: build.cooldown * build.aiCooldown,
     weaponSpread: build.spread,
-    moduleBarrier: build.barrier,
+    moduleBarrier: build.barrier * powerHealth,
     moduleBarrierMax: build.barrier,
     volatileRadius: build.volatileRadius,
     aiTargeting: build.targeting,
@@ -3155,7 +3277,7 @@ function spawnEnemy(maxMembers = 1) {
 
 function spawnBoss() {
   if (world.activeEncounter) finishEncounter(false);
-  const baseHealth = [420, 640, 920][world.stageIndex];
+  const baseHealth = [340, 490, 690][world.stageIndex];
   const stage = activeStage();
   const health = (QA_BOSS_STATE_MODE ? baseHealth * 100 : QA_FAST_MODE ? baseHealth * .14 : baseHealth) * (world.contract?.enemyHp || 1) * (stage.biome?.enemyHp || 1) * (world.activeBranch?.enemyHp || 1);
   world.boss = {
@@ -3272,8 +3394,8 @@ function enemyBullet(x, y, vx, vy, color = "#ff7d8b", size = 3, source = null, o
     burstSpeed: (options.burstSpeed || 0) * speedMultiplier,
     baseSpeed: Math.hypot(safeVx, safeVy) * speedMultiplier,
     damage: Math.max(1, Number(options.damage) || 1),
-    blastRadius: Math.max(0, Number(options.blastRadius) || 0),
-    blastDamage: Math.max(0, Number(options.blastDamage) || 0),
+    blastRadius: Math.max(0, Number(options.blastRadius) || (options.behavior === "mine" ? 26 : options.behavior === "blast" ? 34 : 0)),
+    blastDamage: Math.max(0, Number(options.blastDamage) || (options.behavior === "mine" ? 1 : options.behavior === "blast" ? 2 : 0)),
     enemyBlastDamage: Math.max(0, Number(options.enemyBlastDamage) || 0),
     anchored: Boolean(options.anchored),
     sourceId: source?.id || 0,
@@ -3792,82 +3914,102 @@ function updateBoss(boss, dt) {
   }
 }
 
+function baseShotDamage(player) {
+  return 1.25 * player.damage * statusBonuses(player).damage * (world.activeBranch?.reward.damage || 1);
+}
+
+function emitPlayerShot(player, source, options = {}) {
+  const ids = { primary: "overclock", heavy: "rail", fan: "prism", seeker: "drone", overloadPulse: "rushOverdrive" };
+  const tier = source === "primary" ? Math.max(upgradeLevel("overclock"), upgradeLevel("piercing")) : upgradeLevel(ids[source]);
+  const relic = relicBonuses();
+  const angle = options.angle || 0;
+  const damage = baseShotDamage(player) * (options.damage ?? 1);
+  const bullet = {
+    x: player.x + (options.x || 0), y: player.y - 9,
+    vx: Math.sin(angle) * player.projectileSpeed, vy: -Math.cos(angle) * player.projectileSpeed,
+    r: source === "heavy" || source === "overloadPulse" ? 2.6 : 2,
+    source, tier, owner: player.index, damage, baseDamage: damage,
+    color: source === "heavy" ? "#ffc767" : source === "seeker" ? "#b497ff" : source === "fan" ? "#78dedb" : source === "overloadPulse" ? "#bb8fff" : PLAYER_CONFIG[player.index].color,
+    pierceLeft: source === "primary" ? player.pierce : 0,
+    pierceRank: source === "primary" ? player.pierce : 0,
+    phaseBarrier: source === "heavy" && relic.phaseLance,
+    seeker: source === "seeker" ? Math.PI * 150 / 180 : 0,
+    targetId: options.targetId ?? null, guidance: 1.2, age: 0, life: source === "seeker" ? 2 : source === "overloadPulse" ? 1.2 : 3,
+    choir: source === "seeker" && options.choir && relic.prismChoir,
+    hitIds: [], dead: false,
+  };
+  world.bullets.push(bullet);
+  world.power.shots[source] = (world.power.shots[source] || 0) + 1;
+  if (source !== "primary") powerEffect("muzzle", bullet.x, bullet.y, 4 + tier, bullet.color, tier);
+  return bullet;
+}
+
 function playerShoot(player) {
-  const config = PLAYER_CONFIG[player.index];
   const rush = SpaceRush.combatMultipliers(rushActive(), teamRushBonuses());
   const relic = relicBonuses();
-  const status = statusBonuses(player);
-  const movingFast = Math.hypot(player.vx, player.vy) > player.speed * .42;
-  const patterns = [
-    [{ x: 0, vx: 0, damage: 1.25 }],
-    [{ x: -3, vx: -5, damage: 1.15 }, { x: 3, vx: 5, damage: 1.15 }],
-    [{ x: -5, vx: -14, damage: 1.1 }, { x: 0, vx: 0, damage: 1.4 }, { x: 5, vx: 14, damage: 1.1 }],
-    [{ x: -7, vx: -22, damage: 1.1 }, { x: -3, vx: -7, damage: 1.2 }, { x: 3, vx: 7, damage: 1.2 }, { x: 7, vx: 22, damage: 1.1 }],
-  ];
-
-  const addShot = (shot, damageScale = 1) => {
-    world.bullets.push({
-      x: player.x + shot.x,
-      y: player.y - 9,
-      vx: shot.vx,
-      vy: -player.projectileSpeed,
-      r: shot.r || (relic.phaseLance ? 2.7 : 2),
-      damage: shot.damage * player.damage * damageScale * rush.damage * relic.phaseDamage * status.damage * (world.activeBranch?.reward.damage || 1),
-      owner: player.index,
-      color: shot.color || (relic.phaseLance ? "#d7f1ff" : config.color),
-      pierceLeft: player.pierce + (relic.phaseLance ? 1 : 0),
-      phaseBarrier: relic.phaseLance,
-      seeker: shot.seeker || 0,
-      hitIds: [],
-      dead: false,
-    });
-  };
-
-  patterns[player.weapon - 1].forEach((shot) => {
-    addShot(shot);
-  });
-  if (player.burstCadence > 0 && player.shots % player.burstCadence === player.burstCadence - 1) {
-    addShot({ x: 0, vx: 0, damage: 1.75, r: 2.6, color: "#fff0a8" });
-    player.capstoneHeavyProcs += 1;
-  }
-  if (player.prismEcho > 0 && player.shots % 4 === 1) {
-    addShot({ x: -10, vx: -42, damage: .42, color: "#ff8fd2" });
-    addShot({ x: 10, vx: 42, damage: .42, color: "#8de9ff" });
-    player.capstonePrismProcs += 1;
-  }
-  const droneCadence = player.droneVolley ? 3 : 4;
-  if (player.droneLevel > 0 && player.shots % droneCadence === droneCadence - 1) {
-    const offset = 11 + player.droneLevel * 3;
-    const spread = 25 + player.droneLevel * 5;
-    addShot({ x: -offset, vx: -spread, damage: .58, seeker: relic.seekerTurn }, 1 + (player.droneLevel - 1) * .12);
-    addShot({ x: offset, vx: spread, damage: .58, seeker: relic.seekerTurn }, 1 + (player.droneLevel - 1) * .12);
-    if (player.droneVolley) addShot({ x: 0, vx: 0, damage: .5, seeker: Math.max(.8, relic.seekerTurn), color: "#c691ff" });
-    if (player.droneVolley) player.capstoneDroneProcs += 1;
-    if (relic.prismChoir) {
-      addShot({ x: -offset - 5, vx: -spread * 1.35, damage: .32, seeker: relic.seekerTurn, color: "#ff8fd2" });
-      addShot({ x: offset + 5, vx: spread * 1.35, damage: .32, seeker: relic.seekerTurn, color: "#ff8fd2" });
-      markProtocolProc("prismChoir", player.x, player.y - 8);
-    }
-  }
-  if (relic.cometDrive && movingFast && player.shots % 4 === 3) {
-    addShot({ x: -9, vx: -54, damage: .62, color: "#69f7e4" });
-    addShot({ x: 9, vx: 54, damage: .62, color: "#69f7e4" });
-    markProtocolProc("cometDrive", player.x, player.y);
-  }
-  player.fireTimer = Math.max(0.06, (0.2 - player.weapon * 0.016) / (player.fireRate * rush.fireRate * status.fireRate * anomalyConfig().playerFireRate * (movingFast ? relic.movingFireRate : 1)));
+  const movingFast = Math.hypot(player.vx, player.vy) > player.speed * .4;
+  emitPlayerShot(player, "primary", { damage: 1 + .1 * (player.weapon - 1) });
+  const rate = Math.min(2, player.fireRate * (1 + (player.primaryRateBonus || 0) + rush.fireRate - 1
+    + (movingFast ? relic.movingFireRate - 1 : 0)) * statusBonuses(player).fireRate * anomalyConfig().playerFireRate);
+  player.fireTimer = .184 / rate;
   player.shots += 1;
+  if (relic.cometDrive && movingFast && player.shots % 8 === 0) markProtocolProc("cometDrive", player.x, player.y);
   audio.sfx("shoot", player.index);
 }
 
-function damageEnemy(enemy, amount) {
+function updateAuxiliaryWeapons(player, dt) {
+  player.arcCooldown = Math.max(0, (player.arcCooldown || 0) - dt);
+  const tick = (field, interval, fire) => {
+    if (!interval) return;
+    player[field] = (player[field] ?? interval) - dt;
+    if (player[field] <= 0) { player[field] += interval; fire(); }
+  };
+  tick("heavyTimer", player.heavyInterval, () => {
+    emitPlayerShot(player, "heavy", { damage: player.heavyDamage });
+    if (upgradeLevel("rail") === 3) player.capstoneHeavyProcs += 1;
+    audio.sfx("powerHeavy", player.index);
+  });
+  tick("fanTimer", player.fanInterval, () => {
+    for (const side of [-1, 1]) emitPlayerShot(player, "fan", { x: side * 9, angle: side * Math.PI / 9, damage: .35 });
+    if (upgradeLevel("prism") === 3) player.capstonePrismProcs += 1;
+    audio.sfx("powerFan", player.index);
+  });
+  tick("seekerTimer", player.seekerInterval, () => {
+    const targets = world.enemies.filter((e) => !e.dead && !(e.boss && e.phaseShield > 0) && e.y < player.y && distance(e, player) <= 220)
+      .sort((a, b) => distance(a, player) - distance(b, player) || a.id - b.id);
+    for (const [i, side] of [-1, 1].entries()) emitPlayerShot(player, "seeker", { x: side * 13, angle: side * Math.PI / 12, damage: .75, targetId: (targets[i] || targets[0])?.id, choir: i === 0 });
+    if (upgradeLevel("drone") === 3) player.capstoneDroneProcs += 1;
+    audio.sfx("powerSeeker", player.index);
+  });
+}
+
+function triggerArc(player, enemy, extra = 1) {
+  if (!player?.chainHits) return;
+  player.arcCount = Math.min(player.chainHits, (player.arcCount || 0) + extra);
+  if (player.arcCount < player.chainHits || player.arcCooldown > 0) return;
+  const targets = world.enemies.filter((e) => !e.dead && e !== enemy && !(e.boss && e.phaseShield > 0) && distance(e, enemy) <= 56)
+    .sort((a, b) => distance(a, enemy) - distance(b, enemy) || a.id - b.id).slice(0, 2);
+  if (!targets.length) return;
+  player.arcCount = 0; player.arcCooldown = .5;
+  for (const target of targets) {
+    creditDamage("arc", damageEnemy(target, baseShotDamage(player) * player.chainDamage));
+    powerEffect("arc", enemy.x, enemy.y, 0, "#8bddff", upgradeLevel("chain"), { x: target.x, y: target.y });
+    if (target.hp <= 0) killEnemy(target, player.index, { derived: true });
+  }
+  audio.sfx("powerArc");
+  return true;
+}
+
+function damageEnemy(enemy, amount, shieldScale = 1) {
   if (amount <= 0 || enemy.dead || (enemy.boss && enemy.phaseShield > 0)) return { hull: 0, barrier: 0, broken: false };
   let remaining = amount;
+  const hullBefore = Math.max(0, enemy.hp);
   let barrierDamage = 0;
   let broken = false;
   if ((enemy.moduleBarrier || 0) > 0) {
-    barrierDamage = Math.min(enemy.moduleBarrier, remaining);
+    barrierDamage = Math.min(enemy.moduleBarrier, remaining * shieldScale);
     enemy.moduleBarrier -= barrierDamage;
-    remaining -= barrierDamage;
+    remaining -= barrierDamage / shieldScale;
     broken = enemy.moduleBarrier <= 0;
     enemy.hitFlash = .11;
     burst(enemy.x, enemy.y, enemy.moduleColor || "#9be9ff", broken ? 12 : 4, broken ? 58 : 28);
@@ -3877,7 +4019,7 @@ function damageEnemy(enemy, amount) {
     enemy.hp -= remaining;
     enemy.hitFlash = .075;
   }
-  return { hull: remaining, barrier: barrierDamage, broken };
+  return { hull: Math.min(hullBefore, remaining), barrier: barrierDamage, broken };
 }
 
 function novaDangerState() {
@@ -4008,7 +4150,7 @@ function updateNova(dt) {
   }
 }
 
-function damagePlayer(player, amount = 1) {
+function damagePlayer(player, amount = 1, impact = null) {
   if (player.invulnerability > 0 || player.downed) return false;
   const incoming = Math.max(1, Math.round(Number(amount) || 1));
   let remaining = incoming;
@@ -4018,6 +4160,15 @@ function damagePlayer(player, amount = 1) {
     const absorbed = Math.min(player.shield, remaining);
     player.shield -= absorbed;
     player.shieldAbsorbed += absorbed;
+    // Presentation metadata only: source side, with reverse velocity at point overlap.
+    let impactX = Number.isFinite(impact?.x) ? impact.x - player.x : 0;
+    let impactY = Number.isFinite(impact?.y) ? impact.y - player.y : 0;
+    if (Math.hypot(impactX, impactY) < .01) {
+      impactX = -(impact?.vx || 0); impactY = -(impact?.vy || 0);
+    }
+    const impactLength = Math.hypot(impactX, impactY);
+    player.shieldImpactX = impactLength > 0 ? impactX / impactLength : 0;
+    player.shieldImpactY = impactLength > 0 ? impactY / impactLength : 0;
     player.shieldHitTimer = .32;
     player.shieldBreakTimer = player.shield <= 0 ? .55 : 0;
     remaining -= absorbed;
@@ -4026,7 +4177,11 @@ function damagePlayer(player, amount = 1) {
     burst(player.x, player.y, "#9be9ff", 8, 45);
     audio.sfx(player.shield <= 0 ? "shieldBreak" : "shieldBlock");
     pulseGamepad(player.index, 80, 0.16, 0.34);
-    if (player.novaShieldCharge > 0) addNovaCharge("shield", player.novaShieldCharge, player);
+    if (player.novaShieldCharge > 0) {
+      const charge = Math.min(world.power.shieldBudget, absorbed * player.novaShieldCharge);
+      world.power.shieldBudget -= charge;
+      addNovaCharge("shield", charge, player);
+    }
     triggerAegisNova(player);
     if (remaining <= 0) return true;
   }
@@ -4067,7 +4222,10 @@ function revivePlayer(player) {
   player.downTimer = 0;
   player.revive = 0;
   burst(player.x, player.y, PLAYER_CONFIG[player.index].light, 28, 90);
-  if (player.novaRescueCharge > 0) addNovaCharge("rescue", player.novaRescueCharge, player);
+  if (player.novaRescueCharge > 0 && world.power.rescueCooldown <= 0) {
+    world.power.rescueCooldown = 20;
+    addNovaCharge("rescue", player.novaRescueCharge, player);
+  }
   addRushCharge("rescue");
   audio.sfx("revive");
   showToast(t("toast.revived", { player: player.index + 1 }));
@@ -4106,7 +4264,6 @@ function updatePlayers(dt) {
           player.shieldRegenTimer = player.shieldRegenInterval;
           burst(player.x, player.y, "#9be9ff", 10, 38);
           audio.sfx("shield");
-          triggerAegisNova(player);
         }
       } else {
         player.shieldRegenTimer = player.shieldRegenInterval;
@@ -4138,6 +4295,7 @@ function updatePlayers(dt) {
     }
 
     if (player.fireTimer <= 0) playerShoot(player);
+    updateAuxiliaryWeapons(player, dt);
   }
 
   const livePilots = Math.max(1, world.players.filter((player) => !player.downed).length);
@@ -4167,11 +4325,13 @@ function updatePlayers(dt) {
     world.beamTimer -= dt;
     if (world.beamTimer <= 0) {
       world.beamTimer = 0.12 / rush.linkRate;
+      let charged = false;
       for (const enemy of world.enemies) {
         if (!enemy.dead && pointToSegmentDistance(enemy.x, enemy.y, p1.x, p1.y, p2.x, p2.y) < enemy.r + 3 + relic.beamRadius) {
           const statusBeam = (statusBonuses(p1).beamDamage + statusBonuses(p2).beamDamage) * .5;
           const damage = damageEnemy(enemy, 1.2 * rush.linkDamage * relic.beamDamage * statusBeam * ((p1.beamDamage + p2.beamDamage) * .5));
-          if (damage.hull > 0 || damage.barrier > 0) addNovaCharge("hit", NOVA_CONFIG.hitCharge);
+          creditDamage("link", damage);
+          if (!charged && (damage.hull > 0 || damage.barrier > 0)) { addNovaCharge("hit", NOVA_CONFIG.hitCharge); charged = true; }
           if (relic.resonantGyro && world.protocolSoundTimer <= 0) markProtocolProc("resonantGyro", enemy.x, enemy.y);
           if (enemy.hp <= 0) killEnemy(enemy, 0);
         }
@@ -4242,32 +4402,13 @@ function killEnemy(enemy, owner = 0, options = {}) {
   const player = world.players[owner];
   if (options.novaSource) addNovaCharge("nova", NOVA_CONFIG.hitCharge);
   burst(enemy.x, enemy.y, enemy.boss ? "#fff2a6" : activeStage().accent, enemy.boss ? 80 : 12, enemy.boss ? 150 : 65);
-  addRushCharge("kill");
-  if (enemy.elite) addRushCharge("elite");
+  if (!options.derived && !options.novaSource) {
+    addRushCharge("kill");
+    if (enemy.elite) addRushCharge("elite");
+  }
   if (options.suppressDeathrattle && enemy.deathrattle) world.novaSuppressedDeathrattles += 1;
   else triggerEnemyDeathrattle(enemy);
 
-  if (!enemy.boss && player?.chainDamage > 0 && !world.chainResolving) {
-    const chainLevel = upgradeLevel("chain");
-    const relic = relicBonuses();
-    const radius = 52 + Math.max(0, chainLevel - 1) * 12 + (relic.stormCircuit ? 14 : 0);
-    const targets = world.enemies
-      .filter((target) => !target.dead && target !== enemy && distance(enemy, target) <= radius)
-      .sort((a, b) => distance(enemy, a) - distance(enemy, b))
-      .slice(0, 2 + chainLevel + relic.chainTargets);
-    world.chainResolving = true;
-    try {
-      for (const target of targets) {
-        const damage = damageEnemy(target, player.chainDamage * relic.chainDamage);
-        if (damage.hull > 0 || damage.barrier > 0) addNovaCharge("hit", NOVA_CONFIG.hitCharge, player);
-        burst(target.x, target.y, "#b6f7ff", 5, 42);
-        if (target.hp <= 0) killEnemy(target, owner);
-      }
-    } finally {
-      world.chainResolving = false;
-    }
-    if (targets.length && relic.stormCircuit) markProtocolProc("stormCircuit", enemy.x, enemy.y);
-  }
 
   if (!enemy.boss && enemy.volatileRadius > 0 && !world.volatileResolving) {
     world.volatileResolving = true;
@@ -4351,7 +4492,9 @@ function applyPickup(player, pickup) {
     if (world.researchShieldProgress >= effects.pickupShieldEvery && researchShield()) world.researchShieldProgress = 0;
   }
   if (pickup.type === "weapon") {
-    for (const pilot of world.players.filter((entry) => !entry.downed)) pilot.weapon = Math.min(3, pilot.weapon + 1);
+    const maxed = world.players.every((pilot) => pilot.weapon >= 3);
+    for (const pilot of world.players) pilot.weapon = Math.min(3, pilot.weapon + 1);
+    if (maxed) addNovaCharge("pickup", 8, player);
   } else if (pickup.type === "repair") {
     player.hp = Math.min(player.maxHp, player.hp + 2);
     if (world.gameMode === "solo") {
@@ -4370,26 +4513,15 @@ function applyPickup(player, pickup) {
   const buff = grantBuff(player, pickup.type);
   pickup.dead = true;
   addRushCharge("pickup");
+  if (player.pickupNovaBonus) addNovaCharge("pickup", player.pickupNovaBonus, player);
   const relic = relicBonuses();
   if (relic.salvageReactor) {
-    addNovaCharge("pickup", Math.min(6, (relic.pickupEnergy || 0) / 3), player);
-    for (let index = 0; index < 4; index += 1) {
-      const angle = index / 4 * TAU;
-      world.bullets.push({
-        x: pickup.x,
-        y: pickup.y,
-        vx: Math.cos(angle) * 128,
-        vy: Math.sin(angle) * 128,
-        r: 2.4,
-        damage: 5.5 * player.damage,
-        owner: player.index,
-        color: "#91ff9d",
-        pierceLeft: 1,
-        hitIds: [],
-        dead: false,
-      });
+    world.power.salvageCount += 1;
+    if (world.power.salvageCount % 4 === 0) {
+      addNovaCharge("pickup", 8, player);
+      addRushAmount(6);
+      markProtocolProc("salvageReactor", pickup.x, pickup.y);
     }
-    markProtocolProc("salvageReactor", pickup.x, pickup.y);
   }
   burst(pickup.x, pickup.y, PLAYER_CONFIG[player.index].light, 15, 65);
   audio.sfx("pickup");
@@ -4662,20 +4794,65 @@ function updateStage(dt) {
   if (!QA_VOXEL_MODE && world.stageTime >= stage.duration) spawnBoss();
 }
 
+function detonateEnemyBlast(bullet) {
+  if (bullet.dead || bullet.detonated) return;
+  bullet.detonated = true;
+  bullet.dead = true;
+  const radius = bullet.blastRadius || (bullet.behavior === "mine" ? 26 : 34);
+  const damage = bullet.blastDamage || (bullet.behavior === "mine" ? 1 : 2);
+  const blast = { ...bullet, blastRadius: radius };
+  world.power.blastCount += 1;
+  // Resolve one explosion against every pilot, before any fragment contacts.
+  for (const player of world.players) {
+    if (player.downed || !SpaceCollision.hostileBlastHitsPlayer(blast, player)) continue;
+    if (damagePlayer(player, damage, bullet)) {
+      world.combatBlastHits += 1;
+      world.power.blastDamage += damage;
+      applyEnemyDebuff(player, bullet);
+    }
+  }
+  if (bullet.enemyBlastDamage > 0) for (const enemy of world.enemies) {
+    if (enemy.dead || enemy.id === bullet.sourceId || !SpaceCollision.circlesOverlap(blast, radius, enemy, enemy.r)) continue;
+    damageEnemy(enemy, bullet.enemyBlastDamage);
+    if (enemy.hp <= 0) killEnemy(enemy, -1, { derived: true });
+  }
+  const count = Math.max(4, bullet.burstCount || 8);
+  const phase = (bullet.age || 0) + (bullet.sourceId || 0) * .37;
+  for (let index = 0; index < count; index += 1) {
+    const angle = phase + index / count * TAU;
+    world.power.fragments.push({ ...bullet, detonated: false, dead: false, age: 0,
+      vx: Math.cos(angle) * (bullet.burstSpeed || 65), vy: Math.sin(angle) * (bullet.burstSpeed || 65),
+      anchored: false, r: Math.max(2.1, bullet.r * .64), damage: 1, behavior: "linear",
+      pattern: `${bullet.pattern}:blast`, triggerAge: 0, burstCount: 0,
+      blastRadius: 0, blastDamage: 0, enemyBlastDamage: 0, contactGrace: .15 });
+  }
+  powerEffect("blast", bullet.x, bullet.y, radius, bullet.color || "#ff965d", 3);
+  burst(bullet.x, bullet.y, bullet.color, 18, radius * 2.4);
+  world.shake = Math.max(world.shake, .24);
+  audio.sfx("volatile");
+}
+
 function updateObjects(dt) {
+  for (const effect of world.power.effects) effect.age += dt;
+  world.power.effects = world.power.effects.filter((effect) => effect.age < effect.duration);
   for (const bullet of world.bullets) {
-    if (bullet.seeker > 0) {
-      const target = world.enemies
-        .filter((enemy) => !enemy.dead && !bullet.hitIds?.includes(enemy.id))
-        .sort((a, b) => distance(bullet, a) - distance(bullet, b))[0];
+    if (bullet.dead) continue;
+    bullet.age = (bullet.age || 0) + dt;
+    if (bullet.age >= (bullet.life || 3)) { bullet.dead = true; continue; }
+    if (bullet.seeker > 0 && bullet.age <= (bullet.guidance || 1.2)) {
+      const candidates = world.enemies.filter((enemy) => !enemy.dead && !(enemy.boss && enemy.phaseShield > 0)
+        && enemy.y < bullet.y && distance(bullet, enemy) <= 220 && !bullet.hitIds?.includes(enemy.id));
+      const target = candidates.find((enemy) => enemy.id === bullet.targetId)
+        || candidates.sort((a, b) => distance(bullet, a) - distance(bullet, b) || a.id - b.id)[0];
       if (target) {
+        bullet.targetId = target.id;
         const speed = Math.max(80, Math.hypot(bullet.vx, bullet.vy));
-        const dx = target.x - bullet.x;
-        const dy = target.y - bullet.y;
-        const range = Math.max(1, Math.hypot(dx, dy));
-        const turn = 1 - Math.exp(-dt * bullet.seeker);
-        bullet.vx = lerp(bullet.vx, dx / range * speed, turn);
-        bullet.vy = lerp(bullet.vy, dy / range * speed, turn);
+        const angle = Math.atan2(bullet.vy, bullet.vx);
+        const desired = Math.atan2(target.y - bullet.y, target.x - bullet.x);
+        const delta = Math.atan2(Math.sin(desired - angle), Math.cos(desired - angle));
+        const next = angle + clamp(delta, -bullet.seeker * dt, bullet.seeker * dt);
+        bullet.vx = Math.cos(next) * speed;
+        bullet.vy = Math.sin(next) * speed;
       }
     }
     const anomalyFlow = SpaceAnomalies.bulletFlow(world.activeAnomaly, world.anomalyElapsed, bullet, W, H, false);
@@ -4727,71 +4904,10 @@ function updateObjects(dt) {
       }
     } else if (bullet.behavior === "mine") {
       const drag = Math.exp(-dt * 2.2);
-      bullet.vx *= drag;
-      bullet.vy *= drag;
-      if (bullet.age >= bullet.triggerAge) {
-        const count = Math.max(4, bullet.burstCount || 6);
-        const phase = bullet.age + bullet.sourceId * .31;
-        for (let index = 0; index < count; index += 1) {
-          const angle = phase + index / count * TAU;
-          spawnedEnemyBullets.push({
-            ...bullet,
-            vx: Math.cos(angle) * bullet.burstSpeed,
-            vy: Math.sin(angle) * bullet.burstSpeed,
-            r: Math.max(2.1, bullet.r * .72),
-            age: 0,
-            dead: false,
-            behavior: "linear",
-            pattern: `${bullet.pattern}:burst`,
-            baseSpeed: bullet.burstSpeed,
-            triggerAge: 0,
-            burstCount: 0,
-          });
-        }
-        bullet.dead = true;
-        burst(bullet.x, bullet.y, bullet.color, 8, 42);
-        audio.sfx("enemyOrbit");
-        continue;
-      }
+      bullet.vx *= drag; bullet.vy *= drag;
+      if (bullet.age >= bullet.triggerAge) { detonateEnemyBlast(bullet); continue; }
     } else if (bullet.behavior === "blast" && (bullet.age >= bullet.triggerAge || blastProximity)) {
-      const count = Math.max(6, bullet.burstCount || 8);
-      const phase = bullet.age + bullet.sourceId * .37;
-      for (let index = 0; index < count; index += 1) {
-        const angle = phase + index / count * TAU;
-        spawnedEnemyBullets.push({
-          ...bullet,
-          vx: Math.cos(angle) * bullet.burstSpeed,
-          vy: Math.sin(angle) * bullet.burstSpeed,
-          r: Math.max(2.2, bullet.r * .64),
-          age: 0,
-          dead: false,
-          damage: 1,
-          behavior: "linear",
-          pattern: `${bullet.pattern}:blast`,
-          baseSpeed: bullet.burstSpeed,
-          triggerAge: 0,
-          burstCount: 0,
-          blastRadius: 0,
-          blastDamage: 0,
-        });
-      }
-      for (const player of world.players) {
-        if (!player.downed && SpaceCollision.hostileBlastHitsPlayer(bullet, player) && damagePlayer(player, bullet.blastDamage || 2)) {
-          world.combatBlastHits += 1;
-          applyEnemyDebuff(player, bullet);
-        }
-      }
-      if (bullet.enemyBlastDamage > 0) {
-        for (const targetEnemy of world.enemies) {
-          if (targetEnemy.dead || targetEnemy.id === bullet.sourceId || distance(targetEnemy, bullet) > bullet.blastRadius) continue;
-          damageEnemy(targetEnemy, bullet.enemyBlastDamage);
-          if (targetEnemy.hp <= 0) killEnemy(targetEnemy, -1);
-        }
-      }
-      bullet.dead = true;
-      burst(bullet.x, bullet.y, bullet.color, 18, bullet.blastRadius * 2.4);
-      world.shake = Math.max(world.shake, .24);
-      audio.sfx("volatile");
+      detonateEnemyBlast(bullet);
       continue;
     }
     const anomalyFlow = bullet.anchored ? { x: 0, y: 0 } : SpaceAnomalies.bulletFlow(world.activeAnomaly, world.anomalyElapsed, bullet, W, H, true);
@@ -4800,7 +4916,7 @@ function updateObjects(dt) {
     if (bullet.y < -25 || bullet.y > H + 25 || bullet.x < -25 || bullet.x > W + 25 || bullet.age > 10) bullet.dead = true;
   }
   let activeBulletCount = world.enemyBullets.reduce((count, bullet) => count + (bullet.dead ? 0 : 1), 0);
-  for (const spawned of spawnedEnemyBullets) {
+  for (const spawned of [...spawnedEnemyBullets, ...world.power.fragments.splice(0)]) {
     const hardCap = world.combatBulletCap + Math.max(0, spawned.budgetBonus || 0);
     if (activeBulletCount >= hardCap) continue;
     world.enemyBullets.push(spawned);
@@ -4815,7 +4931,7 @@ function updateObjects(dt) {
       if (player.downed || beam.hitIds.includes(player.index)) continue;
       if (pointToSegmentDistance(player.x, player.y, beam.x1, beam.y1, beam.x2, beam.y2) <= player.hurtRadius + beam.width) {
         beam.hitIds.push(player.index);
-        if (damagePlayer(player, beam.damage)) {
+        if (damagePlayer(player, beam.damage, { x: beam.x1, y: beam.y1, vx: beam.x2 - beam.x1, vy: beam.y2 - beam.y1 })) {
           world.combatLaserHits += 1;
           applyEnemyDebuff(player, beam);
         }
@@ -4904,7 +5020,7 @@ function handleCollisions() {
         }
         const markEvery = world.researchEffects.markEvery;
         let markBonus = 0;
-        if (markEvery && (enemy.elite || enemy.boss)) {
+        if (markEvery && ["primary", "heavy", "fan", "seeker"].includes(bullet.source || "primary") && (enemy.elite || enemy.boss)) {
           enemy.researchMarks = (enemy.researchMarks || 0) + 1;
           if (enemy.researchMarks >= markEvery) {
             enemy.researchMarks = 0;
@@ -4913,17 +5029,44 @@ function handleCollisions() {
             burst(enemy.x, enemy.y, "#ffe16c", 8, 45);
           }
         }
-        const damage = damageEnemy(enemy, bullet.damage + markBonus);
+        const source = bullet.source || "primary";
+        const firstHit = !bullet.hitIds?.length;
+        const damage = damageEnemy(enemy, bullet.damage + markBonus, bullet.phaseBarrier && source === "heavy" ? 1.5 : 1);
+        creditDamage(source, damage);
+        world.power.hits[source] = (world.power.hits[source] || 0) + 1;
+        if (!firstHit && source === "primary") { world.power.pierceHits += 1; creditDamage("pierce", damage); }
         bullet.hitIds?.push(enemy.id);
-        if (damage.barrier > 0 && !bullet.phaseBarrier) bullet.dead = true;
-        else if (bullet.pierceLeft > 0) bullet.pierceLeft -= 1;
+        if (damage.barrier > 0 || source !== "primary") bullet.dead = true;
+        else if (bullet.pierceLeft > 0) {
+          bullet.pierceLeft -= 1;
+          const sequence = bullet.pierceRank >= 2 ? [1, .65, .4] : [1, .55];
+          bullet.damage = (bullet.baseDamage || bullet.damage) * (sequence[bullet.hitIds.length] || 0);
+        }
         else bullet.dead = true;
         if (damage.barrier > 0 && bullet.phaseBarrier) markProtocolProc("phaseLance", bullet.x, bullet.y);
         if (enemy.boss) world.shake = Math.max(world.shake, .035);
         const owner = world.players[bullet.owner];
-        if (damage.hull > 0 || damage.barrier > 0) addNovaCharge("hit", NOVA_CONFIG.hitCharge, owner);
+        if ((damage.hull > 0 || damage.barrier > 0) && firstHit && ["primary", "heavy", "fan", "seeker"].includes(source)) {
+          addNovaCharge("hit", NOVA_CONFIG.hitCharge, owner);
+          addRushHitCharge();
+        }
+        if (source === "primary" && !bullet.arcTriggered && (firstHit || (bullet.hitIds.length === 2 && relicBonuses().stormCircuit))) {
+          if (!firstHit) markProtocolProc("stormCircuit", enemy.x, enemy.y);
+          bullet.arcTriggered = triggerArc(owner, enemy) === true;
+        }
+        if (bullet.choir && firstHit && owner) {
+          const targets = world.enemies.filter((e) => !e.dead && e !== enemy && distance(e, enemy) <= 24)
+            .sort((a, b) => distance(a, enemy) - distance(b, enemy) || a.id - b.id).slice(0, 2);
+          for (const target of targets) {
+            creditDamage("prismChoir", damageEnemy(target, baseShotDamage(owner) * .35));
+            if (target.hp <= 0) killEnemy(target, owner.index, { derived: true });
+          }
+          powerEffect("impact", enemy.x, enemy.y, 24, "#cc91ff", 3);
+          if (targets.length) markProtocolProc("prismChoir", enemy.x, enemy.y);
+        }
+        if (source !== "primary" || (bullet.tier || 0) > 0) powerEffect("impact", bullet.x, bullet.y, source === "heavy" ? 7 : 4, bullet.color, bullet.tier || 1);
         burst(bullet.x, bullet.y, bullet.color, 2, 20);
-        if (enemy.hp <= 0) killEnemy(enemy, bullet.owner);
+        if (enemy.hp <= 0) killEnemy(enemy, bullet.owner, { derived: source === "overloadPulse" });
         break;
       }
     }
@@ -4931,11 +5074,16 @@ function handleCollisions() {
 
   for (const bullet of world.enemyBullets) {
     if (bullet.dead) continue;
+    if ((bullet.age || 0) < (bullet.contactGrace || 0)) continue;
     for (const player of world.players) {
       if (player.downed) continue;
       if (SpaceCollision.hostileBulletHitsPlayer(bullet, player)) {
+        if (["blast", "mine"].includes(bullet.behavior)) {
+          if (!bullet.anchored || bullet.age >= bullet.triggerAge) detonateEnemyBlast(bullet);
+          break;
+        }
         bullet.dead = true;
-        if (damagePlayer(player, bullet.damage || 1)) {
+        if (damagePlayer(player, bullet.damage || 1, bullet)) {
           if (bullet.behavior === "homing") world.combatHomingHits += 1;
           applyEnemyDebuff(player, bullet);
         }
@@ -4950,7 +5098,7 @@ function handleCollisions() {
       if (player.downed) continue;
       if (enemy.collisionCooldown <= 0 && SpaceCollision.bodyHitsPlayer(enemy, player)) {
         const impactDamage = enemy.boss ? 4 : enemy.elite ? 4 : Math.max(3, enemy.collisionDamage || 2);
-        const playerDamaged = damagePlayer(player, impactDamage);
+        const playerDamaged = damagePlayer(player, impactDamage, enemy);
         enemy.collisionCooldown = .7;
         if (playerDamaged) world.combatBodyCollisions += 1;
         if (playerDamaged && !enemy.boss) {
@@ -5023,7 +5171,7 @@ function handleCollisions() {
         pulseGamepad(player.index, 65, .08, .22);
       } else if (object.type === "meteor") {
         object.dead = true;
-        if (damagePlayer(player) && world.activeEncounter?.kind === "survive") world.activeEncounter.hits += 1;
+        if (damagePlayer(player, 1, object) && world.activeEncounter?.kind === "survive") world.activeEncounter.hits += 1;
         burst(object.x, object.y, object.color, 20, 88);
         world.shake = Math.max(world.shake, .3);
         audio.sfx("encounterImpact");
@@ -6228,6 +6376,16 @@ function draw() {
   canvas.dataset.rushCount = String(world.rushCount);
   canvas.dataset.rushStartClears = String(world.rushStartClears);
   canvas.dataset.rushGuardClears = String(world.rushGuardClears);
+  canvas.dataset.powerRules = "visible-build-v1";
+  canvas.dataset.powerDamage = JSON.stringify(world.power.damage);
+  canvas.dataset.powerShots = JSON.stringify(world.power.shots);
+  canvas.dataset.powerHits = JSON.stringify(world.power.hits);
+  canvas.dataset.pierceFollowupHits = String(world.power.pierceHits);
+  canvas.dataset.blastDetonations = String(world.power.blastCount);
+  canvas.dataset.blastAreaDamage = String(world.power.blastDamage);
+  canvas.dataset.linkNodes = String(world.power.guardNodes);
+  canvas.dataset.linkRecovery = world.power.guardRecovery.toFixed(2);
+  canvas.dataset.ammoRanks = JSON.stringify(world.upgrades);
   canvas.dataset.rushGuardLimit = String(teamRushBonuses().rushGuardLimit);
   const rushDiagnostics = SpaceRush.combatMultipliers(true, teamRushBonuses());
   canvas.dataset.rushMoveSpeed = rushDiagnostics.moveSpeed.toFixed(3);

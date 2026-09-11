@@ -137,8 +137,8 @@ assert.ok(voxelCallCount(methodBody("fighterNose", "sweptWing")) <= 4, "fighter 
 assert.ok(voxelCallCount(methodBody("sweptWing", "tailFins")) <= 4, "each wing must follow the four-block Occam budget");
 assert.ok(voxelCallCount(methodBody("tailFins", "drawPlayerShield")) <= 2, "each tail side must follow the two-block Occam budget");
 const shieldSection = methodBody("drawPlayerShield", "drawPlayerDamage");
-assert.match(shieldSection, /panel < 4/, "shield must remain four open panels");
-assert.match(shieldSection, /segment < 5/, "shield geometry must keep a bounded twenty-segment budget");
+assert.match(shieldSection, /shieldImpactX/, "shield response must follow the actual incoming side");
+assert.doesNotMatch(shieldSection, /voxelSegment/, "shield must use sparse particles instead of solid panels");
 assert.match(shieldSection, /shieldBreakTimer/, "the shell must visibly break when depleted");
 assert.ok(voxelCallCount(methodBody("alienCrescent", "alienTendril")) <= 3, "each alien crescent side must follow the three-block Occam budget");
 assert.ok(voxelCallCount(methodBody("alienTendril", "alienEye")) <= 1, "alien tendril segments must share one organic block rule");
@@ -194,10 +194,9 @@ assert.match(surfaces, /CAPACITY = 1536/);
 assert.match(renderer, /const weapon = enemy\.weaponModule \|\| "pulse"/, "installed module identity must not switch with attack pattern");
 assert.match(renderer, /enemyHardpoints\(enemy\)/);
 const hostileBeam = methodBody("drawEnemyBeam", "drawRush");
-assert.match(hostileBeam, /leftA[\s\S]*rightA/, "hostile lasers need separate edge rails around the damage core");
-assert.match(hostileBeam, /"#fff8d8"/, "hostile lasers need a hot center distinct from their colored edge");
-assert.match(hostileBeam, /for \(let packet = 0; packet < 3; packet \+= 1\)/, "hostile lasers need directional energy packets instead of a single midpoint cube");
-assert.doesNotMatch(hostileBeam, /midpoint/, "hostile lasers must not regress to a plain two-layer line with one midpoint block");
+assert.match(hostileBeam, /pixelEffects\.spark/, "laser energy must use bounded pixel particles");
+assert.match(hostileBeam, /"#fff8d8"/, "laser core must stay readable throughout its damage window");
+assert.doesNotMatch(hostileBeam, /surfaces\.segment|surfaces\.solid|voxelSegment/, "laser must not restore solid rods or muzzle cubes");
 assert.match(renderer, /Math\.hypot\(particle\.vx/);
 assert.match(renderer, /emissiveBatchFor\(color\)/);
 for (const biome of ["sugarBloom", "crystalOrchard", "cometTide", "auroraFoundry", "thunderWorks", "cloudReef", "eclipseCarnival", "prismGrave", "voidGarden"]) {

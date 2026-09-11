@@ -35,7 +35,7 @@ assert.match(updateNova, /world\.novaCooldown = Math\.max\(0, world\.novaCooldow
 assert.match(updateNova, /eligible && world\.novaCharge >= NOVA_CONFIG\.threshold/, "travel cannot consume a ready reactor");
 assert.match(updateNova, /qaReady && immediateDanger/, "a local purge must wait for a nearby target");
 assert.doesNotMatch(game, /addNovaCharge\("kill"/, "takedowns must not pay charge again after the killing hit");
-assert.match(game, /if \(damage\.hull > 0 \|\| damage\.barrier > 0\) addNovaCharge\("hit"/, "blocked boss hits must not grant energy");
+assert.match(game, /\(damage\.hull > 0 \|\| damage\.barrier > 0\) && firstHit/, "blocked hits and repeated piercing hits must not grant energy");
 assert.match(roguelike, /upgradeId === "novaPurifier"/);
 assert.match(roguelike, /player\.novaClearAll = true/);
 assert.match(roguelike, /player\.novaDamage \*= \.85/);
@@ -49,7 +49,7 @@ assert.match(game, /novaSuppressedDeathrattles/, "the runtime gate must prove a 
 
 const damagePlayer = game.slice(game.indexOf("function damagePlayer("), game.indexOf("function revivePlayer("));
 assert.match(damagePlayer, /player\.invulnerability = remaining > 0 \? 0 : \.22/, "a shield block needs only a short contact debounce");
-assert.match(roguelike, /Math\.min\(\.94, player\.hitInvulnerability \+ \.07\)/, "Phase Hull must not restore long invulnerability chains");
+assert.match(roguelike, /Math\.min\(\.94, player\.hitInvulnerability \+ stats\.invulnerability/, "Phase Hull must not restore long invulnerability chains");
 assert.match(html, /src="\.\/src\/rush\.js/);
 
 console.log("Shared Nova verified: 120-point hit-driven team reactor, 14-second cadence floor, local purge, beam persistence and no kill feedback loop.");

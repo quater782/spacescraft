@@ -5,13 +5,48 @@ const os = require("node:os");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
-const outputRoot = path.join(os.tmpdir(), "spacescraft-chapter-one-soak");
+const offenseBuild = process.argv.includes('--offense');
+const dualAi = process.argv.includes('--dual-ai');
+const sampleSeconds = Number(process.argv.find(arg => arg.startsWith('--sample-seconds='))?.split('=')[1]) || 0;
+if (sampleSeconds && (sampleSeconds < 20 || sampleSeconds > 570)) throw new Error('sample-seconds must be 20..570');
+const outputRoot = path.join(os.tmpdir(), dualAi ? `spacescraft-chapter-one-dual-ai-${offenseBuild ? 'offense' : 'survival'}` : offenseBuild ? "spacescraft-chapter-one-offense" : "spacescraft-chapter-one-soak");
 const mime = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png" };
 const SAMPLE_MS = 250;
 const CHAPTER_SECONDS = 570;
 const BOSS_BUDGET_SECONDS = 240;
-const BUILD_PRIORITY = ["nanites", "aegisCycle", "phase", "overclock", "rail", "prism", "piercing", "turbo", "gyro", "capacitor", "magnet"];
+const BUILD_PRIORITY = offenseBuild
+  ? ["rail", "drone", "prism", "overclock", "piercing", "chain", "nanites", "aegisCycle", "phase", "rushOverdrive", "capacitor"]
+  : ["nanites", "aegisCycle", "phase", "overclock", "rail", "prism", "piercing", "turbo", "gyro", "capacitor", "magnet"];
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+// Test-server-only instrumentation; no production globals, AI privileges or save edits.
+function instrumentGame(source) {
+  const replaceOnce = (from, to) => {
+    if (source.split(from).length !== 2) throw new Error(`Fixture anchor missing or ambiguous: ${from}`);
+    source = source.replace(from, to);
+  };
+  if (dualAi) {
+    replaceOnce('if (index === 1 && world.gameMode === "solo") return aiPilotControls(world.players[1]);',
+      'if (world.gameMode === "solo") { window.__pilotQA.controlCalls[index]++; return aiPilotControls(world.players[index]); }');
+    // The production wingman assumes P1 is its partner; P1 must not target itself.
+    replaceOnce('const partner = world.players[0];', 'const partner = world.players[1 - player.index];');
+  }
+  replaceOnce('world.power.shots[source] = (world.power.shots[source] || 0) + 1;',
+    'world.power.shots[source] = (world.power.shots[source] || 0) + 1; window.__pilotQA.pilots[player.index].shots++;');
+  replaceOnce('creditDamage(source, damage);',
+    'creditDamage(source, damage); window.__pilotQA.pilots[bullet.owner].hits++; window.__pilotQA.pilots[bullet.owner].directDamage += damage.hull + damage.barrier;');
+  replaceOnce('player.downCount += 1;', `player.downCount += 1;
+    window.__pilotQA.events.push({type:'down',pilot:player.index,time:world.stageTime,hp:world.players.map(p=>p.hp),positions:world.players.map(p=>({x:p.x,y:p.y})),intent:world.players.map(p=>p.aiIntent)});`);
+  replaceOnce('player.rescueCount += 1;', `player.rescueCount += 1;
+    window.__pilotQA.events.push({type:'rescued',pilot:player.index,time:world.stageTime});`);
+  replaceOnce('function updatePlayers(dt) {', `function updatePlayers(dt) {
+    if (world.mode === 'playing' && world.introTimer <= 0 && !world.routeChoice) {
+      for (const p of world.players) window.__pilotQA.pilots[p.index][p.downed ? 'downSeconds' : 'activeSeconds'] += dt;
+      if (world.players.every(p=>!p.downed) && linkedNow()) window.__pilotQA.linkSeconds += dt;
+    }`);
+  return `window.__pilotQA={controlCalls:[0,0],events:[],linkSeconds:0,pilots:Array.from({length:2},()=>({shots:0,hits:0,directDamage:0,activeSeconds:0,downSeconds:0}))};\n` + source;
+}
+const gameSnapshot = instrumentGame(fs.readFileSync(path.join(root, 'src/game.js'), 'utf8'));
 
 const server = http.createServer((request, response) => {
   const pathname = new URL(request.url, "http://127.0.0.1").pathname;
@@ -22,7 +57,7 @@ const server = http.createServer((request, response) => {
     return;
   }
   response.setHeader("Content-Type", mime[path.extname(target)] || "application/octet-stream");
-  response.end(fs.readFileSync(target));
+  response.end(pathname === '/src/game.js' ? gameSnapshot : fs.readFileSync(target));
 });
 
 app.commandLine.appendSwitch("disable-background-timer-throttling");
@@ -72,7 +107,11 @@ async function stateOf(window) {
       rescues: pair(game.dataset.playerRescueCount),
       positions,
       aiIntent: game.dataset.aiIntent,
+      pilotQA: window.__pilotQA,
       kills: Number(game.dataset.kills),
+      powerDamage: JSON.parse(game.dataset.powerDamage || '{}'),
+      powerShots: JSON.parse(game.dataset.powerShots || '{}'),
+      powerHits: JSON.parse(game.dataset.powerHits || '{}'),
       bossPhase: Number(game.dataset.bossPhase),
       bossAttackState: game.dataset.bossAttackState,
       bossAttack: game.dataset.bossAttack,
@@ -222,6 +261,7 @@ async function run() {
       break;
     }
     if (state.mode === "ended") break;
+    if (sampleSeconds && state.stageTime >= sampleSeconds) break;
     if (state.bossPhase > 0) {
       summary.bossSeen = true;
       if (!bossSeenAt) {
@@ -245,7 +285,7 @@ async function run() {
       await delay(180);
       continue;
     }
-    if (state.mode === "playing") held = syncKeys(window, held, movementKeys(state, (Date.now() - startedAt) / 1000));
+    if (state.mode === "playing" && !dualAi) held = syncKeys(window, held, movementKeys(state, (Date.now() - startedAt) / 1000));
     else held = syncKeys(window, held, new Set());
 
     if (state.stageTime >= nextCapture && nextCapture < CHAPTER_SECONDS) {
@@ -272,9 +312,22 @@ async function run() {
   };
   delete result.fpsTotal;
   delete result.fpsSamples;
+  result.buildPolicy = offenseBuild ? 'offense' : 'survival';
+  result.controller = dualAi ? 'dual-production-ai-peer-partner' : 'direction-script-plus-wingman';
+  result.sampleSeconds = sampleSeconds;
+  result.survived = finalState?.mode !== 'ended';
+  summary.screenshots.push(await capture(window, 'final.png'));
+  fs.writeFileSync(path.join(outputRoot, 'report.json'), JSON.stringify({chapterOne:result,consoleErrors:errors}, null, 2));
 
   if (!finalState || finalState.qa !== "off" || finalState.runTargetSeconds !== 1800) throw new Error(`chapter-one soak was not a normal 1x run: ${JSON.stringify(result)}`);
   if (!finalState.webgl || finalState.renderer !== "three-r185-instanced-voxel") throw new Error(`chapter-one WebGL contract failed: ${JSON.stringify(result)}`);
+  if (dualAi && !finalState.pilotQA.controlCalls.every(count=>count>600)) throw new Error('Both pilots must actually execute production AI controls');
+  if (sampleSeconds) {
+    if (errors.length || summary.invalidProjectiles) throw new Error('sample contained runtime or projectile errors');
+    // A bounded observation records deaths too. It does NOT pass the full-chapter gate.
+    process.stdout.write(`${JSON.stringify({sample:result,fullChapterVerified:false,consoleErrors:errors.length,outputRoot})}\n`);
+    window.destroy(); server.close(); app.quit(); return;
+  }
   if (summary.maxStageTime < CHAPTER_SECONDS - .75 || summary.maxEvents !== 9 || summary.maxEncounters !== 4 || encounterHistory.length !== 4) throw new Error(`chapter-one director coverage incomplete: ${JSON.stringify(result)}`);
   if (handledDrafts !== 4 || summary.draftChoices.length !== 4) throw new Error(`chapter-one mid-stage builds incomplete: ${JSON.stringify(result)}`);
   if (summary.maxNative < 1 || summary.species.size !== 1 || summary.eliteSpawns < 1 || summary.maxElites < 1) throw new Error(`chapter-one ecology coverage incomplete: ${JSON.stringify(result)}`);
