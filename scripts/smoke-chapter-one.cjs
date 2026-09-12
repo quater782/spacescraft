@@ -112,6 +112,8 @@ async function stateOf(window) {
       powerDamage: JSON.parse(game.dataset.powerDamage || '{}'),
       powerShots: JSON.parse(game.dataset.powerShots || '{}'),
       powerHits: JSON.parse(game.dataset.powerHits || '{}'),
+      linkSupport: JSON.parse(game.dataset.linkSupport || '{}'),
+      masteryTasks: JSON.parse(game.dataset.masteryTasks || '{}'),
       bossPhase: Number(game.dataset.bossPhase),
       bossAttackState: game.dataset.bossAttackState,
       bossAttack: game.dataset.bossAttack,

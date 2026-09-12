@@ -109,7 +109,7 @@
 
 原生种死亡时可释放追踪齐射、晶片扇爆、电弧十字、雷环、交叉爆发、孢子爆发或近身爆炸。近身死亡爆炸与爆裂核心不再同帧结算伤害，而是在残骸位置留下 0.68/0.72 秒的静止引信和与实际范围一致的断续危险环；爆发后仍会伤害范围内玩家与敌军。敌军高速互撞时双方受伤并强制分离。死亡连锁允许发生，但普通敌弹仍受预算约束。
 
-WebGL 的普通射击预警只强化敌机自身的充能器官和局部警戒环；冲撞使用机鼻箭头，爆炸使用实际范围环，只有激光显示跨屏方向瞄准器。弹墙、夹击、曲线弹和种雷继续使用不同粗体素轮廓；高对比弹幕设置覆盖颜色但不改变轨迹。`data-enemy-spacing="live-target-standoff"`、`data-warning-grammar="local-charge-laser-sight-ram-chevrons-blast-rings"` 与 `data-laser-vfx="layered-core-edge-packets"` 固化这套语义。
+WebGL 的普通射击预警只强化敌机自身的充能器官和局部警戒环；冲撞沿锁定终点显示加速闪烁红线，爆炸使用实际范围环，激光沿实际射线显示加速闪烁的完整方向预警。弹墙、夹击、曲线弹和种雷继续使用不同粗体素轮廓；高对比弹幕设置覆盖颜色但不改变轨迹。`data-enemy-spacing="live-target-standoff"`、`data-warning-grammar="local-charge-laser-sight-ram-chevrons-blast-rings"` 与 `data-laser-vfx="layered-core-edge-packets"` 固化这套语义。
 
 首次发现模块组合时，扫描信息固定在左侧 `158×34` 逻辑像素双行卡片内，显示 2.2 秒并至少间隔 6.4 秒；它不再使用中央横幅遮挡锁定线、安全口或玩家主要观察区。`data-enemy-scan-layout`、`data-enemy-scan-visible` 与 `data-enemy-scan-bounds` 提供稳定视觉诊断。
 

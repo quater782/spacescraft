@@ -902,3 +902,8 @@ html[lang="en"] .loadout-card.contract-card { min-height: 148px; }
 .upgrade-recipe { color: #c4b3ef; margin-top: .9rem; font-size: .7rem; line-height: 1.5; }
 .build-chip:focus-visible { outline: 2px solid #9ef5de; outline-offset: 3px; }
 .power-summary { color: #b5d8df; font-size: .8rem; line-height: 1.6; max-height: 28vh; overflow-y: auto; }
+.mastery-tray { display: flex; gap: 8px; flex-wrap: wrap; padding: 8px; border: 1px solid var(--line); background: var(--panel); color: #b7d6e0; font: 11px/1.6 system-ui, sans-serif; }
+.mastery-tray[hidden] { display: none; }
+.mastery-tray > span { flex: 1 1 240px; }
+.mastery-tray svg { width: 16px; height: 16px; vertical-align: middle; margin-right: 5px; fill: currentColor; }
+.mastery-tray .mastered, .build-chip.mastered { color: #ffe698; border-color: #e8c975; }

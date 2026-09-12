@@ -577,25 +577,46 @@ class SpaceRenderer3D {
     const radiusX = profile.span + .2, radiusZ = profile.bodyLength * .78 + .2;
     const directed = Math.hypot(player.shieldImpactX || 0, player.shieldImpactY || 0) > .01;
     const impactAngle = Math.atan2((player.shieldImpactY || 0) / 13.3, (player.shieldImpactX || 0) / 21.5);
-    const count = this.quality === "low" ? 32 : 56;
-    // Sparse field motes expose the ship; only the actual impact sector lights up.
+    const count = this.quality === "low" ? 30 : 48;
+    // Unequal lifetimes and counter-moving latitudes keep the field from reading as a dotted hoop.
     for (let index = 0; index < count; index += 1) {
-      const angle = index / count * TAU + this.time * .15;
-      const latitude = Math.sin(index * 2.4 + this.time * .65) * .5;
+      const seed = (index * .618034) % 1;
+      const life = (this.time * (.35 + seed * .45) + seed) % 1;
+      const pulse = Math.sin(life * Math.PI);
+      const angle = index * 2.39996 + this.time * (index % 2 ? .24 : -.18);
+      const latitude = Math.sin(index * 1.71 + this.time * .7) * .72;
       const alignment = directed ? Math.max(0, Math.cos(angle - impactAngle)) ** 8 : .3;
-      const spread = breaking ? progress * (.3 + (index % 4) * .12) : 0;
+      const spread = breaking ? progress * (.3 + seed * .9) : 0;
       const radius = Math.sqrt(1 - latitude * latitude) + spread;
+      const large = index % 9 === 0;
       this.pixelEffects.spark(base, [Math.cos(angle) * radiusX * radius, .16 + latitude * .8 + spread * .2, Math.sin(angle) * radiusZ * radius],
-        .12 + alignment * hit * .2, alignment * hit > .2 ? "#c5f8ff" : "#56bfdc", breaking ? (1 - progress) * .65 : .16 + alignment * hit * .7);
+        (large ? .30 : .075 + seed * .12) * (.65 + pulse * .35), large ? "#8deaff" : "#46b3df",
+        (breaking ? (1 - progress) * .55 : .12 + pulse * .3 + alignment * hit * .35), large ? 1.2 : .45);
     }
     if (hit > 0 || breaking) {
-      for (let index = 0; index < 18; index += 1) {
-        const offset = (index / 17 - .5) * (directed ? 1.5 : TAU);
-        const angle = impactAngle + offset * (.4 + progress);
-        const scatter = progress * (breaking ? 1.1 : .3) * (.4 + index % 3 * .3);
-        const radius = 1 + scatter;
-        this.pixelEffects.spark(base, [Math.cos(angle) * radiusX * radius, .18 + Math.sin(index * 2.4) * (.12 + progress * .55), Math.sin(angle) * radiusZ * radius],
-          .11 + (1 - progress) * .1, index % 4 ? "#77dfff" : "#e0fcff", (1 - progress) * .6);
+      // Two wave fronts travel away from the incoming direction over the shield surface.
+      for (const side of [-1, 1]) for (let index = 0; index < 6; index += 1) {
+        const trail = index / 5;
+        const angle = impactAngle + side * (progress * (breaking ? 2.9 : 2.2) - trail * .48);
+        const radius = 1 + (breaking ? progress * .55 : Math.sin(progress * Math.PI) * .06);
+        this.pixelEffects.spark(base, [Math.cos(angle) * radiusX * radius, .18 + Math.sin(trail * Math.PI) * .12, Math.sin(angle) * radiusZ * radius],
+          (.12 + (1 - trail) ** 3 * .29) * (1 - progress * .45), index < 2 ? "#79e7ff" : "#38ace6",
+          (1 - progress) * (1 - trail * .8) * .72, index < 2 ? 1.65 : .65);
+      }
+      // A brief contact flare, then large chips and fine dust separate, curl and cool.
+      const flash = Math.max(0, 1 - progress * 5);
+      this.pixelEffects.spark(base, [Math.cos(impactAngle) * radiusX, .2, Math.sin(impactAngle) * radiusZ],
+        .85 + flash * .3, "#c9faff", flash * .65, 2.1);
+      const fragments = this.quality === "low" ? 18 : 30;
+      for (let index = 0; index < fragments; index += 1) {
+        const seed = (index * .618034) % 1;
+        const age = clamp(progress / (.5 + seed * .5), 0, 1);
+        const coarse = index % 7 === 0;
+        const angle = impactAngle + (seed - .5) * (directed ? .85 : TAU) + Math.sin(index * 2.4) * age * .5;
+        const spread = age * (.16 + seed * .65) + age * age * (breaking ? .85 : .15);
+        this.pixelEffects.spark(base, [Math.cos(angle) * (radiusX + spread), .2 + Math.sin(index * 2.4) * age * .6 - age * age * .2, Math.sin(angle) * (radiusZ + spread)],
+          (coarse ? .48 : .07 + seed * .12) * (1 - age * .65), age < .25 ? "#c5f8ff" : coarse ? "#59d9ff" : "#318dcc",
+          (1 - age) ** 1.3 * Math.min(1, progress * 10) * .8, coarse ? 1.7 : .65, coarse ? 1.6 : 1, index + age * 3);
       }
     }
   }
@@ -2138,6 +2159,7 @@ class SpaceRenderer3D {
       else if (bullet.source === "fan") { shape = `fan${Math.max(1, tier)}`; unit = .075; palette = ["#59d8c9", "#3b6998", "#a3eee3"]; }
       else if (bullet.source === "seeker") { shape = tier >= 3 ? "drone3" : tier === 2 ? "drone2" : "drone"; unit = .085; }
       else if (bullet.source === "overloadPulse") { shape = tier >= 2 ? "overload2" : "overload1"; unit = .095; palette = ["#bc8df0", "#695da8", "#e3c8fb"]; }
+      else if (bullet.source === "linkReturn") { shape = "phase"; unit = .085; palette = ["#87ffee", "#428fb6", "#d1f5ff"]; this.projectileTrail(base, palette[0], .08, .38); }
       else if (bullet.source === "primary" && tier) { shape = tier >= 2 ? "bolt3" : "bolt2"; unit = .075; }
       const spent = (bullet.hitIds?.length || 0) > 0;
       if (spent) unit *= .78;
@@ -2157,6 +2179,15 @@ class SpaceRenderer3D {
     for (const effect of world.power?.effects || []) {
       const progress = clamp(effect.age / effect.duration, 0, 1);
       const base = compose(this.toWorld(effect.x, effect.y, .48));
+      if (effect.kind === "intercept") {
+        for (let mote = 0; mote < 16; mote += 1) {
+          const angle = mote / 16 * TAU;
+          const radius = .12 + progress * .52;
+          this.pixelEffects.spark(base, [Math.cos(angle) * radius, Math.sin(mote * 2.4) * progress * .22, Math.sin(angle) * radius],
+            .11 + (1 - progress) * .12, effect.color, (1 - progress) * .75);
+        }
+        continue;
+      }
       if (effect.kind === "arc" && effect.target) {
         const a = this.toWorld(effect.x, effect.y, .5), b = this.toWorld(effect.target.x, effect.target.y, .5);
         let previous = [0, 0, 0];
@@ -2164,6 +2195,17 @@ class SpaceRenderer3D {
           const next = [(b[0] - a[0]) * i / 5, 0, (b[2] - a[2]) * i / 5 + (i === 5 ? 0 : (i % 2 ? .13 : -.13))];
           this.surfaces.line(compose(a), previous, next, effect.color, 1 - progress);
           previous = next;
+        }
+        continue;
+      }
+      if (["linkPulse", "novaEcho"].includes(effect.kind)) {
+        // Sparse stepped pixels show the actual local area without masking enemy fire.
+        const radius = effect.radius * (.7 + progress * .3);
+        const count = effect.kind === "novaEcho" ? 24 : 16;
+        for (let i = 0; i < count; i += 1) {
+          const angle = i * TAU / count;
+          this.pixelEffects.spark(base, [Math.cos(angle) * radius / 21.5, 0, Math.sin(angle) * radius / 13.3],
+            .1 + (1 - progress) * .06, effect.color, (1 - progress) * .65);
         }
         continue;
       }
@@ -2182,13 +2224,22 @@ class SpaceRenderer3D {
           [.065, .065, .13], effect.color, (1 - progress) * .5, [0, angle, 0]);
       }
     }
+    const support = world.power?.link;
+    if (support && (support.connected || support.linger > 0)) {
+      for (const player of world.players.filter(p => !p.downed)) {
+        const base = compose(this.toWorld(player.x, player.y, .55));
+        const ready = support.ready && (support.stable >= .5 || !support.connected);
+        for (const side of [-1, 1]) this.pixelEffects.spark(base, [side * .65, 0, .12],
+          ready ? .2 : .1, ready ? "#87ffee" : "#416a80", support.connected ? .6 : support.linger * .5);
+      }
+    }
     if (world.linked && world.upgrades?.rushGuard) {
       const [a, b] = world.players;
       for (let index = 0; index < 3; index += 1) {
         const fraction = (index + 1) / 4;
         const base = compose(this.toWorld(lerp(a.x, b.x, fraction), lerp(a.y, b.y, fraction), .65));
         const full = index < (world.power?.guardNodes || 0);
-        const color = full ? "#a6e5ff" : "#415374";
+        const color = full ? (support?.tasks.rushGuard?.complete ? "#ffe698" : "#a6e5ff") : "#415374";
         this.pixelEffects.spark(base, [0, 0, 0], full ? .3 : .14, color, full ? .9 : .22);
         if (full) for (let mote = 0; mote < 6; mote += 1) {
           const angle = mote / 6 * TAU + this.time * 1.6;
@@ -2257,7 +2308,8 @@ class SpaceRenderer3D {
     const color = overloaded ? "#b69aff" : "#5ccfc8";
     const speed = overloaded ? 1.8 : cooling ? .28 : .55 + charge * .4;
     this.surfaces.line(compose(), a, b, color, overloaded ? .65 : .22);
-    const count = this.quality === "low" ? 18 : overloaded ? 44 : 28;
+    const distance = Math.hypot(b[0] - a[0], b[2] - a[2]);
+    const count = Math.max(10, Math.min(this.quality === "low" ? 18 : overloaded ? 44 : 28, Math.ceil(distance * (overloaded ? 7 : 4))));
     // Two streams converge on the actual link; no solid cable or lateral fake hit lane.
     for (let index = 0; index < count; index += 1) {
       const flow = (index / count + this.time * speed) % 1;
@@ -2289,17 +2341,35 @@ class SpaceRenderer3D {
       this.surfaces.line(base, [a[0] + nx * side, a[1], a[2] + nz * side],
         [b[0] + nx * side, b[1], b[2] + nz * side], "#ff4f69", .27);
     }
-    const count = Math.min(this.quality === "low" ? 90 : 200, Math.max(28, Math.ceil(length * .35)));
+    const count = Math.min(this.quality === "low" ? 64 : 112, Math.max(28, Math.ceil(length * .32)));
+    // Uneven hot packets race along the continuous line; fine embers peel off and cool.
     for (let index = 0; index < count; index += 1) {
-      const t = (index / count + beam.age * 1.6) % 1;
-      const offset = Math.sin(index * 12.3 + Math.floor(beam.age * 24)) * .8;
-      const p = [lerp(a[0], b[0], t) + nx * offset, .48 + Math.cos(index * 4.1) * .035, lerp(a[2], b[2], t) + nz * offset];
-      this.pixelEffects.spark(null, p, .13 + (index % 4) * .055, index % 4 ? "#ff5964" : "#ffe4b0", alpha * .8);
+      const seed = (index * .618034) % 1;
+      const life = (beam.age * (2.8 + seed * 2.2) + seed) % 1;
+      const t = (seed + beam.age * (1.7 + (index % 3) * .45)) % 1;
+      const coarse = index % 11 === 0;
+      const offset = Math.sin(index * 2.4) * (coarse ? .12 : life * life * .9);
+      const p = [lerp(a[0], b[0], t) + nx * offset, .48 + Math.sin(index * 1.7) * life * .07, lerp(a[2], b[2], t) + nz * offset];
+      this.pixelEffects.spark(null, p, (coarse ? .48 + seed * .25 : .085 + seed * .23) * (1 - life * .55),
+        coarse ? "#ffd8a0" : life < .3 ? "#ff9d6b" : "#f33562", alpha * (.35 + Math.sin(life * Math.PI) * .5),
+        coarse ? 1.8 : .65, coarse ? 1 : 1.5, index + life * 2);
     }
-    for (let index = 0; index < 18; index += 1) {
-      const t = (index / 18 + beam.age * 2) % 1, angle = index * 2.4;
-      this.pixelEffects.spark(null, [a[0] + Math.cos(angle) * t * .32, a[1] + Math.sin(angle) * t * .25, a[2]],
-        .18 + (1 - t) * .22, "#ffac83", (1 - t) * alpha);
+    // A travelling cluster has a bright head and a shrinking tail, never a chain of equal beads.
+    for (let packet = 0; packet < 4; packet += 1) for (let tail = 0; tail < 5; tail += 1) {
+      const t = (packet * .271 + beam.age * 2.35 - tail * .009 + 1) % 1;
+      this.pixelEffects.spark(null, [lerp(a[0], b[0], t), .49, lerp(a[2], b[2], t)],
+        (.35 + packet * .025 - tail * .06), tail ? "#ff644f" : "#ffbd70", alpha * (.52 - tail * .08), tail ? .8 : 1.8);
+    }
+    const ignition = Math.max(0, 1 - beam.age / .12);
+    this.pixelEffects.spark(null, a, .7 + ignition * .5, "#ffaf78", alpha * .7, 2.1);
+    for (let index = 0; index < 16; index += 1) {
+      const seed = (index * .618034) % 1;
+      const life = (seed + beam.age * (2.4 + seed)) % 1;
+      const angle = index * 2.4;
+      const radius = life * (.15 + seed * .5);
+      this.pixelEffects.spark(null, [a[0] + Math.cos(angle) * radius, a[1] + Math.sin(angle) * radius * .55, a[2] + life * .16],
+        (index % 5 ? .1 + seed * .12 : .42) * (1 - life * .7), life < .3 ? "#ffdb99" : "#ff4c56", (1 - life) ** 2 * alpha,
+        index % 5 ? .65 : 1.6, 1.3, angle + life);
     }
   }
 

@@ -64,6 +64,7 @@ async function run() {
     result.fuse={before:beforeFuse,after:world.players[0].hp,count:world.power.blastCount};
 
     clean(); upgrade('rushGuard');
+    world.power.link.ready=false; // Isolate paid nodes from the independent base pulse.
     const ordinary=Array.from({length:4},()=>enemyBullet(230,210,0,60));
     const protectedBomb=enemyBullet(230,210,0,0,'#ff8050',3,null,{behavior:'blast',triggerAge:8});
     for (let i=0;i<48;i++) updateRush(1/60);
@@ -150,7 +151,7 @@ async function run() {
   }
   await win.webContents.executeJavaScript(`(() => {
     world.draftOptions=['rail','piercing','rushGuard'].map(id=>UPGRADE_DEFS.find(c=>c.id===id));
-    world.upgrades={rail:1,piercing:1,rushGuard:1};world.draftIndex=0;world.mode='draft';document.querySelector('#upgradePanel').hidden=false;renderUpgradeDraft();return true;
+    world.upgrades={rail:1,piercing:1};world.draftIndex=0;world.mode='draft';document.querySelector('#upgradePanel').hidden=false;renderUpgradeDraft();return true;
   })()`);
   for(const language of ['zh','en']){
     await win.webContents.executeJavaScript(`SpaceI18n.setLanguage('${language}');renderUpgradeDraft();true;`);

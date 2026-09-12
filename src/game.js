@@ -136,6 +136,7 @@ const UPGRADE_DEFS = SpaceRoguelike.UPGRADE_DEFS;
 const TALENT_NODES = SpaceConstellation.TALENT_NODES;
 const RUSH_CONFIG = SpaceRush.RUSH_CONFIG;
 const NOVA_CONFIG = SpaceRush.NOVA_CONFIG;
+const LINK_CONFIG = SpaceRush.LINK_CONFIG;
 const PROTOCOLS = SpaceRelics.PROTOCOLS;
 const BUFF_MODULES = SpaceStatus.BUFF_MODULES;
 const DEBUFF_MODULES = SpaceStatus.DEBUFF_MODULES;
@@ -943,7 +944,8 @@ class AudioEngine {
     if (name.startsWith("power")) {
       const sounds = { powerHeavy: [43, 67, .12, "square"], powerFan: [74, 81, .045, "triangle"],
         powerSeeker: [69, 76, .08, "square"], powerArc: [91, 79, .055, "square"],
-        powerIntercept: [96, 84, .09, "triangle"], powerOverload: [55, 74, .15, "square"] };
+        powerIntercept: [96, 84, .09, "triangle"], powerOverload: [55, 74, .15, "square"],
+        powerLink: [76, 88, .1, "triangle"], powerEcho: [67, 91, .14, "triangle"], powerMastery: [72, 96, .2, "square"] };
       const spec = sounds[name];
       if (!spec) return;
       this.powerSoundTimes ||= {};
@@ -1686,6 +1688,7 @@ function rollDraftOptions() {
   const choices = SpaceRoguelike.rollDraftOptions({
     levels: world.upgrades,
     stageIndex: world.stageIndex,
+    tasks: world.power.link.tasks,
     draftIndex,
     offerHistory: world.draftOfferHistory,
     pickHistory: world.upgradeHistory,
@@ -1694,7 +1697,7 @@ function rollDraftOptions() {
   return SpaceRelics.injectProtocolChoice({
     choices,
     levels: world.upgrades,
-    upgrades: UPGRADE_DEFS,
+    upgrades: UPGRADE_DEFS.filter(card => SpaceRoguelike.eligibleUpgrade(card, world.upgrades, world.stageIndex, world.power.link.tasks)),
     draftIndex,
     offerHistory: world.draftOfferHistory,
     pickHistory: world.upgradeHistory,
@@ -1710,8 +1713,8 @@ function renderBuildTray() {
     const upgrade = UPGRADE_DEFS.find((entry) => entry.id === id);
     if (!upgrade) return "";
     const level = upgradeLevel(id);
-    const description = t(upgrade.descriptionKey, SpaceRoguelike.tierStats(id, level));
-    return `<span class="build-chip ${upgrade.rarity}" tabindex="0" title="${description}" aria-label="${localizedName(upgrade)} Lv.${level}. ${description}">${upgradeIcon(id)}<b>${level}</b></span>`;
+    const description = t(upgrade.descriptionKey, SpaceRoguelike.tierStats(id, level)) + (SpaceRoguelike.TASKS[id] ? " · " + masteryText(id) : "");
+    return `<span class="build-chip ${upgrade.rarity} ${mastered(id) ? "mastered" : ""}" tabindex="0" title="${description}" aria-label="${localizedName(upgrade)} Lv.${level}. ${description}">${upgradeIcon(id)}<b>${level}</b></span>`;
   }).join("");
   const protocolChips = protocols.map((protocol) => `<span class="build-chip protocol-chip protocol-${protocol.id}" aria-label="${t("hud.protocolOnline", { protocol: localizedName(protocol) })}">${protocolIcon(protocol.id)}</span>`).join("");
   buildTray.innerHTML = upgrades + protocolChips;
@@ -1739,7 +1742,7 @@ function renderResultBuild() {
     : `<span>${t("result.protocolsEmpty")}</span>`;
   const upgradeChips = uniqueIds.map((id) => {
     const upgrade = UPGRADE_DEFS.find((entry) => entry.id === id);
-    return upgrade ? `<span>${upgradeIcon(id)}${localizedName(upgrade)} <b>Lv.${upgradeLevel(id)}</b></span>` : "";
+    return upgrade ? `<span>${upgradeIcon(id)}${localizedName(upgrade)} <b>Lv.${upgradeLevel(id)}</b>${SpaceRoguelike.TASKS[id] ? " · " + masteryText(id) : ""}</span>` : "";
   }).join("");
   const settlement = world.researchReward;
   const rewardChips = settlement ? `<span>${t("research.breakdown", settlement.breakdown)}</span><span>${t("research.progress", { earned: settlement.dataEarned, progress: settlement.research.progress })}</span>` + settlement.discoveries.map((entry) => {
@@ -1757,7 +1760,8 @@ function renderUpgradeDraft(focusSelected = false) {
     const selected = index === world.draftIndex;
     const nextLevel = upgradeLevel(upgrade.id) + 1;
     const before = nextLevel > 1 ? t(upgrade.descriptionKey, SpaceRoguelike.tierStats(upgrade.id, nextLevel - 1)) : t("draft.new");
-    const after = t(upgrade.descriptionKey, SpaceRoguelike.tierStats(upgrade.id, nextLevel));
+    const after = t(upgrade.descriptionKey, SpaceRoguelike.tierStats(upgrade.id, nextLevel))
+      + (SpaceRoguelike.TASKS[upgrade.id] ? " · " + masteryText(upgrade.id) : "");
     const recipe = PROTOCOLS.filter((entry) => entry.required.includes(upgrade.id)).map((entry) => t("draft.recipe", { recipe: entry.required.map((id, i) => `${localizedName(UPGRADE_DEFS.find((card) => card.id === id))} ${entry.ranks[i]}`).join(" + ") })).join(" · ");
     const protocol = SpaceRelics.protocolUnlockedByChoice(world.upgrades, upgrade.id);
     const protocolBadge = protocol ? `<span class="protocol-ready-badge protocol-${protocol.id}">${protocolIcon(protocol.id)}${t("draft.protocolReady", { protocol: localizedName(protocol) })}</span>` : "";
@@ -1799,6 +1803,9 @@ function applyRunUpgrade(upgrade) {
     SpaceRoguelike.applyUpgradeToPlayer(player, upgrade.id, level);
   }
   if (upgrade.id === "rushGuard" && level === 1) world.power.guardNodes = 3;
+  if (SpaceRoguelike.TASKS[upgrade.id] && !world.power.link.tasks[upgrade.id]) {
+    world.power.link.tasks[upgrade.id] = { progress: 0, complete: false, lastToken: null };
+  }
   world.activeProtocols = SpaceRelics.activeProtocols(world.upgrades, world.upgradeHistory);
   const activated = world.activeProtocols.find((protocol) => !previousProtocols.has(protocol.id));
   if (activated) {
@@ -2082,7 +2089,8 @@ function renderPowerSummary() {
   const damage = Math.round(Object.entries(power.damage).reduce((sum, [source, value]) => sum + (source === "pierce" ? 0 : value), 0));
   const summary = t("power.summary", { damage, pierce: power.pierceHits, guard: world.rushGuardClears });
   const link = t("power.linkState", { state: t(linkedNow() ? "power.linked" : "power.unlinked"), nodes: power.guardNodes });
-  document.querySelector("#powerSummary").textContent = summary + " · " + link;
+  document.querySelector("#powerSummary").textContent = summary + " · " + link + " · "
+    + t("link.guide") + " · " + t("link.summary", { clears: power.link.clears, returns: power.link.returns, echoes: power.link.echoClears });
 }
 
 function resumeGame() {
@@ -2652,7 +2660,7 @@ function makePowerState() {
     guardNodes: 0, guardRecovery: 0, guardCooldown: 0, guardFlash: 0,
     chargeBudget: 0, hitBudget: 0, unlinkedTime: 0, pulseElapsed: 0, pulseCount: 0,
     shieldBudget: 6, rescueCooldown: 0, aegisCooldown: 0, salvageCount: 0,
-    fragments: [], blastDamage: 0, novaEarned: 0 };
+    fragments: [], blastDamage: 0, novaEarned: 0, link: SpaceRush.createLinkState() };
 }
 
 function powerEffect(kind, x, y, radius, color, tier = 1, target = null) {
@@ -2670,6 +2678,102 @@ function creditDamage(source, damage) {
 const interceptable = (bullet) => !["blast", "mine"].includes(bullet.behavior);
 const linkedNow = () => world.players.length === 2 && world.players.every((p) => !p.downed)
   && distance(world.players[0], world.players[1]) < Math.max(...world.players.map((p) => p.linkRange)) * (world.activeBranch?.reward.link || 1);
+
+const mastered = id => Boolean(world.power.link.tasks[id]?.complete);
+
+function masteryText(id) {
+  const definition = SpaceRoguelike.TASKS[id];
+  if (!definition) return "";
+  const state = world.power.link.tasks[id];
+  return (state?.complete ? t("mastery.done") + " · " : "") + t(definition.key, {
+    progress: state?.progress || 0, goal: definition.goal, damage: LINK_CONFIG.returnDamage,
+    delay: LINK_CONFIG.echoDelay, clears: LINK_CONFIG.echoClears,
+  });
+}
+
+function renderMasteryTray() {
+  const tray = document.querySelector("#masteryTray");
+  const ids = Object.keys(world.power.link.tasks);
+  tray.hidden = !ids.length || !["playing", "paused", "draft"].includes(world.mode);
+  const text = ids.map(id => `<span class="${mastered(id) ? "mastered" : ""}">${upgradeIcon(id)}${localizedName(UPGRADE_DEFS.find(card => card.id === id))} · ${masteryText(id)}</span>`).join("");
+  if (tray._masteryMarkup !== text) { tray.innerHTML = text; tray._masteryMarkup = text; }
+}
+
+function advanceMastery(event, token) {
+  for (const [id, task] of Object.entries(world.power.link.tasks)) {
+    if (SpaceRoguelike.advanceTask(task, SpaceRoguelike.TASKS[id], event, token)) {
+      world.power.link.flash = 1;
+      showToast(t("mastery.complete", { name: localizedName(UPGRADE_DEFS.find(card => card.id === id)) }));
+      audio.sfx("powerMastery");
+      renderBuildTray();
+    }
+  }
+}
+
+function localCombatActive() {
+  const pilots = world.players.filter(player => !player.downed);
+  return world.enemies.some(enemy => !enemy.dead && !(enemy.boss && enemy.phaseShield > 0)
+    && pilots.some(player => distance(enemy, player) <= LINK_CONFIG.combatRadius))
+    || world.enemyBullets.some(bullet => !bullet.dead && pilots.some(player => distance(bullet, player) <= 60));
+}
+
+function updateLinkSupport(dt) {
+  const link = world.power.link;
+  const eligible = world.introTimer <= 0 && world.clearTimer <= 0 && !world.routeChoice;
+  if (!eligible) { link.echoes = []; link.linger = 0; link.stable = 0; link.connected = false; return; }
+  const connected = linkedNow();
+  const pilots = world.players.filter(player => !player.downed);
+  const combat = localCombatActive();
+  link.flash = Math.max(0, link.flash - dt);
+  link.stable = connected ? link.stable + dt : 0;
+  if (connected && link.stable >= LINK_CONFIG.readyDelay) link.linger = LINK_CONFIG.linger;
+  else if (!connected) link.linger = Math.max(0, link.linger - dt);
+  link.connected = connected;
+  if (connected && combat && !link.ready) {
+    link.recharge = Math.min(LINK_CONFIG.recharge, link.recharge + dt);
+    if (link.recharge >= LINK_CONFIG.recharge - 1e-8) { link.ready = true; link.recharge = 0; }
+  }
+  const protectedNow = connected ? link.stable >= LINK_CONFIG.readyDelay : link.linger > 0;
+  if (protectedNow && link.ready && pilots.length) {
+    const [a, b] = world.players;
+    const candidates = world.enemyBullets.filter(bullet => !bullet.dead && interceptable(bullet)
+      && (pilots.some(player => distance(player, bullet) <= LINK_CONFIG.radius)
+        || (connected && pointToSegmentDistance(bullet.x, bullet.y, a.x, a.y, b.x, b.y) <= LINK_CONFIG.halfWidth)))
+      .sort((a, b) => Math.min(...pilots.map(p => distance(p, a))) - Math.min(...pilots.map(p => distance(p, b))));
+    if (candidates.length) {
+      link.ready = false; link.recharge = 0; link.pulses += 1;
+      for (const bullet of candidates.slice(0, LINK_CONFIG.clears)) {
+        bullet.dead = true; link.clears += 1;
+        powerEffect("intercept", bullet.x, bullet.y, 7, "#87ffee", 1);
+      }
+      for (const player of pilots) powerEffect("linkPulse", player.x, player.y, LINK_CONFIG.radius, "#87ffee", 2);
+      audio.sfx("powerLink");
+    }
+  }
+  for (const echo of link.echoes) {
+    echo.delay -= dt;
+    if (echo.delay > 1e-8) continue;
+    const bullets = world.enemyBullets.filter(bullet => !bullet.dead && interceptable(bullet)
+      && echo.origins.some(origin => distance(origin, bullet) <= LINK_CONFIG.echoRadius))
+      .sort((a, b) => Math.min(...echo.origins.map(p => distance(p, a))) - Math.min(...echo.origins.map(p => distance(p, b))))
+      .slice(0, LINK_CONFIG.echoClears);
+    for (const bullet of bullets) { bullet.dead = true; link.echoClears += 1; }
+    for (const origin of echo.origins) powerEffect("novaEcho", origin.x, origin.y, LINK_CONFIG.echoRadius, "#c6adff", 2);
+    audio.sfx("powerEcho");
+  }
+  link.echoes = link.echoes.filter(echo => echo.delay > 1e-8);
+}
+
+function reflectLinkBullet(bullet) {
+  const [a, b] = world.players;
+  const owner = distance(a, bullet) <= distance(b, bullet) ? a : b;
+  const velocity = SpaceRush.reflectedVelocity(bullet, a, b);
+  const shot = emitPlayerShot(owner, "linkReturn", { damage: LINK_CONFIG.returnDamage });
+  Object.assign(shot, velocity, { x: bullet.x, y: bullet.y, life: LINK_CONFIG.returnLife,
+    color: "#adefff", tier: 2, r: Math.min(2.6, bullet.r || 2), returnOrigin: { x: bullet.x, y: bullet.y } });
+  world.power.link.returns += 1;
+  powerEffect("arc", bullet.x, bullet.y, 0, "#adefff", 2, { x: bullet.x + velocity.vx * .15, y: bullet.y + velocity.vy * .15 });
+}
 
 function teamAverage(field, fallback = 0) {
   const players = world.players.filter((player) => !player.downed);
@@ -2882,6 +2986,8 @@ function addRushHitCharge() {
 }
 
 function updateRush(dt) {
+  updateLinkSupport(dt);
+  if (world.introTimer > 0 || world.clearTimer > 0 || world.routeChoice) return;
   const state = world.power;
   const wasCooling = world.rushCooldown > 0;
   world.rushCooldown = Math.max(0, world.rushCooldown - dt);
@@ -2906,8 +3012,10 @@ function updateRush(dt) {
         && pointToSegmentDistance(entry.x, entry.y, a.x, a.y, b.x, b.y) <= 10)
         .sort((x, y) => threatTime(x) - threatTime(y) || (x.serial || 0) - (y.serial || 0))[0];
       if (bullet) {
+        if (mastered("rushGuard")) reflectLinkBullet(bullet);
         bullet.dead = true; state.guardNodes -= 1; state.guardCooldown = .25; state.guardFlash = .3;
         world.rushGuardClears += 1;
+        advanceMastery("intercept", world.rushGuardClears);
         if (rushActive()) world.rushGuardClearsThisRush += 1;
         powerEffect("intercept", bullet.x, bullet.y, 9, "#b9efff", 2);
         audio.sfx("powerIntercept");
@@ -2945,7 +3053,7 @@ function updateRush(dt) {
   state.hitBudget = Math.min(budget, state.hitBudget + budget * dt);
   state.unlinkedTime = connected ? 0 : state.unlinkedTime + dt;
   if (connected) addRushAmount(RUSH_CONFIG.linkedChargePerSecond * bonuses.rushLinkedChargeRate * dt);
-  else if (state.unlinkedTime > 3) world.rushCharge = Math.max(0, world.rushCharge - dt);
+  // Splitting to dodge pauses charge; it never removes earned cooperation progress.
   if (connected && world.rushCharge >= RUSH_CONFIG.threshold && world.enemies.some((e) => !e.dead && !(e.boss && e.phaseShield > 0))) startRush();
 }
 
@@ -4076,6 +4184,8 @@ function useNova() {
   const clearAll = world.players.some((player) => player.novaClearAll);
   const damageMultiplier = teamAverage("novaDamage", 1);
   const beamsBefore = world.enemyBeams.filter((beam) => !beam.dead).length;
+  const clearsBefore = world.novaBulletsCleared;
+  let effectiveDamage = 0;
   world.novaCharge = 0;
   world.novaCooldown = NOVA_CONFIG.cooldown;
   world.novaCount += 1;
@@ -4102,6 +4212,7 @@ function useNova() {
   for (const enemy of world.enemies) {
     if (enemy.dead || !pilots.some((pilot) => distance(pilot, enemy) <= damageRadius)) continue;
     const damage = damageEnemy(enemy, (enemy.boss ? NOVA_CONFIG.bossDamage : NOVA_CONFIG.damage) * damageMultiplier);
+    effectiveDamage += damage.hull + damage.barrier;
     if (damage.hull <= 0 && damage.barrier <= 0) enemy.hitFlash = .1;
     if (enemy.hp <= 0) killEnemy(enemy, -1, { novaSource: true, suppressDeathrattle: true });
   }
@@ -4125,6 +4236,8 @@ function useNova() {
   pulseGamepad(0, 260, .75, .45);
   pulseGamepad(1, 260, .75, .45);
   showToast(t("toast.novaShared"));
+  if (effectiveDamage > 0 || world.novaBulletsCleared > clearsBefore) advanceMastery("nova", world.novaCount);
+  if (mastered("novaEcho")) world.power.link.echoes.push({ delay: LINK_CONFIG.echoDelay, origins: pilots.map(p => ({ x: p.x, y: p.y })) });
   return true;
 }
 
@@ -4550,6 +4663,8 @@ function advanceStage() {
     return;
   }
   world.stageIndex += 1;
+  // Clear positional effects, but keep earned charge, cooldown and mission progress.
+  Object.assign(world.power.link, { echoes: [], linger: 0, stable: 0, connected: false });
   world.stageTime = 0;
   world.sectorIndex = 0;
   world.globalSector = DIRECTOR.globalSector(world.stageIndex, 0);
@@ -5066,7 +5181,7 @@ function handleCollisions() {
         }
         if (source !== "primary" || (bullet.tier || 0) > 0) powerEffect("impact", bullet.x, bullet.y, source === "heavy" ? 7 : 4, bullet.color, bullet.tier || 1);
         burst(bullet.x, bullet.y, bullet.color, 2, 20);
-        if (enemy.hp <= 0) killEnemy(enemy, bullet.owner, { derived: source === "overloadPulse" });
+        if (enemy.hp <= 0) killEnemy(enemy, bullet.owner, { derived: ["overloadPulse", "linkReturn"].includes(source) });
         break;
       }
     }
@@ -5924,7 +6039,8 @@ function drawHud() {
     drawBar(W / 2 - 58, H - 21, 116, ratio, color);
     ctx.globalAlpha = 1;
   }
-  if (world.linked) pixelText(t("hud.resonance"), W / 2, H - 8, "#92fff0", "center", 6);
+  if (world.linked || world.power.link.linger > 0) pixelText(t(!world.linked ? "link.linger" : world.power.link.ready ? "link.ready" : "link.recharge",
+    { seconds: Math.ceil(LINK_CONFIG.recharge - world.power.link.recharge) }), W / 2, H - 8, "#92fff0", "center", 6);
   if (world.activeProtocols.length) {
     const protocol = world.activeProtocols[Math.floor(world.time / 4) % world.activeProtocols.length];
     pixelText(t("hud.protocolActive", { protocol: localizedName(protocol), procs: world.protocolProcs }), 9, H - 8, protocol.color, "left", 5.5);
@@ -6377,6 +6493,10 @@ function draw() {
   canvas.dataset.rushStartClears = String(world.rushStartClears);
   canvas.dataset.rushGuardClears = String(world.rushGuardClears);
   canvas.dataset.powerRules = "visible-build-v1";
+  renderMasteryTray();
+  canvas.dataset.linkSupport = JSON.stringify({ ready: world.power.link.ready, recharge: world.power.link.recharge, linger: world.power.link.linger,
+    pulses: world.power.link.pulses, clears: world.power.link.clears, returns: world.power.link.returns, echoClears: world.power.link.echoClears });
+  canvas.dataset.masteryTasks = JSON.stringify(world.power.link.tasks);
   canvas.dataset.powerDamage = JSON.stringify(world.power.damage);
   canvas.dataset.powerShots = JSON.stringify(world.power.shots);
   canvas.dataset.powerHits = JSON.stringify(world.power.hits);
@@ -6525,6 +6645,7 @@ languageSetting.addEventListener("change", () => {
   audio.updateButton();
   resetSaveButton.textContent = t(resetSaveArmed ? "settings.resetConfirm" : "settings.reset");
   if (world.mode === "draft") renderUpgradeDraft();
+  if (world.mode === "paused") renderPowerSummary();
   renderBuildTray();
   if (world.mode === "ended") renderResult();
   showToast(t("toast.language"));

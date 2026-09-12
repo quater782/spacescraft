@@ -7,7 +7,7 @@
     maximumDuration: 7.5,
     cooldown: 8,
     linkedChargePerSecond: 2,
-    unlinkedDecayPerSecond: 1,
+    unlinkedDecayPerSecond: 0,
     linkedEventBonus: 1,
     killExtension: 0,
     moveSpeed: 1.12,
@@ -93,10 +93,30 @@
 
   const clampNovaCharge = (value) => Math.max(0, Math.min(NOVA_CONFIG.threshold, Number(value) || 0));
 
+  const LINK_CONFIG = Object.freeze({ readyDelay: .5, recharge: 6, linger: 1, clears: 2, radius: 24, halfWidth: 10, combatRadius: 200,
+    echoDelay: .45, echoRadius: 36, echoClears: 3, returnDamage: .6, returnLife: .8 });
+  const createLinkState = () => ({ ready: true, recharge: 0, stable: 0, linger: 0, connected: false,
+    pulses: 0, clears: 0, returns: 0, echoClears: 0, echoes: [], tasks: {}, flash: 0 });
+
+  function reflectedVelocity(bullet, a, b) {
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    const speed = Math.max(60, Math.hypot(bullet.vx || 0, bullet.vy || 0));
+    const nx = length > .01 ? -(b.y - a.y) / length : 0;
+    const ny = length > .01 ? (b.x - a.x) / length : -1;
+    const dot = (bullet.vx || 0) * nx + (bullet.vy || 0) * ny;
+    let vx = (bullet.vx || 0) - 2 * dot * nx, vy = (bullet.vy || 0) - 2 * dot * ny;
+    if (length <= .01 || Math.hypot(vx, vy) < .01 || Math.abs(dot) < speed * .15) {
+      const side = (bullet.x - (a.x + b.x) / 2) * nx + (bullet.y - (a.y + b.y) / 2) * ny >= 0 ? 1 : -1;
+      vx = nx * speed * side; vy = ny * speed * side;
+    }
+    return { vx, vy };
+  }
+
   window.SpaceRush = Object.freeze({
     RUSH_CONFIG,
     EVENT_CHARGE,
     NOVA_CONFIG,
+    LINK_CONFIG, createLinkState, reflectedVelocity,
     clampCharge,
     clampNovaCharge,
     chargeForEvent,

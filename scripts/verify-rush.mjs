@@ -28,7 +28,17 @@ assert.equal(api.chargeForEvent("pickup", false, { rushPickupCharge: 3 }), 3, "S
 assert.equal(api.clampCharge(-5), 0);
 assert.equal(api.clampCharge(150), 100);
 assert.ok(api.advanceCharge(20, 1, true) > 20, "linked formation must charge over time");
-assert.ok(api.advanceCharge(20, 1, false) < 20, "unlinked formation must gently decay");
+assert.equal(api.advanceCharge(20, 1, false), 20, "splitting to dodge must preserve charge");
+assert.equal(api.LINK_CONFIG.clears, 2);
+assert.equal(api.LINK_CONFIG.readyDelay, .5);
+assert.equal(api.LINK_CONFIG.recharge, 6);
+assert.equal(api.LINK_CONFIG.linger, 1);
+assert.equal(api.LINK_CONFIG.echoClears, 3);
+const reflected = api.reflectedVelocity({ x: 20, y: 0, vx: 30, vy: 60 }, { x: 0, y: 0 }, { x: 40, y: 0 });
+assert.equal(reflected.vx, 30);
+assert.equal(reflected.vy, -60);
+const fallback = api.reflectedVelocity({ x: 0, y: 0, vx: 0, vy: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 });
+assert.ok(Number.isFinite(fallback.vx) && Number.isFinite(fallback.vy) && Math.hypot(fallback.vx, fallback.vy) >= 60);
 assert.equal(api.advanceCharge(20, 100, false, false), 20, "charge must freeze when the mode is ineligible");
 assert.equal(api.addEventCharge(99, "rescue", true), 100);
 assert.deepEqual({ ...api.combatMultipliers(false) }, {

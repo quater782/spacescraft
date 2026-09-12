@@ -57,6 +57,7 @@ async function run() {
     await win.webContents.executeJavaScript(`(() => {${script}; draw(); document.querySelector('#game').style.visibility='hidden';document.querySelector('#toast').style.visibility='hidden';return true;})()`);
     await delay(100);
     fs.writeFileSync(path.join(output,name+'.png'),(await win.webContents.capturePage()).toPNG());
+    if(['shield-directions','link-overload','link-intercept'].includes(name)) fs.writeFileSync(path.join(output,name+'-detail.png'),(await win.webContents.capturePage({x:410,y:495,width:620,height:190})).toPNG());
   };
   await capture('shield-directions', `cleanEffects();
     damagePlayer(world.players[0],1,{x:120,y:205});damagePlayer(world.players[1],1,{x:360,y:205});
@@ -64,6 +65,7 @@ async function run() {
   await capture('shield-break', `world.players.forEach((p,i)=>{p.invulnerability=0;p.shield=1;damagePlayer(p,1,{x:p.x,y:120});p.shieldBreakTimer=.36;p.shieldHitTimer=.13;});world.particles=[];`);
   await capture('link-charge', `cleanEffects();world.linked=true;world.rushCharge=65;world.upgrades.rushGuard=1;world.power.guardNodes=3;world.players.forEach(p=>p.shield=0);`);
   await capture('link-overload', `world.rushTimer=4;world.rushCharge=0;world.power.guardNodes=1;world.time=2.17;`);
+  await capture('link-intercept', `world.power.effects=[{kind:'intercept',x:240,y:205,radius:9,color:'#b9efff',tier:2,duration:.3,age:.1}];`);
   await capture('link-cooldown', `world.rushTimer=0;world.rushCooldown=4;world.time=2.3;`);
   await capture('warning-early', `cleanEffects();world.players.forEach(p=>p.shield=0);
     const a=makeEnemy('cometRammer',160,80), b=makeEnemy('lancer',310,75);
@@ -82,6 +84,20 @@ async function run() {
   await capture('effects-low', `document.querySelector('#qualitySetting').value='low';document.querySelector('#qualitySetting').dispatchEvent(new Event('change'));`);
   const particles = await win.webContents.executeJavaScript(`({...document.querySelector('#scene').dataset})`);
   assert.equal(particles.effectDropped,'0');assert.ok(Number(particles.effectParticles)>50);
+  if(process.argv.includes('--motion')) {
+    await win.webContents.executeJavaScript(`cleanEffects();document.querySelector('#qualitySetting').value='balanced';document.querySelector('#qualitySetting').dispatchEvent(new Event('change'));
+      world.players.forEach(p=>p.shield=3);world.players[0].x=205;world.players[1].x=310;
+      world.players[0].shieldImpactX=-1;world.players[0].shieldImpactY=0;
+      world.enemies=[makeEnemy('lancer',310,90)];world.enemyBeams=[{x1:310,y1:90,x2:310,y2:240,width:5,age:0,duration:.65}];true;`);
+    for(let frame=0;frame<60;frame++) {
+      const time=frame/30;
+      await win.webContents.executeJavaScript(`world.time=2+${time};
+        world.players[0].shieldHitTimer=Math.max(0,.32-((${time}+.7)%1.2));
+        world.enemyBeams[0].age=${time}%.65;draw();true;`);
+      await delay(34);
+      fs.writeFileSync(path.join(output,`motion-${String(frame).padStart(3,'0')}.png`),(await win.webContents.capturePage({x:410,y:300,width:620,height:400})).toPNG());
+    }
+  }
   if(process.argv.includes('--fixtures-only')){assert.equal(errors.length,0,errors.join(' | '));console.log(JSON.stringify({output,directions,warningRises:flashes,particles:particles.effectParticles,dropped:particles.effectDropped,opening:'skipped: fixtures-only',errors}));win.destroy();server.close();app.quit();return;}
   await win.loadURL(`http://127.0.0.1:${server.address().port}/?seed=2706`);
   await win.webContents.executeJavaScript(`document.querySelector('#startButton').click();if(!document.querySelector('#tutorial').hidden)document.querySelector('#tutorialContinueButton').click();true;`);

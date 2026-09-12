@@ -10,13 +10,28 @@ vm.runInNewContext(source, sandbox, { filename: "src/roguelike.js" });
 const api = sandbox.window.SpaceRoguelike;
 const { PATHS, OPENING_SURVIVAL_IDS, UPGRADE_DEFS, createRng, createRngStreams, rollDraftOptions, applyUpgradeToPlayer, growthScore } = api;
 const originalIds = ["overclock", "rail", "prism", "piercing", "drone", "chain", "turbo", "gyro", "phase", "aegisCycle", "nanites", "capacitor", "novaCore", "resonanceArray", "magnet"];
-const newIds = ["novaHarvester", "novaAegis", "novaPurifier", "rushRelay", "rushSalvage", "rushOverdrive", "rushGuard"];
+const newIds = ["novaHarvester", "novaAegis", "novaPurifier", "rushRelay", "rushSalvage", "rushOverdrive", "rushGuard", "novaEcho"];
 const schedule = [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2];
 
-assert.equal(UPGRADE_DEFS.length, 22, "the controlled-build pool must contain 22 upgrades");
+assert.equal(UPGRADE_DEFS.length, 23, "the controlled-build pool must contain 23 upgrades");
 assert.deepEqual([...PATHS], ["armament", "mobility", "nova", "rush"]);
 assert.ok([...originalIds, ...newIds].every((id) => UPGRADE_DEFS.some((upgrade) => upgrade.id === id)), "all stable and new IDs must exist");
 assert.equal(new Set(UPGRADE_DEFS.map((upgrade) => upgrade.id)).size, UPGRADE_DEFS.length);
+for (const [id, definition] of Object.entries(api.TASKS)) {
+  const card = UPGRADE_DEFS.find(card => card.id === id);
+  assert.equal(card.max, 1, "auto-evolution must not cost a second pick");
+  assert.equal(api.eligibleUpgrade(card, {}, 2), false, "no new mission cards in the final chapter");
+  assert.equal(api.eligibleUpgrade(card, {}, 0, { a: { complete: false }, b: { complete: false } }), false);
+  const task = { progress: 0, complete: false, lastToken: null };
+  assert.equal(api.advanceTask(task, definition, "unrelated", 1), false);
+  for (let token = 1; token <= definition.goal; token++) {
+    assert.equal(api.advanceTask(task, definition, definition.event, token), token === definition.goal);
+    assert.equal(api.advanceTask(task, definition, definition.event, token), false);
+    assert.equal(task.progress, token);
+  }
+  assert.equal(api.advanceTask(task, definition, definition.event, 100), false);
+  assert.equal(task.progress, definition.goal);
+}
 for (const upgrade of UPGRADE_DEFS) {
   assert.ok(PATHS.includes(upgrade.path), `${upgrade.id} has an invalid build path`);
   assert.ok(["armament", "mobility", "system"].includes(upgrade.category), `${upgrade.id} has an invalid display category`);
@@ -129,4 +144,4 @@ assert.match(gameSource, /SpaceRoguelike\.rollDraftOptions/);
 assert.match(gameSource, /SpaceRoguelike\.applyUpgradeToPlayer/);
 assert.doesNotMatch(gameSource, /Math\.min\(4, player\.weapon/, "all rewards must preserve the three-way volley ceiling");
 
-console.log("Roguelike verified: 22 stable-path cards, four-path opening coverage, focus continuation, rarity/legendary pity, isolated RNG streams, bounded effects, and 2k-seed P90/P10 fairness.");
+console.log("Roguelike verified: 23 stable-path cards, four-path opening coverage, focus continuation, rarity/legendary pity, isolated RNG streams, bounded effects, and 2k-seed P90/P10 fairness.");

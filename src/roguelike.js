@@ -26,8 +26,9 @@
     { id: "rushSalvage", category: "system", path: "rush", rarity: "common", max: 2, nameKey: "upgrade.rushSalvage.name", descriptionKey: "upgrade.rushSalvage.description" },
     { id: "rushOverdrive", category: "system", path: "rush", rarity: "rare", max: 2, nameKey: "upgrade.rushOverdrive.name", descriptionKey: "upgrade.rushOverdrive.description" },
     { id: "rushGuard", category: "system", path: "rush", rarity: "legendary", max: 1, nameKey: "upgrade.rushGuard.name", descriptionKey: "upgrade.rushGuard.description" },
+    { id: "novaEcho", category: "system", path: "nova", rarity: "rare", max: 1, nameKey: "upgrade.novaEcho.name", descriptionKey: "upgrade.novaEcho.description" },
   ].map((upgrade) => Object.freeze({ ...upgrade,
-    max: ({ overclock: 2, drone: 3, turbo: 2, gyro: 2, nanites: 2, rushGuard: 2 })[upgrade.id] || upgrade.max,
+    max: ({ overclock: 2, drone: 3, turbo: 2, gyro: 2, nanites: 2, rushGuard: 1 })[upgrade.id] || upgrade.max,
     rarity: ({ rail: "common", drone: "rare", chain: "rare", resonanceArray: "common", rushGuard: "rare" })[upgrade.id] || upgrade.rarity,
   }));
   const UPGRADE_BY_ID = new Map(UPGRADE_DEFS.map((upgrade) => [upgrade.id, upgrade]));
@@ -52,12 +53,26 @@
     rushRelay: [{ hit: .3, budget: .8 }, { hit: .5, budget: 1.4 }],
     rushSalvage: [{ pickup: 4, encounter: 4 }, { pickup: 7, encounter: 7 }],
     rushOverdrive: [{ rate: 35, interval: 1, damage: 4 }, { rate: 50, interval: .75, damage: 6 }],
-    rushGuard: [{ interval: 5, nodes: 3 }, { interval: 3.5, nodes: 3 }],
+    rushGuard: [{ interval: 5, nodes: 3 }],
+    novaEcho: [{ damage: 10 }],
   });
   for (const ranks of Object.values(TIERS)) { ranks.forEach(Object.freeze); Object.freeze(ranks); }
   const tierStats = (id, level) => TIERS[id]?.[Math.max(0, Math.min(TIERS[id].length - 1, level - 1))] || {};
-  const eligibleUpgrade = (upgrade, levels) => (levels[upgrade.id] || 0) < upgrade.max
-    && (upgrade.id !== "novaPurifier" || (levels.novaCore || 0) >= 1);
+  const TASKS = Object.freeze({
+    rushGuard: Object.freeze({ event: "intercept", goal: 12, key: "mastery.guard" }),
+    novaEcho: Object.freeze({ event: "nova", goal: 3, key: "mastery.nova" }),
+  });
+  const eligibleUpgrade = (upgrade, levels, stageIndex = 0, tasks = {}) => (levels[upgrade.id] || 0) < upgrade.max
+    && (upgrade.id !== "novaPurifier" || (levels.novaCore || 0) >= 1)
+    && (!TASKS[upgrade.id] || (stageIndex < 2 && Object.values(tasks).filter(task => !task.complete).length < 2));
+
+  function advanceTask(task, definition, event, token) {
+    if (!task || task.complete || definition.event !== event || task.lastToken === token) return false;
+    task.lastToken = token;
+    task.progress = Math.min(definition.goal, task.progress + 1);
+    task.complete = task.progress >= definition.goal;
+    return task.complete;
+  }
 
   function createRng(seed) {
     let state = (Number(seed) >>> 0) || 0x6d2b79f5;
@@ -123,10 +138,10 @@
     return focus;
   }
 
-  function rollDraftOptions({ levels = {}, stageIndex = 0, draftIndex, offerHistory = [], pickHistory = [], random }) {
+  function rollDraftOptions({ levels = {}, stageIndex = 0, tasks = {}, draftIndex, offerHistory = [], pickHistory = [], random }) {
     if (typeof random !== "function") throw new TypeError("rollDraftOptions requires a random function");
     const index = Math.max(0, Number.isInteger(draftIndex) ? draftIndex : historyIds(pickHistory).length);
-    const eligible = UPGRADE_DEFS.filter((upgrade) => eligibleUpgrade(upgrade, levels));
+    const eligible = UPGRADE_DEFS.filter((upgrade) => eligibleUpgrade(upgrade, levels, stageIndex, tasks));
     const choices = [];
     const addFrom = (items, forcedRarity = null) => {
       const pool = items.filter((item) => !choices.includes(item) && (!forcedRarity || item.rarity === forcedRarity));
@@ -236,6 +251,7 @@
     } else if (upgradeId === "magnet") { add("pickupMagnetRadius", "radius"); player.pickupNovaBonus = stats.energy; }
     else if (upgradeId === "capacitor") scale("novaChargeRate", "charge");
     else if (upgradeId === "novaCore") { scale("novaDamage", "damage"); add("novaRadiusBonus", "radius"); }
+    else if (upgradeId === "novaEcho") scale("novaDamage", "damage");
     else if (upgradeId === "novaHarvester") { player.novaHitChargeBonus = stats.hit; player.novaHitBudgetBonus = stats.budget; }
     else if (upgradeId === "novaAegis") { player.novaShieldCharge = stats.shield; player.novaRescueCharge = stats.rescue; }
     else if (upgradeId === "novaPurifier") { player.novaClearAll = true; player.novaDamage *= .85; }
@@ -257,6 +273,7 @@
   }
 
   window.SpaceRoguelike = Object.freeze({
+    TASKS, advanceTask,
     PATHS,
     OPENING_SURVIVAL_IDS,
     UPGRADE_DEFS: Object.freeze(UPGRADE_DEFS),

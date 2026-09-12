@@ -30,6 +30,7 @@ const keys = new Set([
   "talent.status.available",
   "talent.status.prerequisite",
   "talent.status.cost",
+  "mastery.guard", "mastery.nova", "link.ready", "link.recharge", "link.linger",
 ]);
 
 for (const match of html.matchAll(/data-i18n(?:-aria-label)?="([^"]+)"/g)) keys.add(match[1]);
