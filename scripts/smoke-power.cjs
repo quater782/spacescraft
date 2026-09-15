@@ -9,7 +9,7 @@ const path = require('node:path');
 // The bridge exists only in this isolated loopback server, never shipped source.
 const root = path.resolve(__dirname, '..');
 const output = path.join(os.tmpdir(), 'spacescraft-power');
-const bridge = 'world, resetWorld, applyRunUpgrade, UPGRADE_DEFS, advanceStage, relicBonuses, makeEnemy, handleCollisions, updatePlayers, updatePlayerStatus, playerShoot, emitPlayerShot, updateAuxiliaryWeapons, updateRush, startRush, updateObjects, detonateEnemyBlast, enemyBullet, applyPickup, addNovaCharge, draw, renderUpgradeDraft, renderPowerSummary';
+const bridge = 'world, resetWorld, applyRunUpgrade, UPGRADE_DEFS, advanceStage, relicBonuses, makeEnemy, handleCollisions, updatePlayers, updatePlayerStatus, playerShoot, emitPlayerShot, updateAuxiliaryWeapons, updateRush, startRush, updateObjects, detonateEnemyBlast, enemyBullet, applyPickup, addNovaCharge, draw, renderUpgradeDraft, renderPowerSummary, updateLinkSupport, useNova, baseShotDamage, renderMasteryTray, update';
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
   const target = path.resolve(root, pathname === '/' ? 'index.html' : decodeURIComponent(pathname.slice(1)));
@@ -73,6 +73,71 @@ async function run() {
     const recovery=world.power.guardRecovery;
     for(let i=0;i<360;i++)updateRush(1/60);
     result.guard.splitRecovery=world.power.guardRecovery-recovery;
+
+    // Real gameplay functions at fixed dt; fixtures isolate resources, not a difficulty simulation.
+    const check=(condition,label)=>{if(!condition)throw new Error('Starlink: '+label);};
+    const step=(frames,fn=updateLinkSupport)=>{for(let i=0;i<frames;i++)fn(1/60);};
+    clean(); const nearShots=Array.from({length:4},()=>enemyBullet(230,210,0,60));
+    const hazards=['mine','blast'].map(behavior=>enemyBullet(230,210,0,0,'#ff8050',3,null,{behavior,triggerAge:8}));
+    const beam={dead:false};world.enemyBeams=[beam];
+    step(29);check(world.power.link.clears===0,'no pulse before stable connection');
+    step(2);check(world.power.link.clears===2 && nearShots.filter(b=>b.dead).length===2,'first pulse has a team cap of two');
+    check(hazards.every(b=>!b.dead)&&!beam.dead,'dangerous payloads and beams stay');
+    world.enemyBullets=[];step(600);check(world.power.link.recharge<.1,'empty space cannot recharge');
+    target(230,120);step(180);const saved=world.power.link.recharge;
+    world.players[1].x=450;step(120);check(world.power.link.recharge===saved,'split preserves partial recharge');
+    world.players[1].x=250;step(29);check(!world.power.link.ready,'rejoining grants no free pulse');
+    step(151);check(world.power.link.ready,'six accumulated combat seconds recharge');
+    world.rushCharge=23;world.players[1].x=450;step(300,updateRush);check(world.rushCharge===23,'overload charge does not decay');
+    result.link={firstClears:2,recharge:saved,preservesCharge:true,excludesHazards:true};
+
+    clean();step(31);world.players[1].x=450;
+    const corridor=enemyBullet(330,210,0,60);const near=enemyBullet(210,220,0,60);
+    step(1);check(near.dead&&!corridor.dead,'grace covers ships, not a disconnected bridge');
+    clean();step(31);world.players[1].x=450;step(61);
+    const late=enemyBullet(210,220,0,60);step(1);check(!late.dead,'grace ends after one second');
+
+    clean();upgrade('rushGuard');world.power.link.ready=false;
+    let incoming;
+    for(let count=0;count<13;count++){
+      world.power.guardNodes=1;world.power.guardCooldown=0;
+      incoming=enemyBullet(230,210,30,60);updateRush(1/60);
+      if(count===10)check(!world.power.link.tasks.rushGuard.complete,'no early evolution');
+    }
+    check(world.power.link.tasks.rushGuard.progress===12&&world.power.link.tasks.rushGuard.complete,'twelve actual interceptions evolve once');
+    check(world.power.link.clears===0&&world.power.link.returns===1,'base pulse does not feed guard mission');
+    const returned=world.bullets.find(b=>b.source==='linkReturn');
+    check(returned.vx===incoming.vx&&returned.vy===-incoming.vy&&!returned.seeker&&!returned.pierceLeft&&!returned.choir,'reflection changes actual velocity without inherited offensive procs');
+    check(Math.abs(returned.damage/baseShotDamage(world.players[returned.owner])-.6)<1e-8&&returned.life===.8,'return damage and lifetime bounded');
+    const victim=target(230,160);victim.hp=.1;returned.x=victim.x;returned.y=victim.y;
+    world.novaCharge=0;const rushBefore=world.rushCharge;handleCollisions();
+    check(returned.dead&&returned.hitIds.length===1&&world.novaCharge===0&&world.rushCharge===rushBefore,'return ends on first hit, no charge loop');
+    const taskBefore=JSON.stringify(world.power.link.tasks);advanceStage();
+    check(JSON.stringify(world.power.link.tasks)===taskBefore,'mission evolution survives chapter change');
+    result.reflection={progress:12,returns:1,damage:returned.damage,noCharge:true};
+
+    clean();upgrade('novaEcho');const novaVictim=target(230,155);
+    check(Math.abs(world.players[0].novaDamage-1.1)<1e-8,'Nova card grants immediate damage');
+    const cast=()=>{world.novaCharge=120;world.novaCooldown=0;useNova();};
+    world.enemies=[];cast();check(world.power.link.tasks.novaEcho.progress===0,'empty cast is not effective');
+    world.enemies=[novaVictim];novaVictim.boss=true;novaVictim.phaseShield=1;cast();
+    check(world.power.link.tasks.novaEcho.progress===0,'invulnerable target cannot feed a mission');
+    novaVictim.boss=false;novaVictim.phaseShield=0;
+    cast();cast();check(world.power.link.tasks.novaEcho.progress===2&&!world.power.link.tasks.novaEcho.complete,'one shared increment per effective cast');
+    cast();check(world.power.link.tasks.novaEcho.complete&&world.power.link.echoes.length===1,'third cast evolves and queues one echo');
+    const castCount=world.novaCount;world.players[0].x=50;world.players[1].x=450;
+    const echoShots=Array.from({length:4},()=>enemyBullet(230,210,0,60));
+    const echoBomb=enemyBullet(230,210,0,0,'#ff8050',3,null,{behavior:'blast',triggerAge:8});
+    const frozen=JSON.stringify(world.power.link);world.mode='paused';step(60,update);
+    check(JSON.stringify(world.power.link)===frozen,'pause freezes effects and progress');
+    world.mode='draft';step(60,update);check(JSON.stringify(world.power.link)===frozen,'draft freezes effects and progress');
+    world.mode='inspection';step(26);check(echoShots.every(b=>!b.dead),'echo waits for its delay');
+    step(1);check(echoShots.filter(b=>b.dead).length===3&&!echoBomb.dead,'echo capped at three at original positions');
+    check(world.novaCount===castCount&&world.power.link.tasks.novaEcho.progress===3,'echo cannot count as a new Nova');
+    world.power.link.echoes.push({delay:.45,origins:[{x:230,y:210}]});advanceStage();
+    check(world.power.link.echoes.length===0&&world.power.link.tasks.novaEcho.complete,'transition drops positional echoes, not progress');
+    result.echo={progress:3,clears:3,casts:castCount,pauseFrozen:true};
+    clean();check(Object.keys(world.power.link.tasks).length===0,'new run resets missions');
 
     result.pulses=[];
     for(const rank of [1,2]){
@@ -160,6 +225,38 @@ async function run() {
     assert.equal(cards.length,3);for(const card of cards)assert.doesNotMatch(card.text,/\{\w+\}/);
     fs.writeFileSync(path.join(output,`draft-${language}.png`),(await win.webContents.capturePage()).toPNG());
   }
+  // Task cards and their finished effects are explicit presentation fixtures.
+  for(const language of ['zh','en']){
+    await win.webContents.executeJavaScript(`(() => {
+      resetWorld();world.mode='inspection';world.introTimer=0;world.routeChoice=null;world.cinematic=null;
+      SpaceI18n.setLanguage('${language}');world.mode='draft';world.draftCount=1;
+      world.draftOptions=['rushGuard','novaEcho','rail'].map(id=>UPGRADE_DEFS.find(c=>c.id===id));
+      document.querySelector('#upgradePanel').hidden=false;
+      renderUpgradeDraft();renderMasteryTray();return true;
+    })()`);
+    await delay(80);
+    const readable=await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.upgrade-choice'),n=>({text:n.textContent,visible:n.getClientRects().length>0,overflow:n.scrollHeight>n.clientHeight+1}))`);
+    assert.equal(readable.length,3);
+    for(const card of readable){assert.doesNotMatch(card.text,/\{\w+\}/);assert.ok(card.visible&&!card.overflow,'task text must be visible and fit');}
+    fs.writeFileSync(path.join(output,`missions-${language}.png`),(await win.webContents.capturePage()).toPNG());
+  }
+  await win.webContents.executeJavaScript(`(() => {
+    world.mode='inspection';document.querySelector('#upgradePanel').hidden=true;
+    world.players.forEach((p,i)=>{p.x=195+i*80;p.y=195;p.invulnerability=0;});world.linked=true;
+    for(const id of ['rushGuard','novaEcho'])applyRunUpgrade(UPGRADE_DEFS.find(c=>c.id===id));
+    world.power.link.tasks.rushGuard={progress:12,complete:true,lastToken:12};
+    world.power.link.tasks.novaEcho={progress:3,complete:true,lastToken:3};
+    world.power.link.ready=false;world.power.link.connected=true;world.power.link.stable=1;
+    enemyBullet(235,195,0,60);updateRush(1/60);
+    world.novaCharge=120;world.novaCooldown=0;useNova();
+    world.power.link.ready=true;enemyBullet(195,190,0,60);updateLinkSupport(1/60);
+    for(let i=0;i<27;i++)updateLinkSupport(1/60);
+    for(const b of world.bullets.filter(b=>b.source==='linkReturn')) { b.x+=b.vx*.25;b.y+=b.vy*.25;b.age=.25; }
+    world.power.effects.forEach(e=>e.age=.1);world.flash=0;world.shake=0;world.mode='paused';draw();renderMasteryTray();
+    return true;
+  })()`);
+  await delay(80);
+  fs.writeFileSync(path.join(output,'missions-evolved.png'),(await win.webContents.capturePage()).toPNG());
   assert.deepEqual(errors,[]);
   console.log(JSON.stringify({fixtures:'passed',errors,screenshots:output,normalPlay:'separate smoke:chapter-one run'}));
   win.destroy();

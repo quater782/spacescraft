@@ -169,6 +169,7 @@ class SpaceRenderer3D {
     this.canvas.dataset.groundPlane = "none-open-space";
     this.canvas.dataset.depthScaffolding = "macro-mid-distant";
     this.canvas.dataset.shieldLanguage = "segmented-shell-hit-break";
+    this.canvas.dataset.shieldFeedback = "pixel-impact-shatter-reform";
     this.canvas.dataset.hullDamageLanguage = "scorch-cracks-smoke-60-30";
     this.canvas.dataset.bossGalleryView = "neutral-silhouette";
     this.canvas.dataset.macroLayout = "alternating-edge-anchors";
@@ -286,6 +287,7 @@ class SpaceRenderer3D {
     this.projectileArt.end();
     this.pixelEffects.end();
     this.canvas.dataset.combatEffects = "pixel-sparks-directional-shields-flow-link";
+    this.canvas.dataset.effectBeams = String(this.pixelEffects.beamCount);
     this.canvas.dataset.effectParticles = String(this.pixelEffects.count);
     this.canvas.dataset.effectDropped = String(this.pixelEffects.dropped);
     this.canvas.dataset.projectileArt = "extruded-pixel-stamps";
@@ -572,13 +574,65 @@ class SpaceRenderer3D {
     }
   }
 
+  shieldContact(base, profile, player) {
+    const radii = new THREE.Vector3(profile.span + .2, .8, profile.bodyLength * .78 + .2);
+    const inverse = new THREE.Matrix3().setFromMatrix4(base.clone().invert());
+    const origin = new THREE.Vector3((player.shieldImpactOffsetX || player.shieldImpactX || 0) / 21.5, 0,
+      (player.shieldImpactOffsetY || player.shieldImpactY || 0) / 13.3).applyMatrix3(inverse);
+    let direction = new THREE.Vector3((player.shieldIncomingX || 0) / 21.5, 0, (player.shieldIncomingY || 0) / 13.3).applyMatrix3(inverse);
+    if (direction.lengthSq() < 1e-8) direction.copy(origin).negate();
+    if (direction.lengthSq() < 1e-8) direction.set(0, 0, 1);
+    direction.normalize();
+    const o = origin.clone().divide(radii), d = direction.clone().divide(radii);
+    const a = d.dot(d), b = 2 * o.dot(d), c = o.dot(o) - 1;
+    const discriminant = b * b - 4 * a * c;
+    let point;
+    if (discriminant >= 0) {
+      // Entry root also works when collision reports a projectile already inside the shell.
+      point = origin.clone().addScaledVector(direction, (-b - Math.sqrt(discriminant)) / (2 * a));
+    } else {
+      // Wide beam / collision tolerance: project the nearest point onto the visible surface.
+      const closest = o.clone().addScaledVector(d, -o.dot(d) / a);
+      if (closest.lengthSq() < 1e-8) closest.copy(d).negate();
+      point = closest.normalize().multiply(radii);
+    }
+    const normal = point.clone().divide(radii).divide(radii).normalize();
+    const incidence = clamp(-direction.dot(normal), 0, 1);
+    const tangent = direction.clone().addScaledVector(normal, incidence);
+    if (tangent.lengthSq() < 1e-8) tangent.set(-normal.z, 0, normal.x);
+    tangent.normalize();
+    const reflection = direction.clone().addScaledVector(normal, 2 * incidence).normalize();
+    const angle = Math.atan2(point.z / radii.z, point.x / radii.x);
+    point.y += .18;
+    return { point, normal, tangent, reflection, incidence, angle };
+  }
+
   drawPlayerShield(base, profile, player) {
-    const hit = clamp((player.shieldHitTimer || 0) / .32, 0, 1);
+    const hit = clamp((player.shieldHitTimer || 0) / .48, 0, 1);
     const breaking = player.shield <= 0;
-    const progress = breaking ? 1 - clamp((player.shieldBreakTimer || 0) / .55, 0, 1) : 1 - hit;
+    const progress = breaking ? 1 - clamp((player.shieldBreakTimer || 0) / .8, 0, 1) : 1 - hit;
     const radiusX = profile.span + .2, radiusZ = profile.bodyLength * .78 + .2;
     const directed = Math.hypot(player.shieldImpactX || 0, player.shieldImpactY || 0) > .01;
-    const impactAngle = Math.atan2((player.shieldImpactY || 0) / 13.3, (player.shieldImpactX || 0) / 21.5);
+    const contact = this.shieldContact(base, profile, player);
+    const impactAngle = contact.angle;
+    const power = clamp((player.shieldImpactDamage || 1) - 1, 0, 4) / 4;
+    const impactScale = 1 + power * .8;
+    const glance = Math.sqrt(Math.max(0, 1 - contact.incidence ** 2));
+    const tangentSign = Math.sign(-Math.sin(impactAngle) * contact.tangent.x + Math.cos(impactAngle) * contact.tangent.z) || 1;
+    const reform = clamp((player.shieldReformTimer || 0) / .72, 0, 1);
+    const reformProgress = 1 - reform;
+    if (reform > 0) {
+      // Three counter-winding streams gather into the real shield boundary, then lock in.
+      for (let index = 0; index < (this.quality === "low" ? 30 : 54); index += 1) {
+        const seed = (index * .618034) % 1;
+        const age = clamp(reformProgress * 1.35 - seed * .25, 0, 1);
+        const angle = index * 2.39996 + (1 - age) * 1.7;
+        const radius = 1 + (1 - age) ** 2 * (.45 + seed * .8);
+        this.pixelEffects.spark(base, [Math.cos(angle) * radiusX * radius, .18 + Math.sin(index * 1.8) * (1 - age) * .7, Math.sin(angle) * radiusZ * radius],
+          (index % 6 ? .14 : .4) * (.5 + age * .5), age > .8 ? "#affff1" : "#3caacb",
+          Math.sin(reformProgress * Math.PI) * (.4 + age * .4), index % 6 ? .8 : 1.8, 1, angle);
+      }
+    }
     const count = this.quality === "low" ? 30 : 48;
     // Unequal lifetimes and counter-moving latitudes keep the field from reading as a dotted hoop.
     for (let index = 0; index < count; index += 1) {
@@ -588,37 +642,51 @@ class SpaceRenderer3D {
       const angle = index * 2.39996 + this.time * (index % 2 ? .24 : -.18);
       const latitude = Math.sin(index * 1.71 + this.time * .7) * .72;
       const alignment = directed ? Math.max(0, Math.cos(angle - impactAngle)) ** 8 : .3;
-      const spread = breaking ? progress * (.3 + seed * .9) : 0;
+      const spread = breaking ? progress * (.6 + seed * 1.4) : 0;
       const radius = Math.sqrt(1 - latitude * latitude) + spread;
       const large = index % 9 === 0;
       this.pixelEffects.spark(base, [Math.cos(angle) * radiusX * radius, .16 + latitude * .8 + spread * .2, Math.sin(angle) * radiusZ * radius],
-        (large ? .30 : .075 + seed * .12) * (.65 + pulse * .35), large ? "#8deaff" : "#46b3df",
-        (breaking ? (1 - progress) * .55 : .12 + pulse * .3 + alignment * hit * .35), large ? 1.2 : .45);
+        (large ? .30 : .075 + seed * .12) * (.65 + pulse * .35 + hit * alignment * .8), hit > .2 && alignment > .5 ? "#b0f7ff" : large ? "#8deaff" : "#46b3df",
+        (breaking ? (1 - progress) * .9 : (.12 + pulse * .3 + alignment * hit * .85) * (reform ? .35 + reformProgress * .65 : 1)), large ? 1.5 : .65);
     }
     if (hit > 0 || breaking) {
+      // A readable flash of the entire boundary accompanies the stronger contact sector.
+      const shock = Math.max(0, 1 - progress * (breaking ? 1.5 : 2.4));
+      for (let index = 0; index < 36; index += 1) {
+        const angle = index / 36 * TAU;
+        const align = directed ? Math.max(0, Math.cos(angle - impactAngle)) ** 4 : .5;
+        const radius = 1 + progress * (breaking ? 1.15 : .08);
+        this.pixelEffects.spark(base, [Math.cos(angle) * radiusX * radius, .18, Math.sin(angle) * radiusZ * radius],
+          (.14 + align * .18) * (breaking ? 1.35 : 1), breaking ? "#b3dfff" : "#74eaff", shock * (.3 + align * .6) * impactScale, 1.2 + power * .6);
+      }
       // Two wave fronts travel away from the incoming direction over the shield surface.
       for (const side of [-1, 1]) for (let index = 0; index < 6; index += 1) {
         const trail = index / 5;
-        const angle = impactAngle + side * (progress * (breaking ? 2.9 : 2.2) - trail * .48);
+        const angle = impactAngle + tangentSign * glance * progress * 1.7 + side * (progress * (breaking ? 2.9 : 2.2) - trail * .48) * (1 - glance * .65);
         const radius = 1 + (breaking ? progress * .55 : Math.sin(progress * Math.PI) * .06);
         this.pixelEffects.spark(base, [Math.cos(angle) * radiusX * radius, .18 + Math.sin(trail * Math.PI) * .12, Math.sin(angle) * radiusZ * radius],
           (.12 + (1 - trail) ** 3 * .29) * (1 - progress * .45), index < 2 ? "#79e7ff" : "#38ace6",
-          (1 - progress) * (1 - trail * .8) * .72, index < 2 ? 1.65 : .65);
+          (1 - progress) * (1 - trail * .8) * .72 * impactScale, index < 2 ? 1.65 + power * .5 : .65);
       }
       // A brief contact flare, then large chips and fine dust separate, curl and cool.
-      const flash = Math.max(0, 1 - progress * 5);
-      this.pixelEffects.spark(base, [Math.cos(impactAngle) * radiusX, .2, Math.sin(impactAngle) * radiusZ],
-        .85 + flash * .3, "#c9faff", flash * .65, 2.1);
-      const fragments = this.quality === "low" ? 18 : 30;
+      const flash = Math.max(0, 1 - progress * 2.8);
+      this.pixelEffects.spark(base, contact.point.toArray(),
+        (.65 + flash * .25) * impactScale, "#b2f5ff", flash * (.65 + contact.incidence * .3), 1.8 + power * .7);
+      const fragments = (this.quality === "low" ? 18 : 30) + Math.round(power * 18);
       for (let index = 0; index < fragments; index += 1) {
         const seed = (index * .618034) % 1;
         const age = clamp(progress / (.5 + seed * .5), 0, 1);
         const coarse = index % 7 === 0;
-        const angle = impactAngle + (seed - .5) * (directed ? .85 : TAU) + Math.sin(index * 2.4) * age * .5;
-        const spread = age * (.16 + seed * .65) + age * age * (breaking ? .85 : .15);
-        this.pixelEffects.spark(base, [Math.cos(angle) * (radiusX + spread), .2 + Math.sin(index * 2.4) * age * .6 - age * age * .2, Math.sin(angle) * (radiusZ + spread)],
-          (coarse ? .48 : .07 + seed * .12) * (1 - age * .65), age < .25 ? "#c5f8ff" : coarse ? "#59d9ff" : "#318dcc",
-          (1 - age) ** 1.3 * Math.min(1, progress * 10) * .8, coarse ? 1.7 : .65, coarse ? 1.6 : 1, index + age * 3);
+        const angle = impactAngle + (seed - .5) * (directed && !breaking ? .85 : TAU) + Math.sin(index * 2.4) * age * .5;
+        const spread = age * (.16 + seed * .65) + age * age * (breaking ? 1.6 : .15);
+        const position = breaking ? [Math.cos(angle) * (radiusX + spread), .2 + Math.sin(index * 2.4) * age * .6 - age * age * .2, Math.sin(angle) * (radiusZ + spread)]
+          : contact.point.clone().addScaledVector(contact.reflection, age * (.35 + seed * .9) * impactScale)
+            .addScaledVector(contact.tangent, age * Math.sin(index * 2.4) * .35 + age * glance * .45)
+            .add(new THREE.Vector3(0, Math.sin(index * 1.7) * age * .3 - age * age * .1, 0)).toArray();
+        this.pixelEffects.spark(base, position,
+          (coarse ? (breaking ? .7 : .38) : .07 + seed * .12) * (1 - age * .65) * impactScale, age < .25 ? "#c5f8ff" : coarse ? "#59d9ff" : "#318dcc",
+          (1 - age) ** 1.1 * Math.min(1, progress * 12) * (breaking ? 1 : .85), coarse ? 1.7 + power * .5 : .65, coarse ? 1.6 + glance : 1, index + age * 3);
+
       }
     }
   }
@@ -2327,41 +2395,36 @@ class SpaceRenderer3D {
     // Compute transverse offsets in logical collision space before projecting to 3D.
     const nx = -dy / length * (beam.width || 5) / 21.5;
     const nz = dx / length * (beam.width || 5) / 13.3;
-    const base = compose();
-    this.surfaces.line(base, a, b, "#fff8d8", alpha * .85);
-    for (const side of [-1, 1]) {
-      this.surfaces.line(base, [a[0] + nx * side, a[1], a[2] + nz * side],
-        [b[0] + nx * side, b[1], b[2] + nz * side], "#ff4f69", .27);
-    }
-    const count = Math.min(this.quality === "low" ? 64 : 112, Math.max(28, Math.ceil(length * .32)));
-    // Uneven hot packets race along the continuous line; fine embers peel off and cool.
+    this.pixelEffects.beam(a, b, nx, nz, length, beam.age, alpha, beam);
+    const tint = beam.debuff && beam.payloadColor ? beam.payloadColor : beam.color || "#ffe070";
+    // The continuous energy ribbon carries the silhouette; sparse sparks carry motion.
+    const count = Math.min(this.quality === "low" ? 40 : 72, Math.max(24, Math.ceil(length * .2)));
     for (let index = 0; index < count; index += 1) {
       const seed = (index * .618034) % 1;
       const life = (beam.age * (2.8 + seed * 2.2) + seed) % 1;
       const t = (seed + beam.age * (1.7 + (index % 3) * .45)) % 1;
-      const coarse = index % 11 === 0;
-      const offset = Math.sin(index * 2.4) * (coarse ? .12 : life * life * .9);
-      const p = [lerp(a[0], b[0], t) + nx * offset, .48 + Math.sin(index * 1.7) * life * .07, lerp(a[2], b[2], t) + nz * offset];
-      this.pixelEffects.spark(null, p, (coarse ? .48 + seed * .25 : .085 + seed * .23) * (1 - life * .55),
-        coarse ? "#ffd8a0" : life < .3 ? "#ff9d6b" : "#f33562", alpha * (.35 + Math.sin(life * Math.PI) * .5),
-        coarse ? 1.8 : .65, coarse ? 1 : 1.5, index + life * 2);
+      const offset = Math.sin(index * 2.4) * (.45 + life * .8);
+      const p = [lerp(a[0], b[0], t) + nx * offset, .49 + Math.sin(index * 1.7) * life * .06, lerp(a[2], b[2], t) + nz * offset];
+      this.pixelEffects.spark(null, p, (.075 + seed * .17) * (1 - life * .55),
+        life < .3 ? "#fff0c9" : tint, alpha * (1 - life) * .65, .85, 1.4, index + life * 2);
     }
-    // A travelling cluster has a bright head and a shrinking tail, never a chain of equal beads.
-    for (let packet = 0; packet < 4; packet += 1) for (let tail = 0; tail < 5; tail += 1) {
-      const t = (packet * .271 + beam.age * 2.35 - tail * .009 + 1) % 1;
-      this.pixelEffects.spark(null, [lerp(a[0], b[0], t), .49, lerp(a[2], b[2], t)],
-        (.35 + packet * .025 - tail * .06), tail ? "#ff644f" : "#ffbd70", alpha * (.52 - tail * .08), tail ? .8 : 1.8);
-    }
-    const ignition = Math.max(0, 1 - beam.age / .12);
-    this.pixelEffects.spark(null, a, .7 + ignition * .5, "#ffaf78", alpha * .7, 2.1);
-    for (let index = 0; index < 16; index += 1) {
+    const power = clamp(((beam.damage || 1) - 1) / 4, 0, 1);
+    const ignition = Math.max(0, 1 - beam.age / .18);
+    this.pixelEffects.spark(null, a, .42 + ignition * (.35 + power * .3), tint, alpha * (.35 + ignition * .3), 1.6 + power * .5);
+    // A one-shot, forward fan follows the beam direction, independent of screen orientation.
+    const worldLength = Math.hypot(b[0] - a[0], b[2] - a[2]);
+    const forwardX = (b[0] - a[0]) / Math.max(.001, worldLength), forwardZ = (b[2] - a[2]) / Math.max(.001, worldLength);
+    const sparks = (this.quality === "low" ? 16 : 28) + Math.round(power * 12);
+    for (let index = 0; index < sparks; index += 1) {
       const seed = (index * .618034) % 1;
-      const life = (seed + beam.age * (2.4 + seed)) % 1;
-      const angle = index * 2.4;
-      const radius = life * (.15 + seed * .5);
-      this.pixelEffects.spark(null, [a[0] + Math.cos(angle) * radius, a[1] + Math.sin(angle) * radius * .55, a[2] + life * .16],
-        (index % 5 ? .1 + seed * .12 : .42) * (1 - life * .7), life < .3 ? "#ffdb99" : "#ff4c56", (1 - life) ** 2 * alpha,
-        index % 5 ? .65 : 1.6, 1.3, angle + life);
+      const age = beam.age - (index % 5) * .008;
+      const life = age / (.14 + seed * .16);
+      if (life < 0 || life >= 1) continue;
+      const travel = life * (.28 + seed * .65) * (1 + power * .5);
+      const fan = Math.sin(index * 2.4) * travel * .65;
+      this.pixelEffects.spark(null, [a[0] + forwardX * travel - forwardZ * fan, a[1] + Math.cos(index * 1.7) * travel * .28, a[2] + forwardZ * travel + forwardX * fan],
+        (index % 6 ? .09 + seed * .13 : .35) * (1 - life * .7) * (1 + power * .4), index % 6 ? tint : "#ffebc4",
+        (1 - life) ** 1.4 * (.65 + power * .2), index % 6 ? .8 : 1.7, 1.3, index + life);
     }
   }
 

@@ -6,6 +6,16 @@
 
 `#game` 新增 `data-ai-threats`，以 `类型:严重度:计数` 形式公开每机当前威胁摘要。`npm run smoke:chapter-one -- --dual-ai --offense --sample-seconds=60` 只把两名玩家都接入正式 `aiPilotControls`；队友由生产 `aiPilotPartner` 对称解析，不再在测试服务器里替换内部队友引用。该短样本只验证控制器适配、存活和错误边界，不当作完整首章通过。
 
+## 2026-09-13 星链可选协作与任务卡
+
+`npm run smoke:power` 在原强度夹具上补查基础净空共享上限 2、首次 0.5 秒稳定、6 秒连接作战恢复、空场/断联暂停、过载充能不衰减、1 秒近身余效不保留断开的走廊。护网以真实节点消费累计 12 次并验证折返法线/0.6D/首碰/无回能；Nova 验证空场及无敌目标不计、双机共享三次进阶、0.45 秒原爆点最多清三颗、暂停/选卡冻结和跨章继承/新局重置。首次反射夹具曾误用出生前速度作期望；已改为对比敌弹实际倍率后的速度，未改敌方速度。
+
+新增卡面截图 `missions-zh.png`、`missions-en.png` 与受控完成效果 `missions-evolved.png`，仍在系统临时目录 `spacescraft-power`。夹具不是自然任务完成耗时或胜率证据。`#game` 提供 `data-link-support`（净空、折返、回响次数及恢复状态）和 `data-mastery-tasks`（进度/完成）；双 AI 正常速度脚本也记录这两项，命令仍为 `npm run smoke:chapter-one -- --dual-ai --offense --sample-seconds=270`。
+
+不改生产 AI、敌方策略或掉落数值；完整首章/真人可玩性须另验，短样本不记作通关。
+
+2026-09-13 实测：机制及可见中英卡面通过，零页面错误；双 AI 重炮×2 样本到 270.07 秒双机 HP 3.5/7，基础净空 16 次/17 颗，165 击杀、平均 60 FPS。P2 232.35 秒倒地、234.33 秒被救起，P1 未倒地，任务卡未选择。`fullChapterVerified:false`；旧 268.77 秒全灭样本仅作同种子对照。完整 verify 本地子项通过，在线审计在获准联网后单独补跑成功，0 个漏洞。
+
 ## 敌军连续飞行专项
 
 2026-09-15 后续：专项增加所有职责“不转身倒退/侧移”的响应、喷口方向、普通/芯片同型机属性一致、首章生成保护/在场上限、芯片选位/提前闪避/预警承诺检查。输出 `chip-reverse-zh.png`（平衡）与 `chip-reverse-en.png`（低画质）。正常首章抽样使用 `npm run smoke:chapter-one -- --dual-ai --offense --sample-seconds=210`，记录 `firstChipTime/maxChips` 和实际在场芯片，不能记作完整首章通过。 2026-09-15 已执行：210.2 秒双机 7/7 HP、零倒地、106 击杀、60 FPS；首芯片采样时间 156.55 秒，最多同时在场 1 架，零页面/非法弹体错误。
@@ -20,7 +30,13 @@
 
 ## 像素粒子战斗反馈专项
 
-`npm run smoke:effects -- --motion` 额外输出 60 帧、30 fps 的 `motion-000.png` 至 `motion-059.png`，使用实际 WebGL 渲染，按模拟时间采样护盾受击与激光流动。该受控片段手动设置视觉计时器，适合检查粒径、波前、冷却与局部辉光，不作为真实伤害结算录像；真实四向碰撞与激光来源仍由同一脚本的机制夹具验证。
+`npm run smoke:effects -- --attributes-motion` 追加 60 帧的普通/精英/扫射激光对比（`attributes-000.png` 至 `attributes-059.png`），调用正式 `fireLaser` 取得属性；只为取景截短展示端点并驱动年龄，不作为完整攻击 AI 录像。另有 `shield-damage-detail.png`（左 1 点 / 右 4 点吸收）与 `shield-angle-detail.png`（左正撞 / 右斜擦）；角度展示是受控几何夹具。实际普通弹碰撞覆盖 1/4 点伤害、1 点盾承受 4 点攻击的溢出，求交夹具覆盖正撞、两侧斜擦、单位椭球表面与反射符号。
+
+
+专项还验证真实盾事件、无敌期间不重复命中、满盾不误播、自然回复/研究/拾取装载及计时衰减，检查静音总线。复用正式 `AudioEngine.sfx` 通过 OfflineAudioContext 导出 `shield-hit-break-reform.wav`（依次受击、破盾、装载），检查三段非静音且无削波；音质仍需真实扬声器/耳机主观验收。
+
+
+`npm run smoke:effects -- --motion` 额外输出 108 帧、30 fps 的 `motion-000.png` 至 `motion-107.png`，使用实际 WebGL 渲染，按模拟时间依次采样护盾受击、破碎、装载与激光流动。该受控片段手动设置视觉计时器，适合检查粒径、波前、冷却与局部辉光，不作为真实伤害结算录像；真实四向碰撞与激光来源仍由同一脚本的机制夹具验证。
 
 
 `npm run smoke:effects` 使用隔离 Electron/WebGL，真实普通弹碰撞覆盖护盾左/右/前/后四向，真实光束覆盖激光受击方向；另检查预警亮相间隔逐次缩短。受控截图覆盖预警早/晚、冲刺路径、粒子激光、方向护盾/破盾、星链充能/过载/冷却/拦截与低画质，随后刷新并检查正常首章 20 秒。输出在系统临时目录 `spacescraft-particle-effects`；`--fixtures-only` 可跳过正常开局，输出明确标记，不能代替难度体验。

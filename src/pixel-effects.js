@@ -62,9 +62,60 @@ export class PixelEffects {
     this.points.renderOrder = 4;
     this.geometry.setDrawRange(0, 0);
     scene.add(this.points);
+    this.beamCapacity = 64;
+    this.beamCount = 0;
+    this.beamGeometry = new THREE.BufferGeometry();
+    for (const [name, width] of [['position', 3], ['beamUv', 2], ['beamState', 3], ['beamStyle', 3], ['beamTint', 3]]) {
+      this.beamGeometry.setAttribute(name, new THREE.BufferAttribute(new Float32Array(this.beamCapacity * 6 * width), width).setUsage(THREE.DynamicDrawUsage));
+    }
+    this.beamMaterial = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, depthTest: true, side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending, toneMapped: false,
+      vertexShader: `
+        attribute vec2 beamUv;
+        attribute vec3 beamState;
+        attribute vec3 beamStyle;
+        attribute vec3 beamTint;
+        varying vec2 uvBeam;
+        varying vec3 state;
+        varying vec3 style;
+        varying vec3 tint;
+        void main() {
+          uvBeam = beamUv; state = beamState; style = beamStyle; tint = beamTint;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: `
+        varying vec2 uvBeam;
+        varying vec3 state;
+        varying vec3 style;
+        varying vec3 tint;
+        void main() {
+          // Axial cells travel forward, while stepped edges retain the pixel silhouette.
+          float cell = floor((uvBeam.x - state.x * (150.0 + style.x * 100.0 + style.y * 60.0)) / 2.0);
+          float flow = 0.5 + 0.5 * sin(cell * 0.73);
+          float edge = floor(abs(uvBeam.y) * 24.0) / 24.0;
+          float core = 1.0 - step(0.075 + style.x * 0.12 + flow * 0.025, edge);
+          float body = 1.0 - step(0.55 + flow * 0.05, edge);
+          float halo = pow(max(0.0, 1.0 - abs(uvBeam.y)), 2.0);
+          vec3 color = tint * (0.75 + body * 0.35);
+          color = mix(color, mix(tint, vec3(1.35), 0.6), core);
+          float ripple = 0.9 + 0.1 * sin(cell * (style.y > 0.5 ? 1.2 : 0.3) - state.x * (12.0 + style.z * 8.0));
+          float energy = core * (0.72 + style.x * 0.3) + body * (0.075 + flow * 0.055) + halo * (0.14 + style.x * 0.18);
+          energy *= (0.8 + style.x * 0.5) * ripple;
+          float cap = smoothstep(0.0, 2.0, min(uvBeam.x, state.z - uvBeam.x));
+          gl_FragColor = vec4(color, state.y * energy * cap);
+        }`,
+    });
+    this.beamMesh = new THREE.Mesh(this.beamGeometry, this.beamMaterial);
+    this.beamMesh.frustumCulled = false;
+    this.beamMesh.renderOrder = 3;
+    this.beamGeometry.setDrawRange(0, 0);
+    scene.add(this.beamMesh);
+
   }
 
   begin(height, fov) {
+    this.beamCount = 0;
     this.count = 0;
     this.dropped = 0;
     this.material.uniforms.projectionScale.value = height / (2 * Math.tan(fov * Math.PI / 360));
@@ -84,7 +135,30 @@ export class PixelEffects {
     this.geometry.attributes.sparkAlpha.array[this.count++] = alpha;
   }
 
+  beam(a, b, nx, nz, length, age, alpha, source = {}) {
+    if (this.beamCount >= this.beamCapacity) { this.dropped += 1; return; }
+    // A ribbon in world XZ space: its bright edge matches the collision half-width.
+    const attributes = this.beamGeometry.attributes;
+    const first = this.beamCount++ * 6;
+    const power = Math.min(1, Math.max(0, ((source.damage || 1) - 1) / 4));
+    const sweep = source.pattern === "laserSweep" ? 1 : 0;
+    const heavy = source.sourceElite || source.sourceBoss || source.bossStage != null ? 1 : 0;
+    this.color.set(source.debuff && source.payloadColor ? source.payloadColor : source.color || "#ffe070");
+    const corners = [[0, -1], [1, -1], [1, 1], [0, -1], [1, 1], [0, 1]];
+    for (let index = 0; index < 6; index += 1) {
+      const [end, side] = corners[index];
+      const p = end ? b : a;
+      attributes.position.setXYZ(first + index, p[0] + nx * side * 1.7, p[1], p[2] + nz * side * 1.7);
+      attributes.beamUv.setXY(first + index, end * length, side);
+      attributes.beamState.setXYZ(first + index, age, alpha, length);
+      attributes.beamStyle.setXYZ(first + index, power, sweep, heavy);
+      attributes.beamTint.setXYZ(first + index, this.color.r, this.color.g, this.color.b);
+    }
+  }
+
   end() {
+    this.beamGeometry.setDrawRange(0, this.beamCount * 6);
+    for (const attribute of Object.values(this.beamGeometry.attributes)) attribute.needsUpdate = true;
     this.geometry.setDrawRange(0, this.count);
     for (const attribute of Object.values(this.geometry.attributes)) attribute.needsUpdate = true;
   }

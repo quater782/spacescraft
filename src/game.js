@@ -939,9 +939,10 @@ class AudioEngine {
     }
   }
 
-  sfx(name, owner = 0) {
+  sfx(name, owner = 0, intensity = 1) {
     if (!this.context) return;
     const now = this.context.currentTime;
+    const shieldPower = clamp(Math.sqrt(intensity), .8, 1.75);
     if (name.startsWith("power")) {
       const sounds = { powerHeavy: [43, 67, .12, "square"], powerFan: [74, 81, .045, "triangle"],
         powerSeeker: [69, 76, .08, "square"], powerArc: [91, 79, .055, "square"],
@@ -1055,15 +1056,21 @@ class AudioEngine {
       if (now - this.lastEnemyShot < .13) return;
       this.lastEnemyShot = now;
       [55, 62, 67].forEach((note, index) => this.tone(note + this.stage, .1, "triangle", .017, now + index * .018, this.sfxBus, -4));
-    } else if (name === "shield") {
-      this.tone(79, .16, "sine", .055, now, this.sfxBus, -12);
-      this.tone(91, .1, "square", .025, now + .02, this.sfxBus, -19);
+    } else if (name === "shield" || name === "shieldReform") {
+      // Rising lock-in cadence: distinct from the descending break and short impact.
+      [60, 67, 74, 86].forEach((note, index) => this.tone(note + owner, .13, index % 2 ? "square" : "triangle", .065, now + index * .075, this.sfxBus, 3));
+      this.tone(74 + owner, .3, "triangle", .065, now + .24, this.sfxBus);
+      this.noise(.06, .035, now + .23, 3800);
     } else if (name === "shieldBlock") {
-      this.tone(86, .08, "triangle", .05, now, this.sfxBus, 5);
-      this.tone(93, .12, "square", .025, now + .025, this.sfxBus, -7);
+      this.tone(57 + owner, .095, "triangle", .14 * shieldPower, now, this.sfxBus, -12);
+      this.tone(91 + owner, .075, "square", .09 * shieldPower, now, this.sfxBus, -9);
+      this.tone(79 + owner, .19, "triangle", .065 * shieldPower, now + .025, this.sfxBus, 2);
+      this.noise(.055, .09 * shieldPower, now, 2400);
     } else if (name === "shieldBreak") {
-      [88, 74, 57].forEach((note, index) => this.tone(note, .13, "square", .035, now + index * .045, this.sfxBus, -14));
-      this.noise(.17, .035, now + .025, 2600);
+      this.tone(48 + owner, .32, "triangle", .15 * shieldPower, now, this.sfxBus, -19);
+      [91, 78, 62, 43].forEach((note, index) => this.tone(note + owner, .14, "square", (.075 - index * .01) * shieldPower, now + index * .065, this.sfxBus, -12));
+      this.noise(.17, .12 * shieldPower, now, 1400);
+      this.noise(.12, .045 * shieldPower, now + .13, 3600);
     } else if (name === "barrierBreak") {
       [84, 79, 72].forEach((note, index) => this.tone(note, .11, index === 1 ? "triangle" : "square", .035, now + index * .028, this.sfxBus, -8));
       this.noise(.12, .035, now + .025, 2800);
@@ -1776,6 +1783,7 @@ function upgradeIcon(upgradeId) {
     nanites: '<path d="M9 2h6v7h7v6h-7v7H9v-7H2V9h7V2Zm3 4v6H6v1h6v6h1v-6h6v-1h-6V6h-1Z"/>',
     capacitor: '<path d="M7 3h10v3h2v15H5V6h2V3Zm2 4v5h3v6l4-8h-3V7H9Z"/>',
     novaCore: '<path d="m12 1 2.3 7.4L22 6l-4.7 6 4.7 6-7.7-2.4L12 23l-2.3-7.4L2 18l4.7-6L2 6l7.7 2.4L12 1Zm0 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/>',
+    novaEcho: '<path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM5 4l2 2a8 8 0 0 0 0 12l-2 2A11 11 0 0 1 5 4Zm14 0a11 11 0 0 1 0 16l-2-2a8 8 0 0 0 0-12l2-2Z"/>',
     novaHarvester: '<path d="M4 4h4v5h3V2h3v7h3V4h4v7c0 4.4-2.5 7.2-7 8.6V23h-4v-3.4C6.5 18.2 4 15.4 4 11V4Zm4 8c.4 2 1.7 3.2 4 4 2.3-.8 3.6-2 4-4H8Z"/>',
     novaAegis: '<path d="m12 2 8 3v6c0 5-3.2 8.6-8 11-4.8-2.4-8-6-8-11V5l8-3Zm0 5-1.2 3.4L7 12l3.8 1.6L12 17l1.2-3.4L17 12l-3.8-1.6L12 7Z"/>',
     novaPurifier: '<path d="M11 2h2v5.2l3.7-3.7 1.8 1.8L14.8 9H22v3h-7.2l3.7 3.7-1.8 1.8-3.7-3.7V22h-2v-8.2l-3.7 3.7-1.8-1.8L9.2 12H2V9h7.2L5.5 5.3l1.8-1.8L11 7.2V2Z"/>',
@@ -1923,7 +1931,9 @@ function applyRunUpgrade(upgrade) {
   world.upgradeHistory.push(upgrade.id);
   world.growthGrace = 12;
   for (const player of world.players) {
+    const previousShield = player.shield;
     SpaceRoguelike.applyUpgradeToPlayer(player, upgrade.id, level);
+    shieldRestored(player, previousShield);
   }
   if (upgrade.id === "rushGuard" && level === 1) world.power.guardNodes = 3;
   if (SpaceRoguelike.TASKS[upgrade.id] && !world.power.link.tasks[upgrade.id]) {
@@ -2356,7 +2366,13 @@ function createPlayer(index) {
     shieldHitTimer: 0,
     shieldImpactX: 0,
     shieldImpactY: 0,
+    shieldImpactOffsetX: 0,
+    shieldImpactOffsetY: 0,
+    shieldIncomingX: 0,
+    shieldIncomingY: 0,
+    shieldImpactDamage: 0,
     shieldBreakTimer: 0,
+    shieldReformTimer: 0,
     hullHitTimer: 0,
     damageVfxTimer: 0,
     shieldAbsorbed: 0,
@@ -2428,7 +2444,7 @@ function confirmRouteChoice(index) {
   world.shake = Math.max(world.shake, .24);
   for (const player of world.players) {
     player.hp = Math.min(player.maxHp, player.hp + (branch.reward.repair || 0));
-    player.shield = Math.min(player.maxShield, player.shield + (branch.reward.shield || 0));
+    restorePlayerShield(player, branch.reward.shield || 0);
     player.weapon = Math.min(3, player.weapon + (branch.reward.weapon || 0));
     player.x = player.index === 0 ? W * .39 : W * .61;
     player.y = H - 38;
@@ -2821,7 +2837,10 @@ function renderMasteryTray() {
   const tray = document.querySelector("#masteryTray");
   const ids = Object.keys(world.power.link.tasks);
   tray.hidden = !ids.length || !["playing", "paused", "draft"].includes(world.mode);
-  const text = ids.map(id => `<span class="${mastered(id) ? "mastered" : ""}">${upgradeIcon(id)}${localizedName(UPGRADE_DEFS.find(card => card.id === id))} · ${masteryText(id)}</span>`).join("");
+  const text = ids.map(id => {
+    const progress = mastered(id) ? t("mastery.done") : t("mastery.progress", { progress: world.power.link.tasks[id].progress, goal: SpaceRoguelike.TASKS[id].goal });
+    return `<span class="${mastered(id) ? "mastered" : ""}" tabindex="0" title="${masteryText(id)}" aria-label="${masteryText(id)}">${upgradeIcon(id)}${localizedName(UPGRADE_DEFS.find(card => card.id === id))} · ${progress}</span>`;
+  }).join("");
   if (tray._masteryMarkup !== text) { tray.innerHTML = text; tray._masteryMarkup = text; }
 }
 
@@ -4352,6 +4371,21 @@ function updateNova(dt) {
   }
 }
 
+// Presentation is emitted only after shield charge actually increases.
+function shieldRestored(player, previous) {
+  if (player.shield <= previous) return;
+  player.shieldReformTimer = .72;
+  player.shieldHitTimer = 0;
+  player.shieldBreakTimer = 0;
+  audio.sfx("shieldReform", player.index);
+}
+
+function restorePlayerShield(player, amount) {
+  const previous = player.shield;
+  player.shield = Math.min(player.maxShield, player.shield + amount);
+  shieldRestored(player, previous);
+}
+
 function damagePlayer(player, amount = 1, impact = null) {
   if (player.invulnerability > 0 || player.downed) return false;
   const incoming = Math.max(1, Math.round(Number(amount) || 1));
@@ -4368,16 +4402,26 @@ function damagePlayer(player, amount = 1, impact = null) {
     if (Math.hypot(impactX, impactY) < .01) {
       impactX = -(impact?.vx || 0); impactY = -(impact?.vy || 0);
     }
+    player.shieldImpactOffsetX = impactX;
+    player.shieldImpactOffsetY = impactY;
+    const moving = Math.hypot(impact?.vx || 0, impact?.vy || 0) > .01;
+    const relativeX = moving ? (impact.vx || 0) - (impact.kind === "beam" ? 0 : player.vx || 0) : -impactX;
+    const relativeY = moving ? (impact.vy || 0) - (impact.kind === "beam" ? 0 : player.vy || 0) : -impactY;
+    const relativeLength = Math.hypot(relativeX, relativeY);
+    player.shieldIncomingX = relativeLength > .01 ? relativeX / relativeLength : 0;
+    player.shieldIncomingY = relativeLength > .01 ? relativeY / relativeLength : 0;
+    player.shieldImpactDamage = absorbed;
     const impactLength = Math.hypot(impactX, impactY);
     player.shieldImpactX = impactLength > 0 ? impactX / impactLength : 0;
     player.shieldImpactY = impactLength > 0 ? impactY / impactLength : 0;
-    player.shieldHitTimer = .32;
-    player.shieldBreakTimer = player.shield <= 0 ? .55 : 0;
+    player.shieldHitTimer = .48;
+    player.shieldReformTimer = 0;
+    player.shieldBreakTimer = player.shield <= 0 ? .8 : 0;
     remaining -= absorbed;
     player.invulnerability = remaining > 0 ? 0 : .22;
     player.shieldRegenTimer = player.shieldRegenInterval || Number.POSITIVE_INFINITY;
     burst(player.x, player.y, "#9be9ff", 8, 45);
-    audio.sfx(player.shield <= 0 ? "shieldBreak" : "shieldBlock");
+    audio.sfx(player.shield <= 0 ? "shieldBreak" : "shieldBlock", player.index, absorbed);
     pulseGamepad(player.index, 80, 0.16, 0.34);
     if (player.novaShieldCharge > 0) {
       const charge = Math.min(world.power.shieldBudget, absorbed * player.novaShieldCharge);
@@ -4420,7 +4464,9 @@ function revivePlayer(player) {
   player.rescueCount += 1;
   player.hp = Math.min(player.maxHp, player.reviveHp);
   player.invulnerability = 1.2;
+  const previousShield = player.shield;
   player.shield = 1;
+  shieldRestored(player, previousShield);
   player.downTimer = 0;
   player.revive = 0;
   burst(player.x, player.y, PLAYER_CONFIG[player.index].light, 28, 90);
@@ -4443,6 +4489,7 @@ function updatePlayers(dt) {
     player.invulnerability = Math.max(0, player.invulnerability - dt);
     player.shieldHitTimer = Math.max(0, player.shieldHitTimer - dt);
     player.shieldBreakTimer = Math.max(0, player.shieldBreakTimer - dt);
+    player.shieldReformTimer = Math.max(0, (player.shieldReformTimer || 0) - dt);
     player.hullHitTimer = Math.max(0, player.hullHitTimer - dt);
     player.fireTimer -= dt;
     player.protocolCooldown = Math.max(0, player.protocolCooldown - dt);
@@ -4462,10 +4509,9 @@ function updatePlayers(dt) {
       if (player.shield < player.maxShield) {
         player.shieldRegenTimer -= dt;
         if (player.shieldRegenTimer <= 0) {
-          player.shield += 1;
+          restorePlayerShield(player, 1);
           player.shieldRegenTimer = player.shieldRegenInterval;
           burst(player.x, player.y, "#9be9ff", 10, 38);
-          audio.sfx("shield");
         }
       } else {
         player.shieldRegenTimer = player.shieldRegenInterval;
@@ -4676,11 +4722,9 @@ function researchShield() {
   const pilot = world.players.filter((player) => !player.downed && player.shield < player.maxShield)
     .sort((a, b) => (b.maxShield - b.shield) - (a.maxShield - a.shield))[0];
   if (!pilot) return false;
-  pilot.shield = Math.min(pilot.maxShield, pilot.shield + 1);
-  pilot.shieldHitTimer = .32;
+  restorePlayerShield(pilot, 1);
   burst(pilot.x, pilot.y, "#76dbff", 10, 35);
   world.researchProcs += 1;
-  audio.sfx("shieldBlock");
   return true;
 }
 
@@ -4704,10 +4748,10 @@ function applyPickup(player, pickup) {
       if (partner) partner.hp = Math.min(partner.maxHp, partner.hp + 1);
     }
   } else if (pickup.type === "shield") {
-    player.shield = Math.min(player.maxShield, player.shield + 2);
+    restorePlayerShield(player, 2);
     if (world.gameMode === "solo") {
       const partner = world.players.find((entry) => entry !== player && !entry.downed);
-      if (partner) partner.shield = Math.min(partner.maxShield, partner.shield + 1);
+      if (partner) restorePlayerShield(partner, 1);
     }
   } else {
     addNovaCharge("pickup", NOVA_CONFIG.energyPickupCharge, player);
@@ -4851,7 +4895,7 @@ function finishEncounter(success) {
     for (const player of world.players) {
       player.weapon = Math.min(3, player.weapon + (reward.weapon || 0));
       player.hp = Math.min(player.maxHp, player.hp + (reward.repair || 0) + (player.downed ? 0 : world.researchEffects.encounterRepair));
-      player.shield = Math.min(player.maxShield, player.shield + (reward.shield || 0));
+      restorePlayerShield(player, reward.shield || 0);
     }
     if (reward.energy > 0) addNovaCharge("encounter", NOVA_CONFIG.encounterCharge);
     if (world.researchEffects.encounterRepair) world.researchProcs += 1;
@@ -6493,6 +6537,8 @@ function draw() {
   canvas.dataset.playerShieldAbsorbed = world.players.map((player) => player.shieldAbsorbed).join(",");
   canvas.dataset.playerHullDamage = world.players.map((player) => player.hullDamageTaken).join(",");
   canvas.dataset.playerDamageState = world.players.map((player) => player.downed ? "downed" : player.hp / player.maxHp <= .3 ? "critical" : player.hp / player.maxHp <= .6 ? "damaged" : "healthy").join(",");
+  canvas.dataset.playerShieldImpactDamage = world.players.map(player => player.shieldImpactDamage || 0).join(",");
+  canvas.dataset.playerShieldReform = world.players.map(player => (player.shieldReformTimer || 0).toFixed(2)).join(",");
   canvas.dataset.playerHitFeedback = world.players.map((player) => `${player.shieldHitTimer.toFixed(2)}|${player.shieldBreakTimer.toFixed(2)}|${player.hullHitTimer.toFixed(2)}`).join(",");
   canvas.dataset.playerSpeed = world.players.map((player) => player.speed).join(",");
   canvas.dataset.playerFireRate = world.players.map((player) => player.fireRate).join(",");

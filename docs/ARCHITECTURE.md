@@ -11,6 +11,22 @@
 双 AI 首章脚本只把 P1/P2 都接入正式控制器；队友关系由生产函数解析，不再在测试服务里替换内部队友引用。`data-ai-intent` 保留高层意图，`data-ai-threats` 公开每机最高威胁类型、严重度和计数，供 smoke 与人工实机核对。
 
 
+## 可选星链与局内任务状态（2026-09-13）
+
+`SpaceRush.LINK_CONFIG/createLinkState` 提供有限净空预算与新局默认值；`world.power.link` 保存恢复、余效、回响队列及任务进度，`SpaceRoguelike.TASKS/advanceTask` 使用稳定 ID 和唯一事件计数。`game.js` 负责真实拦截/Nova 结算、跨章保留与新局重置，渲染器只读状态。当前卡池为 23 张；护网自动进阶不再有手动二级，新增 Nova 回响；过载断联充能不衰减。当前 6 秒过载/8 秒冷却/基础主炮射速 ×1.2 与有限净空以[星链专题](./STARLINK-MASTERY-DESIGN.md)及源码为准，下方旧狂潮参数为历史基线。任务状态不进入永久 profile，无需存档迁移。
+
+## 受击几何与光束属性（2026-09-13）
+
+`damagePlayer` 记录相对命中位置、相对入射方向与实际吸收量到临时 `shieldImpactOffsetX/Y`、`shieldIncomingX/Y`、`shieldImpactDamage`。普通弹考虑玩家速度，光束使用其射线方向；无速度来源退回径向。`renderer3d.shieldContact` 转入机体局部空间求可见椭球的交点/法线/切线/反射方向。新增 `data-player-shield-impact-damage`，旧方向与计时诊断保留。玩法碰撞、吸收和溢出结算不依赖渲染求交。
+
+光束创建时快照精英/首领身份与武器模块，渲染直接读取现有伤害、宽度、模式及载荷颜色。GPU 光束批次新增 `beamStyle` 与 `beamTint`，同一批次支持不同伤害、模式和颜色；火花沿实际射线作一次性扇形喷发。声音的可选 intensity 参数只影响盾命中/破碎合成增益。
+
+## 护盾事件与激光能量带（2026-09-12）
+
+`game.js` 的 `shieldRestored`/`restorePlayerShield` 在实际增盾后统一发出装载反馈，`shieldReformTimer` 为临时表现字段，不入存档；受击中断装载，重新补盾结束旧破碎效果。三类音效仍由 `AudioEngine` 的 Web Audio 振荡器/噪声实时合成。新增 `data-player-shield-reform`，旧命中诊断保留。
+
+`pixel-effects.js` 除 4096 点粒子云外，复用一个最多 64 条、每条 6 顶点的世界坐标能量带批次。着色器读取每束激光的真实年龄、长度和逻辑宽度，完成像素轴向流动、阶梯边缘与局部辉光；保留深度测试。新增 `data-effect-beams` 与 `data-shield-feedback="pixel-impact-shatter-reform"`，旧诊断标记继续兼容。
+
 ## 战斗粒子反馈（2026-09-11）
 
 `pixel-effects.js` 为冲刺、激光、护盾和星链共用一个 4096 点上限的 GPU 缓冲，方形点亮芯和分级辉光使用加法混合，保留深度测试；每帧复用属性，不创建纹理或网格。可选 `sparkStyle` 三元属性控制局部辉光、长宽比和旋转；点精灵扩展包络承载柔光，内部保持阶梯像素亮芯，未指定样式的星链/冲刺沿用原样。`renderer3d.js` 使用模拟时钟和实际计时器控制效果，冲刺以 WeakMap 保存短路径历史。`damagePlayer` 新增可选来源参数，记录归一化 `shieldImpactX/Y`；这两个字段仅供显示，不入存档、不参与判定或伤害计算。星链读取已有 `rushCharge`、`rushTimer`、`rushCooldown` 与共享节点状态，不持有第二份战斗规则。

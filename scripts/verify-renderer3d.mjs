@@ -195,7 +195,8 @@ assert.match(renderer, /const weapon = enemy\.weaponModule \|\| "pulse"/, "insta
 assert.match(renderer, /enemyHardpoints\(enemy\)/);
 const hostileBeam = methodBody("drawEnemyBeam", "drawRush");
 assert.match(hostileBeam, /pixelEffects\.spark/, "laser energy must use bounded pixel particles");
-assert.match(hostileBeam, /"#fff8d8"/, "laser core must stay readable throughout its damage window");
+assert.match(hostileBeam, /pixelEffects\.beam\(a, b, nx, nz, length, beam.age, alpha, beam\)/, "continuous laser must use real endpoints, width and lifetime");
+assert.doesNotMatch(hostileBeam, /surfaces\.line/, "fired laser must not retain exterior aiming rails");
 assert.doesNotMatch(hostileBeam, /surfaces\.segment|surfaces\.solid|voxelSegment/, "laser must not restore solid rods or muzzle cubes");
 assert.match(renderer, /Math\.hypot\(particle\.vx/);
 assert.match(renderer, /emissiveBatchFor\(color\)/);
