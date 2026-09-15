@@ -267,7 +267,7 @@ assert.match(rendererSource, /enemy\.aiModule/);
 assert.match(rendererSource, /enemy\.payloadModule/);
 assert.match(rendererSource, /drawEnemyChassis\(enemy, base, palette\)/);
 assert.match(rendererSource, /drawIntegratedEnemyModules\(enemy, base, palette, moduleColor\)/);
-assert.match(gameSource, /function updateEnemyIntelligence\(enemy, dt\)/);
+assert.match(gameSource, /ENEMY_AI\.chooseTarget\(enemy, world\.players, dt\)/);
 assert.match(gameSource, /function applyEnemyDebuff\(player, bullet\)/);
 assert.match(gameSource, /stage === 0 && progress < \.25 \? null : activeStage\(stage\)\.biome\?\.speciesId/, "chapter-one scripted natives must wait until the first strategy draft");
 assert.match(gameSource, /world\.stageIndex === 0 && progress < \.42 \? "" : build\.deathrattle/, "chapter one must teach signature attacks before deathrattles");

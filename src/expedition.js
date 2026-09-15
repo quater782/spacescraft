@@ -59,12 +59,12 @@
   ]);
 
   const AI_MODULES = freezeAll([
-    { id: "sentry", nameKey: "enemyModule.sentry", targeting: "nearest", steer: 0, flank: 0, lead: 0, evasion: 0, cooldown: 1 },
-    { id: "hunter", nameKey: "enemyModule.hunter", targeting: "weakest", steer: .56, flank: 0, lead: .16, evasion: .16, cooldown: .96 },
-    { id: "flanker", nameKey: "enemyModule.flanker", targeting: "isolated", steer: .48, flank: 62, lead: .22, evasion: .24, cooldown: .94 },
-    { id: "oracle", nameKey: "enemyModule.oracle", targeting: "leading", steer: .34, flank: 0, lead: .48, evasion: .34, cooldown: .9 },
-    { id: "pack", nameKey: "enemyModule.pack", targeting: "weakest", steer: .72, flank: 36, lead: .24, evasion: .28, cooldown: .88 },
-    { id: "ambusher", nameKey: "enemyModule.ambusher", targeting: "isolated", steer: .68, flank: 94, lead: .32, evasion: .44, cooldown: .86 },
+    { id: "sentry", nameKey: "enemyModule.sentry", targeting: "nearest", lead: 0, evasion: 0, cooldown: 1 },
+    { id: "hunter", nameKey: "enemyModule.hunter", targeting: "weakest", lead: .16, evasion: .16, cooldown: .96 },
+    { id: "flanker", nameKey: "enemyModule.flanker", targeting: "isolated", lead: .22, evasion: .24, cooldown: .94 },
+    { id: "oracle", nameKey: "enemyModule.oracle", targeting: "leading", lead: .48, evasion: .34, cooldown: .9 },
+    { id: "pack", nameKey: "enemyModule.pack", targeting: "weakest", lead: .24, evasion: .28, cooldown: .88 },
+    { id: "ambusher", nameKey: "enemyModule.ambusher", targeting: "isolated", lead: .32, evasion: .44, cooldown: .86 },
   ]);
 
   const PAYLOAD_MODULES = freezeAll([
@@ -279,8 +279,6 @@
       nativeBiome: hull.nativeBiome || "",
       collisionDamage: hull.collisionDamage || 2,
       targeting: ai.targeting,
-      aiSteer: ai.steer,
-      aiFlank: ai.flank,
       aiLead: ai.lead,
       aiEvasion: ai.evasion,
       aiCooldown: ai.cooldown,

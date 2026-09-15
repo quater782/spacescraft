@@ -71,9 +71,9 @@ async function run() {
           mode: game.dataset.mode,
           stage: game.dataset.stage,
           phase: game.dataset.bossPhase,
-          attackState: game.dataset.bossAttackState,
+          weaponState: game.dataset.bossWeaponState,
           attack: game.dataset.bossAttack,
-          charge: Number(game.dataset.bossAttackCharge),
+          charge: Number(game.dataset.bossWeaponCharge),
           enemyBullets: Number(game.dataset.enemyBullets),
           enemyBeams: Number(game.dataset.enemyBeams),
           homingBullets: Number(game.dataset.enemyHomingBullets),
@@ -94,7 +94,7 @@ async function run() {
         };
       })()`);
       finalState = state;
-      if (state.attackState !== "off") states.add(state.attackState);
+      if (state.weaponState !== "off") states.add(state.weaponState);
       if (state.attack) attacks.add(state.attack);
       maxCharge = Math.max(maxCharge, state.charge || 0);
       maxEnemyBullets = Math.max(maxEnemyBullets, state.enemyBullets || 0);
@@ -108,7 +108,7 @@ async function run() {
       maxDamageTaken = Math.max(maxDamageTaken, state.damageTaken || 0);
       maxInvalidProjectiles = Math.max(maxInvalidProjectiles, state.invalidProjectiles || 0);
       finiteBeams = finiteBeams && state.beamFinite !== "false";
-      if (!captured && state.attackState === "telegraph" && state.charge >= .6) {
+      if (!captured && state.weaponState === "windup" && state.charge >= .6) {
         await window.webContents.executeJavaScript("document.querySelector('#game').style.visibility = 'hidden'; true");
         await delay(50);
         fs.writeFileSync(path.join(outputDirectory, `boss-stage-${stage}.png`), (await window.webContents.capturePage()).toPNG());
@@ -121,12 +121,12 @@ async function run() {
         && (!requirement.blast || maxBlastBullets > 0)
         && (!requirement.fragments || maxBossFragments > 0)
         && (!requirement.laserHit || maxLaserHits > 0);
-      if (states.has("recover") && states.has("telegraph") && attacksReady && maxCharge >= .6 && maxEnemyBullets > 0 && arsenalReady && maxDamageTaken > 0) break;
+      if (states.has("cooldown") && states.has("windup") && attacksReady && maxCharge >= .6 && maxEnemyBullets > 0 && arsenalReady && maxDamageTaken > 0) break;
     }
     const summary = { stage, states: [...states], attacks: [...attacks], maxCharge, maxEnemyBullets, maxEnemyBeams, maxHomingBullets, maxBlastBullets, maxBossFragments, maxLaserHits, maxDamageTaken, maxInvalidProjectiles, maxOverHardBudget, maxAddsOverCap, finiteBeams, finalState, screenshot: path.join(outputDirectory, `boss-stage-${stage}.png`) };
     if (!finalState?.qa.includes("boss-state") || !finalState.qa.includes(`combat-stage${stage}`) || finalState.stage !== String(stage) || finalState.phase !== "3") throw new Error(`boss stage ${stage} QA unavailable: ${JSON.stringify(summary)}`);
     if (!finalState.webgl || finalState.backend !== "three-r185-instanced-voxel" || finalState.choreography !== "telegraph-state-arena") throw new Error(`boss stage ${stage} renderer unavailable: ${JSON.stringify(summary)}`);
-    if (!states.has("recover") || !states.has("telegraph") || !requirement.attacks.every((id) => attacks.has(id)) || maxCharge < .6 || maxEnemyBullets < 1 || maxDamageTaken < 1) throw new Error(`boss stage ${stage} loop incomplete: ${JSON.stringify(summary)}`);
+    if (!states.has("cooldown") || !states.has("windup") || !requirement.attacks.every((id) => attacks.has(id)) || maxCharge < .6 || maxEnemyBullets < 1 || maxDamageTaken < 1) throw new Error(`boss stage ${stage} loop incomplete: ${JSON.stringify(summary)}`);
     if ((requirement.beam && maxEnemyBeams < 1) || (requirement.homing && maxHomingBullets < 1) || (requirement.blast && maxBlastBullets < 1) || (requirement.fragments && maxBossFragments < 1) || (requirement.laserHit && maxLaserHits < 1)) throw new Error(`boss stage ${stage} arsenal incomplete: ${JSON.stringify(summary)}`);
     if (maxOverHardBudget > 0 || maxAddsOverCap > 0) throw new Error(`boss stage ${stage} exceeded a bounded battlefield budget: ${JSON.stringify(summary)}`);
     if (!finiteBeams || maxInvalidProjectiles > 0) throw new Error(`boss stage ${stage} emitted invalid geometry: ${JSON.stringify(summary)}`);

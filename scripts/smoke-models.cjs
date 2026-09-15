@@ -102,7 +102,7 @@ async function run() {
     window.artOriginalEnemy = SpaceRenderer3D.prototype.drawEnemy;
     SpaceRenderer3D.prototype.drawEnemy = function(enemy) {
       return window.artOriginalEnemy.call(this, enemy.galleryScale ? {
-        ...enemy, attackState: window.artPose || 'recover', attackCharge: .9, aiStateAge: .1
+        ...enemy, weaponState: window.artPose || 'cooldown', weaponCharge: .9, weaponAge: .1
       } : enemy);
     }; true;
   `);
@@ -112,7 +112,7 @@ async function run() {
       select.value = ${JSON.stringify(quality)}; select.dispatchEvent(new Event('change')); })(); true;
     `);
     await delay(900);
-    for (const pose of quality === "high" ? ["recover", "telegraph", "attack"] : ["recover"]) {
+    for (const pose of quality === "high" ? ["cooldown", "windup", "fire"] : ["cooldown"]) {
       await window.webContents.executeJavaScript(`window.artPose = ${JSON.stringify(pose)}; true;`);
       await delay(120);
       fs.writeFileSync(path.join(artOutput, quality + '-' + pose + '.png'), (await window.webContents.capturePage()).toPNG());
@@ -136,7 +136,7 @@ async function run() {
         type: 'tank', x: 100 + index % 3 * 140, y: 50 + Math.floor(index / 3) * 78,
         seed: 1, age: this.time, r: 11, galleryScale: 1.1, galleryYaw: -.1,
         movementModule: 'standard', weaponModule: 'pulse', coreModule: 'light', aiModule: 'sentry', payloadModule: 'clean',
-        [slot]: entry.id, moduleBarrier: 4, attackState: 'telegraph', attackCharge: .75
+        [slot]: entry.id, moduleBarrier: 4, weaponState: 'windup', weaponCharge: .75
       }));
     }; window.artSlot = 'weaponModule'; true;
   `);

@@ -69,16 +69,16 @@ async function run() {
   await capture('link-cooldown', `world.rushTimer=0;world.rushCooldown=4;world.time=2.3;`);
   await capture('warning-early', `cleanEffects();world.players.forEach(p=>p.shield=0);
     const a=makeEnemy('cometRammer',160,80), b=makeEnemy('lancer',310,75);
-    Object.assign(a,{attackState:'telegraph',attackPattern:'ramCharge',attackCharge:.12,attackTargetX:190,attackTargetY:220,attackEndX:200,attackEndY:250,aiStateDuration:1.28});
-    Object.assign(b,{attackState:'telegraph',attackPattern:'laserLance',attackCharge:.12,attackTargetX:270,attackTargetY:240,aiStateDuration:1.28});
+    Object.assign(a,{weaponState:'windup',attackPattern:'ramCharge',weaponCharge:.12,attackTargetX:190,attackTargetY:220,attackEndX:200,attackEndY:250,weaponDuration:1.28});
+    Object.assign(b,{weaponState:'windup',attackPattern:'laserLance',weaponCharge:.12,attackTargetX:270,attackTargetY:240,weaponDuration:1.28});
     world.enemies=[a,b];`);
-  await capture('warning-late', `world.enemies.forEach(e=>e.attackCharge=.97);world.time=3;`);
+  await capture('warning-late', `world.enemies.forEach(e=>e.weaponCharge=.97);world.time=3;`);
   const flashes = await win.webContents.executeJavaScript(`(() => {
-    const sample=[];for(let i=0;i<=128;i++)sample.push(renderer3D.warningFlash({aiStateDuration:1.28},i/128));
+    const sample=[];for(let i=0;i<=128;i++)sample.push(renderer3D.warningFlash({weaponDuration:1.28},i/128));
     const rises=sample.flatMap((value,i)=>i>0&&value>sample[i-1]?[i/100]:[]);return rises;
   })()`);
   assert.ok(flashes.length>=3 && flashes[flashes.length-1]-flashes[flashes.length-2]<flashes[1]-flashes[0], 'warning pulses must accelerate');
-  await capture('laser-ram', `const ram=world.enemies[0];world.enemies=[ram];ram.attackState='attack';
+  await capture('laser-ram', `const ram=world.enemies[0];world.enemies=[ram];ram.weaponState='fire';
     for(let i=0;i<24;i++){world.time+=1/60;ram.x=160+i*1.5;ram.y=90+i*3;draw();}
     world.enemyBeams=[{x1:310,y1:75,x2:260,y2:265,width:5,age:.2,duration:.65,color:'#ff5a68'}];`);
   await capture('effects-low', `document.querySelector('#qualitySetting').value='low';document.querySelector('#qualitySetting').dispatchEvent(new Event('change'));`);

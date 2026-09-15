@@ -143,7 +143,7 @@ async function sampleStrategy(window, port, errors, mode) {
     if (state.mode !== "playing") break;
   }
   for (const keyCode of held) if (keyCode) window.webContents.sendInputEvent({ type: "keyUp", keyCode });
-  if (!state.webgl || state.renderer !== "three-r185-instanced-voxel" || state.warningGrammar !== "local-charge-laser-sight-ram-chevrons-blast-rings" || state.fps < 40) throw new Error(`${mode} strategy renderer failed: ${JSON.stringify(state)}`);
+  if (!state.webgl || state.renderer !== "three-r185-instanced-voxel" || state.warningGrammar !== "muzzle-charge-committed-lasers-ram-corridors-blast-rings" || state.fps < 40) throw new Error(`${mode} strategy renderer failed: ${JSON.stringify(state)}`);
   if (errors.length) throw new Error(`console errors during ${mode} strategy sample: ${errors.join(" | ")}`);
   if (!captured) fs.writeFileSync(screenshot, (await window.webContents.capturePage()).toPNG());
   return {

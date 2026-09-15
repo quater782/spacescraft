@@ -77,7 +77,7 @@ async function run() {
         encounters: game.dataset.encounters,
         drafts: game.dataset.drafts,
         draftContext: game.dataset.draftContext,
-        bossState: game.dataset.bossAttackState,
+        bossState: game.dataset.bossWeaponState,
         anomalyId: game.dataset.anomalyId,
         anomalyHistory: game.dataset.anomalyHistory,
         anomalyPlan: game.dataset.anomalyPlan,

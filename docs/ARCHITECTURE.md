@@ -1,5 +1,16 @@
 # 系统架构
 
+## 敌军控制与发射几何（2026-09-15）
+
+`src/enemy-ai.js` 是不访问 DOM/世界单例的控制与几何模块：角色能力、目标迟滞、七态战术、预测避让、速度/转向积分、发射挂点、yaw 非等比映射及激光/冲撞几何。`game.js` 持有全部敌军状态、武器状态、并发预算和碰撞结算，普通敌机与 Boss 统一使用 `weaponState/weaponTimer/weaponDuration/weaponAge/weaponCharge`；`combat.js` 仅负责章节压力、编队和弹幕选择，职责与武器时序参数归新控制器，旧状态表/字段/兼容映射全部删除。`renderer3d.js` 读取实际 heading/bank/pitch/weaponYaw/throttle 与共享挂点，不推算第二份攻击逻辑。`attackCommit` 冻结射线或冲撞走廊，预警、僚机避让与伤害共同读取。所有敌军的目标朝向与全向平移解耦，仅冲撞使用轴向前推。`enemy-ai.js` 还提供独立种子芯片抽取、拥挤/弹道评分、站位迟滞与芯片感知；`game.js` 执行每章生成上限和首次扫描，渲染器只读芯片/反推/侧推状态。芯片作为运行时附加修饰，不加入既有 43,008 构筑签名或永久 profile。新字段均不入 profile，HTML 先加载控制模块，再加载游戏。Boss 的开火保持由 `fire` 状态控制，阶段切换或目标失效会取消预警。
+
+## 友方 AI 威胁场（2026-09-15）
+
+`game.js` 内的 `aiPilotControls` 现在由三层组成：`aiPilotPartner` 对称解析另一架战机，`chooseAiStrategicGoal` 按救援、续航、任务、集火、共振和顺路拾取选择目标，`evaluateAiThreats` 先把敌弹、爆点、激光、冲撞走廊、敌机身体和陨星压成一组闪避向量。曲线弹使用弧线预测，制动弹使用减速窗口预测，锚定爆破/死亡爆点按自身危险半径评估；追踪锁定弹保留横切躲避。战略目标吸引力被封顶，危险严重度可以临时接管目标但不改变玩家生命、无敌帧、敌方策略或存档结构。
+
+双 AI 首章脚本只把 P1/P2 都接入正式控制器；队友关系由生产函数解析，不再在测试服务里替换内部队友引用。`data-ai-intent` 保留高层意图，`data-ai-threats` 公开每机最高威胁类型、严重度和计数，供 smoke 与人工实机核对。
+
+
 ## 战斗粒子反馈（2026-09-11）
 
 `pixel-effects.js` 为冲刺、激光、护盾和星链共用一个 4096 点上限的 GPU 缓冲，方形点亮芯和分级辉光使用加法混合，保留深度测试；每帧复用属性，不创建纹理或网格。可选 `sparkStyle` 三元属性控制局部辉光、长宽比和旋转；点精灵扩展包络承载柔光，内部保持阶梯像素亮芯，未指定样式的星链/冲刺沿用原样。`renderer3d.js` 使用模拟时钟和实际计时器控制效果，冲刺以 WeakMap 保存短路径历史。`damagePlayer` 新增可选来源参数，记录归一化 `shieldImpactX/Y`；这两个字段仅供显示，不入存档、不参与判定或伤害计算。星链读取已有 `rushCharge`、`rushTimer`、`rushCooldown` 与共享节点状态，不持有第二份战斗规则。
@@ -32,7 +43,7 @@
 | 碰撞语义 | `src/collision.js` | 彗星/壁垒/脉冲的受弹、机体和拾取半径，以及弹体/爆破/机体/拾取各自的圆形相交判定 |
 | 远征导演 | `src/director.js` | 30 分钟章节时长、九战区、事件/遭遇/构筑阈值、强度曲线与 QA 时间倍率 |
 | 威胁导演 | `src/threat.js` | 五级动态压力配置、评分、保护包络、迟滞步进与合约压力映射 |
-| 战斗学说 | `src/combat.js` | 三套章别节拍轮廓、四段压力波、七职责状态机、六编队、21 种弹幕选择、常规精英概率、持续追猎和普通敌弹预算 |
+| 战斗学说 | `src/combat.js` | 三套章别节拍轮廓、四段压力波、六编队、弹幕选择、常规精英概率和普通敌弹预算 |
 | 星域异象 | `src/anomalies.js` | 九种确定性战区异象、章节安全池、玩家力场、敌我非对称弹道和经济/音乐倍率 |
 | 远征规则 | `src/expedition.js` | 9 种生态、7 种星门协议、5 类动态遭遇、确定性计划/判定、16 个船体与推进/武器/核心/AI/载荷六维组装 |
 | 3D 渲染 | `src/renderer3d.js` | Three.js WebGL2 透视相机、原生分辨率 + SMAA、0.12 粗体素、按颜色缓存的 `BoxGeometry` 实例批次、三阶 Toon/轻辉光/HDR 能量层、五级选择性 Bloom、人类风筝战机构造器、独立虚空生物构造器、开放深空生态与局部异象 |
@@ -47,7 +58,7 @@
 
 战役开始时，机体、模组、合约、恒星天赋、模式与设置从 profile 生成运行时玩家参数；永久天赋先按前置关系清洗，再统一叠加到双机和单人 AI 的同一套属性。`SpaceDirector` 把三章固定为 570/600/630 秒，并按相对进度生成每章三个战区、九个编队事件、四个遭遇和两个章中构筑；前两章 Boss 后再提供章间构筑，完整路线共有八次选择。`SpaceCombat` 在每个编队事件间循环突入、交锋、杀伤区和释放节拍，三章分别使用 24%/60%/82%、16%/43%/72%、12%/36%/84% 的边界和独立压力向量。`SpaceThreat` 再以 1.25 秒迟滞和单级步进将章节、战区、进度、合约、击破动量、共振、耐久、倒地和近期受击组合为 0–4 级压力；首章前 8%、残血和倒地保护会覆盖高压目标。
 
-`SpaceRng` 从一枚 run seed 以五个稳定盐派生 `combat`、`draft`、`loot`、`route` 和 `cosmetic` 五条独立流。敌军模块/弹幕、三选一、掉落、生态/星门/遭遇路线与视觉/音色表现各自只消耗对应流，因此任一子系统的采样次数不会改写其他序列。16 种船体先定义角色、耐久、半径、得分、生态归属、死亡机能和主体轮廓，4 航行、7 武器、4 核心、6 AI 与 4 载荷形成 43,008 个唯一签名。敌机按职责执行入场、占位、预警、攻击和盘旋/重组六态循环，持续追踪玩家当前站位并在职责交战距离附近接近或后撤，存活单位不按轮数或寿命退场；激光束、恒速限角追踪弹、目标距离引信爆破种、敌我碰撞和九类死亡机能均在固定步模拟中改变耐久，死亡爆炸与爆裂核心先生成锚定半径预警再延迟结算，普通敌弹由 46–132 预算封顶。渲染器不把通用预警解释为牵引线：普通蓄力只显示局部器官，跨屏方向线仅用于即将生成实体伤害束的激光。
+`SpaceRng` 从一枚 run seed 以五个稳定盐派生 `combat`、`draft`、`loot`、`route` 和 `cosmetic` 五条独立流。敌军模块/弹幕、三选一、掉落、生态/星门/遭遇路线与视觉/音色表现各自只消耗对应流，因此任一子系统的采样次数不会改写其他序列。16 种船体先定义角色、耐久、半径、得分、生态归属、死亡机能和主体轮廓，4 航行、7 武器、4 核心、6 AI 与 4 载荷形成 43,008 个唯一签名。敌机按实际目标、距离和航段事件切换七个战术状态，武器独立冷却、对准、预警和发射；连续飞行围绕职责距离带推进，存活单位不按轮数或寿命退场；激光束、恒速限角追踪弹、目标距离引信爆破种、敌我碰撞和九类死亡机能均在固定步模拟中改变耐久，死亡爆炸与爆裂核心先生成锚定半径预警再延迟结算，普通敌弹由 46–132 预算封顶。渲染器不把通用预警解释为牵引线：普通蓄力只显示局部器官，跨屏方向线仅用于即将生成实体伤害束的激光。
 
 每次方向控制的共享构筑暂停战斗，确认后章中节点返回原战区，章间节点才推进下一章。`SpaceRoguelike` 在 22 张卡中构建武装、机动/生存、Nova 和狂潮四条路径：首两次构筑合计覆盖全部路径，后续候选同时保留已选核心路径和当前最弱路径；每两次至少一张稀有/传说，第 5–7 次选择窗口保底传说。遗物层让全部已完成的协议同时生效，拿到首组件后的配套件只在之后两次构筑内确定性出现一次。`SpaceLoot` 对普通击破累积 0.08–0.105 掉落预算，重型敌人额外 +0.1；实际掉落类型从武器、维修、护盾和能量四类洗牌袋中抽取，普通击破的最长旱期为 13 次。
 
@@ -70,7 +81,7 @@
 
 ## 观察与测试接口
 
-`#game` Canvas 的 `data-*` 属性公开模式、语言、章节、事件、Boss 阶段/攻击/状态/蓄力、敌人数/普通弹/伤害束/追踪弹/爆破弹、敌弹和追踪速度、伤害束有限性、非法敌弹、敌军重叠/近距挤压/净距/展开、交战距离误差、当前预警类型、激光/追踪/爆破/死亡机能/实体碰撞计数、敌军船体/武器/物种/AI、原生种/精英数量、最大耐久/存活时间/攻击轮数、玩家耐久/上限/位置/累计受击/倒地/救援、FPS、QA 状态、装备、合约、天赋、倍率、构筑、协议、Buff/Debuff、六槽/43,008 构筑目录、生态、异象、星门、遭遇、狂潮、HUD 分辨率和奖励等稳定摘要。远征导演额外公开 `data-run-target-seconds="1800"`、全局/章内战区、战区转场、事件、遭遇、构筑次数和构筑上下文；威胁矩阵公开当前/目标/峰值等级、连续分数、调整次数、缓冲/极限秒数以及增援、弹速、开火、耐久、瞄准倍率；战斗学说公开节拍、连续压力、弹幕阶级/预算、状态转换/预警、已触发弹幕、当前 AI 状态、编队数、成长分与僚机意图。三机小队生成时由当前站位选择五条横向航道中最空的一条，成员再用稳定 ID 分布到三层纵深；占位时编队锚点与职责交战距离共同约束目标位置。3D Canvas 公开 `data-renderer="three-r185-instanced-voxel"`、`data-art-style="toon-glow-light-blocks"`、`data-pixel-grammar="coarse-emissive-012"`、`data-space-composition="open-celestial-parallax"`、`data-ecosystem-composition="9-macro-mid-sparse"`、`data-combat-negative-space="center-55-clear"`、`data-nebula-parallax="3d-additive-dust"`、`data-sky-atmosphere="layered-soft-voxel-nebula"`、`data-ground-plane="none-open-space"`、`data-depth-scaffolding="macro-mid-distant"`、`data-macro-layout="alternating-edge-anchors"`、`data-celestial-scaffolding="opposed-biome-horizon-bodies"`、`data-hull-exposure="matte-ceramic-no-bloom"`、`data-shield-language="segmented-shell-hit-break"`、`data-boss-gallery-view="neutral-silhouette"`、`data-faction-language="human-kites-vs-void-organisms"`、`data-player-modules="4-integrated-silhouette-parts"`、`data-model-families="3-player-16-alien"`、`data-module-anatomy="integrated-large-form"`、`data-boss-families="3-organic-phase-forms"`、`data-boss-choreography="telegraph-state-arena"`、`data-expedition-sectors="9-progressive-voxel-gates"`、`data-sector-anomalies="9-seeded-gameplay-fields"`、`data-adaptive-threat="5-tier-telegraphed"`、`data-enemy-tactics="role-doctrine-6-state"`、`data-enemy-spacing="live-target-standoff"`、`data-warning-grammar="local-charge-laser-sight-ram-chevrons-blast-rings"`、`data-laser-vfx="layered-core-edge-packets"` 与 `data-bullet-grammar="locked-safe-lanes-curves-mines-lasers-seekers-blasts"`。`smoke:director` 在真实 Electron/WebGL 中压缩运行一章；`smoke:threat` 比较压力双端；`smoke:combat` 检查正常开局、第三章极限杀伤区和 12 格非比例曲线；`smoke:strategy` 同种子比较零输入与预警换位的生存结果；`smoke:arsenal` 以五场会话检查载荷激光、恒速追踪、范围爆破、死亡机能、精英、碰撞和持续追猎；`smoke:boss-state` 逐章检查 phase 3 火力；`smoke:anomalies` 逐项检查九种异象。
+`#game` Canvas 的 `data-*` 属性公开模式、语言、章节、事件、Boss 阶段/攻击/状态/蓄力、敌人数/普通弹/伤害束/追踪弹/爆破弹、敌弹和追踪速度、伤害束有限性、非法敌弹、敌军重叠/近距挤压/净距/展开、交战距离误差、当前预警类型、激光/追踪/爆破/死亡机能/实体碰撞计数、敌军船体/武器/物种/AI、原生种/精英数量、最大耐久/存活时间/攻击轮数、玩家耐久/上限/位置/累计受击/倒地/救援、FPS、QA 状态、装备、合约、天赋、倍率、构筑、协议、Buff/Debuff、六槽/43,008 构筑目录、生态、异象、星门、遭遇、狂潮、HUD 分辨率和奖励等稳定摘要。远征导演额外公开 `data-run-target-seconds="1800"`、全局/章内战区、战区转场、事件、遭遇、构筑次数和构筑上下文；威胁矩阵公开当前/目标/峰值等级、连续分数、调整次数、缓冲/极限秒数以及增援、弹速、开火、耐久、瞄准倍率；战斗学说公开节拍、连续压力、弹幕阶级/预算、状态转换/预警、已触发弹幕、当前 AI 状态、编队数、成长分、僚机意图与 `data-ai-threats` 威胁摘要。三机小队生成时由当前站位选择五条横向航道中最空的一条，成员再用稳定 ID 分布到三层纵深；占位时编队锚点与职责交战距离共同约束目标位置。3D Canvas 公开 `data-renderer="three-r185-instanced-voxel"`、`data-art-style="toon-glow-light-blocks"`、`data-pixel-grammar="coarse-emissive-012"`、`data-space-composition="open-celestial-parallax"`、`data-ecosystem-composition="9-macro-mid-sparse"`、`data-combat-negative-space="center-55-clear"`、`data-nebula-parallax="3d-additive-dust"`、`data-sky-atmosphere="layered-soft-voxel-nebula"`、`data-ground-plane="none-open-space"`、`data-depth-scaffolding="macro-mid-distant"`、`data-macro-layout="alternating-edge-anchors"`、`data-celestial-scaffolding="opposed-biome-horizon-bodies"`、`data-hull-exposure="matte-ceramic-no-bloom"`、`data-shield-language="segmented-shell-hit-break"`、`data-boss-gallery-view="neutral-silhouette"`、`data-faction-language="human-kites-vs-void-organisms"`、`data-player-modules="4-integrated-silhouette-parts"`、`data-model-families="3-player-16-alien"`、`data-module-anatomy="integrated-large-form"`、`data-boss-families="3-organic-phase-forms"`、`data-boss-choreography="telegraph-state-arena"`、`data-expedition-sectors="9-progressive-voxel-gates"`、`data-sector-anomalies="9-seeded-gameplay-fields"`、`data-adaptive-threat="5-tier-telegraphed"`、`data-enemy-tactics="event-tactics-continuous-flight"`、`data-enemy-spacing="predictive-separation-arrival"`、`data-warning-grammar="muzzle-charge-committed-lasers-ram-corridors-blast-rings"`、`data-laser-vfx="layered-core-edge-packets"` 与 `data-bullet-grammar="locked-safe-lanes-curves-mines-lasers-seekers-blasts"`。`smoke:director` 在真实 Electron/WebGL 中压缩运行一章；`smoke:threat` 比较压力双端；`smoke:combat` 检查正常开局、第三章极限杀伤区和 12 格非比例曲线；`smoke:strategy` 同种子比较零输入与预警换位的生存结果；`smoke:arsenal` 以五场会话检查载荷激光、恒速追踪、范围爆破、死亡机能、精英、碰撞和持续追猎；`smoke:boss-state` 逐章检查 phase 3 火力；`smoke:anomalies` 逐项检查九种异象。
 
 当前方向预警还通过 `data-enemy-telegraph-targets` 公开敌机、弹幕、目标玩家、采样目标和承诺终点；该属性仅提供可重复验证，不参与瞄准、移动或伤害计算。
 

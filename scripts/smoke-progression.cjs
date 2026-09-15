@@ -88,7 +88,7 @@ async function run() {
     world.stageIndex = 2; world.stageTime = activeStage().duration * ((4 + .65) / 9); world.growthGrace = 0; world.boss = null; world.enemyBeams = []; world.enemyBullets = [];
     world.enemies = [0,1,2].map((index) => { const foe = makeEnemy("lancer", 100 + index * 100, 80); foe.weaponModule = "laser"; foe.weaponPattern = "laserLance"; foe.speciesPattern = ""; return foe; });
     world.enemies.forEach((foe) => setEnemyState(foe, "telegraph"));
-    return { pickup, sectorCharge, repeatCharge, repair, markedDamage, pulseShield, held: world.pressureHolds, telegraphs: world.enemies.filter((foe) => foe.aiState === "telegraph").length };
+    return { pickup, sectorCharge, repeatCharge, repair, markedDamage, pulseShield, held: world.pressureHolds, telegraphs: world.enemies.filter((foe) => foe.weaponState === "windup").length };
   });
   assert.ok(wiring.pickup.charge > 16); assert.equal(wiring.pickup.shield, 1); assert.equal(wiring.sectorCharge, wiring.repeatCharge);
   assert.equal(wiring.repair, 1.5); assert.equal(wiring.markedDamage, 7); assert.equal(wiring.pulseShield, 1);

@@ -68,25 +68,6 @@
     wing: Object.freeze(profile.wing),
   })));
 
-  const ROLE_DOCTRINES = Object.freeze({
-    interceptor: Object.freeze({ stationY: 84, engagementRange: 138, rangeBand: 22, entrySpeed: 42, lateral: 58, telegraph: .42, attack: .14, recover: .54, breakaway: .72, aimLead: .12 }),
-    striker: Object.freeze({ stationY: 102, engagementRange: 122, rangeBand: 20, entrySpeed: 54, lateral: 76, telegraph: .48, attack: .16, recover: .62, breakaway: .86, aimLead: .18 }),
-    bulwark: Object.freeze({ stationY: 66, engagementRange: 164, rangeBand: 26, entrySpeed: 24, lateral: 22, telegraph: .72, attack: .2, recover: 1.02, breakaway: .58, aimLead: .08 }),
-    artillery: Object.freeze({ stationY: 58, engagementRange: 176, rangeBand: 28, entrySpeed: 29, lateral: 42, telegraph: .68, attack: .22, recover: .9, breakaway: .62, aimLead: .14 }),
-    denial: Object.freeze({ stationY: 74, engagementRange: 154, rangeBand: 26, entrySpeed: 25, lateral: 34, telegraph: .78, attack: .2, recover: 1.06, breakaway: .66, aimLead: .1 }),
-    flanker: Object.freeze({ stationY: 116, engagementRange: 112, rangeBand: 24, entrySpeed: 48, lateral: 108, telegraph: .56, attack: .16, recover: .64, breakaway: 1.02, aimLead: .24 }),
-    command: Object.freeze({ stationY: 62, engagementRange: 172, rangeBand: 30, entrySpeed: 22, lateral: 28, telegraph: .86, attack: .24, recover: 1.16, breakaway: .7, aimLead: .16 }),
-  });
-
-  const STATE_SEQUENCE = Object.freeze({
-    entry: "position",
-    position: "telegraph",
-    telegraph: "attack",
-    attack: "breakaway",
-    breakaway: "position",
-    recover: "position",
-  });
-
   const FORMATIONS = freezeAll([
     { id: "vanguard", minStage: 0, minPattern: 0, weight: 6, members: [["scout", 0, 0], ["scout", -34, .18], ["scout", 34, .36]] },
     { id: "spear", minStage: 0, minPattern: 1, weight: 5, members: [["dart", 0, 0], ["scout", -42, .24], ["scout", 42, .38]] },
@@ -142,28 +123,6 @@
     return clamp(chance, .055, .24);
   }
 
-  function doctrineFor(role) {
-    return ROLE_DOCTRINES[role] || ROLE_DOCTRINES.interceptor;
-  }
-
-  function stateDuration(role, state, stageIndex = 0, elite = false, seed = 0) {
-    const doctrine = doctrineFor(role);
-    const jitter = .9 + ((Math.sin(Number(seed) * 7.13 + state.length) + 1) * .5) * .2;
-    const aggression = 1 / (1 + clamp(stageIndex, 0, 2) * .1 + (elite ? .16 : 0));
-    if (state === "entry") return (1.5 + doctrine.stationY / doctrine.entrySpeed) * .38;
-    if (state === "position") return (.56 + doctrine.recover * .36) * jitter * aggression;
-    if (state === "telegraph") return doctrine.telegraph * Math.max(.78, aggression);
-    if (state === "attack") return doctrine.attack;
-    if (state === "breakaway") return doctrine.breakaway * jitter;
-    return doctrine.recover * jitter * aggression;
-  }
-
-  function nextState(role, state) {
-    const next = STATE_SEQUENCE[state] || "position";
-    if (next === "breakaway" && ["bulwark", "artillery", "denial", "command"].includes(role)) return "recover";
-    return next;
-  }
-
   function patternFor({ role, weaponId, weaponPattern = "", speciesPattern = "", patternTier = 0, cycle = 0, elite = false } = {}) {
     if (elite && cycle % 3 === 2) return cycle % 2 ? "eliteCross" : "eliteHalo";
     if (speciesPattern && cycle % 3 === 0) return speciesPattern;
@@ -193,14 +152,10 @@
   window.SpaceCombat = Object.freeze({
     BEATS,
     CHAPTER_PROFILES,
-    ROLE_DOCTRINES,
     FORMATIONS,
     beatForProgress,
     curveFor,
     ambientEliteChance,
-    doctrineFor,
-    stateDuration,
-    nextState,
     patternFor,
     chooseFormation,
   });

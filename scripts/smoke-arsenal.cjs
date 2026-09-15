@@ -148,7 +148,7 @@ async function sample(window, port, errors, scenario) {
   }
   if (held) window.webContents.sendInputEvent({ type: "keyUp", keyCode: held });
   fs.writeFileSync(screenshot, (await window.webContents.capturePage()).toPNG());
-  if (!state?.webgl || state.renderer !== "three-r185-instanced-voxel" || state.grammar !== "locked-safe-lanes-curves-mines-lasers-seekers-blasts" || state.enemySpacing !== "live-target-standoff" || state.warningGrammar !== "local-charge-laser-sight-ram-chevrons-blast-rings" || state.laserVfx !== "layered-core-edge-packets" || state.fps < 40) throw new Error(`${scenario.id} renderer contract failed: ${JSON.stringify(state)}`);
+  if (!state?.webgl || state.renderer !== "three-r185-instanced-voxel" || state.grammar !== "locked-safe-lanes-curves-mines-lasers-seekers-blasts" || state.enemySpacing !== "predictive-separation-arrival" || state.warningGrammar !== "muzzle-charge-committed-lasers-ram-corridors-blast-rings" || state.laserVfx !== "layered-core-edge-packets" || state.fps < 40) throw new Error(`${scenario.id} renderer contract failed: ${JSON.stringify(state)}`);
   if (!summary.hulls.has(scenario.hull) || !summary.weapons.has(scenario.weapon) || !summary.patterns.has(scenario.pattern) || summary.maxNative < 1) throw new Error(`${scenario.id} signature was not expressed: ${JSON.stringify({ ...summary, patterns: [...summary.patterns], hulls: [...summary.hulls], weapons: [...summary.weapons] })}`);
   if (summary.maxHp < scenario.minHp) throw new Error(`${scenario.id} enemy durability was too low: ${JSON.stringify(summary)}`);
   if (scenario.hitMetric && summary[scenario.hitMetric] < 1) throw new Error(`${scenario.id} never inflicted its designed consequence: ${JSON.stringify(summary)}`);

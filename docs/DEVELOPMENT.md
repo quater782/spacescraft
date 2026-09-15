@@ -1,5 +1,23 @@
 # 开发与验证
 
+## 2026-09-15 友方 AI 威胁场与优先级
+
+友方 AI 现在先评估危险，再执行救援、续航、任务、集火、共振和顺路拾取。威胁评估覆盖直线弹、制动弹、曲线弹、弹墙、锁定追踪弹、种雷、移动爆破种、锚定死亡爆点、激光预警/实体束、冲撞走廊、敌机身体和陨星；战略目标拉力有上限，避免远处目标压过近身危险。追踪锁定仍走横切闪避，爆点按真实半径提前离开。
+
+`#game` 新增 `data-ai-threats`，以 `类型:严重度:计数` 形式公开每机当前威胁摘要。`npm run smoke:chapter-one -- --dual-ai --offense --sample-seconds=60` 只把两名玩家都接入正式 `aiPilotControls`；队友由生产 `aiPilotPartner` 对称解析，不再在测试服务器里替换内部队友引用。该短样本只验证控制器适配、存活和错误边界，不当作完整首章通过。
+
+## 敌军连续飞行专项
+
+2026-09-15 后续：专项增加所有职责“不转身倒退/侧移”的响应、喷口方向、普通/芯片同型机属性一致、首章生成保护/在场上限、芯片选位/提前闪避/预警承诺检查。输出 `chip-reverse-zh.png`（平衡）与 `chip-reverse-en.png`（低画质）。正常首章抽样使用 `npm run smoke:chapter-one -- --dual-ai --offense --sample-seconds=210`，记录 `firstChipTime/maxChips` 和实际在场芯片，不能记作完整首章通过。 2026-09-15 已执行：210.2 秒双机 7/7 HP、零倒地、106 击杀、60 FPS；首芯片采样时间 156.55 秒，最多同时在场 1 架，零页面/非法弹体错误。
+
+2026-09-15 已移除旧 AI 兼容路径。专项同时要求三章 Boss 均经历 `cooldown/align/windup/fire`，并验证阶段切换和目标倒地后取消冻结预警；检查全部通过。旧字段残留由 `verify-enemy-ai.mjs` 阻止重新引入。16 船体硬边界修正合计 0；本轮正常单人/双人开局分别为 20.10/20.12 秒，完整首章未重复长测。
+
+`npm run smoke:enemy-ai` 在隔离 loopback 服务中暴露临时测试桥，先以正式固定步函数覆盖 16 船体、四推进、六 AI 与三章 Boss，记录状态、真实转向、攻击次数、边界修正、预警几何、失效目标和碰撞分离，再生成平衡/低画质 WebGL 截图并运行单人/本地双人的正常 20 秒开局。受控机制快步不计作自然存活样本；测试桥不进入生产。输出为系统临时目录 `spacescraft-enemy-ai`。
+
+新增 `#game` 属性：`data-enemy-tactic-states`、`data-enemy-weapon-states`、`data-enemy-target-switches`、`data-enemy-boundary-corrections`、`data-enemy-contact-corrections` 和 `data-enemy-flight`（当前存活敌军 ID、heading、vx、vy、状态原因）。新增 `data-enemy-behavior-profiles` 为 AI 模块/战术/武器状态摘要；Boss 使用 `data-boss-weapon-state` 与 `data-boss-weapon-charge`。旧 AI 状态与 Boss 攻击状态属性已删除，没有兼容映射。3D `data-enemy-tactics` 为 `event-tactics-continuous-flight`，新增 `data-enemy-orientation="target-facing-omnidirectional-thrust"`。另有 `data-enemy-chips`（ID、芯片、选位次数、闪避次数、原因）、`data-enemy-chip-count` 与 `data-enemy-chip-cap`。计数为当前存活敌军合计，不能当作整局累计。
+
+正常首章使用既有 `npm run smoke:chapter-one -- --dual-ai --offense`，只运行正式僚机 AI 的对称同伴适配，不增加耐久/碰撞特权。完整首章通过需要到 Boss 和转场；短开局、受控快步、自然中途全灭均不能记为首章通过。2026-09-13 实际全程尝试在 419.12 秒双机全灭，输出 `chapter-one director coverage incomplete`（因为死亡前只走到 7 事件/3 遭遇/3 次选卡，未到 Boss），该完整首章命令为失败；256 击杀、60 FPS、零页面与非法弹体错误。受控机制通过不能消除此平衡缺口。
+
 ## 像素粒子战斗反馈专项
 
 `npm run smoke:effects -- --motion` 额外输出 60 帧、30 fps 的 `motion-000.png` 至 `motion-059.png`，使用实际 WebGL 渲染，按模拟时间采样护盾受击与激光流动。该受控片段手动设置视觉计时器，适合检查粒径、波前、冷却与局部辉光，不作为真实伤害结算录像；真实四向碰撞与激光来源仍由同一脚本的机制夹具验证。
@@ -10,7 +28,7 @@
 
 ## 双 AI 控制器对照
 
-运行 `npm run smoke:chapter-one -- --dual-ai --offense --sample-seconds=270`，使用同一种子 260901 和火力优先自然选卡，正常速度观察至 270 秒或全灭。只在测试服务器返回的 `game.js` 内让 P1/P2 均调用正式僚机 AI，并将 AI 的队友引用从固定 P1 改为另一架飞机，避免 P1 跟随/救援自己。生产源码、敌人策略、HP、伤害、掉落、自动技能和存档规则不变；战斗阶段不发送脚本移动，选卡仍通过原方向键操作。
+运行 `npm run smoke:chapter-one -- --dual-ai --offense --sample-seconds=270`，使用同一种子 260901 和火力优先自然选卡，正常速度观察至 270 秒或全灭。测试服务器只把 P1/P2 均接入正式僚机 AI；队友关系由生产 `aiPilotPartner` 对称解析，避免 P1 跟随/救援自己。生产源码、敌人策略、HP、伤害、掉落、自动技能和存档规则不变；战斗阶段不发送脚本移动，选卡仍通过原方向键操作。
 
 测试记录双机实际 AI 调用次数、直接弹体发射/命中/有效伤害、存活/倒地秒数、连接秒数和带时间/位置的倒地及被救援事件。直接弹体统计不包含 Nova、光链或电弧等共享/派生输出，不能当作全来源贡献比例。报告的 `rescues` 与 `rescued` 表示该机被救起次数，而不是它救了别人几次。
 
@@ -84,7 +102,7 @@ http://127.0.0.1:4173/?qa-fast
 
 此模式仅在 `localhost` 或 `127.0.0.1` 生效，会把远征章节时间加速到 90 倍并降低 Boss 测试耐久，用于快速检查九战区、27 个事件、12 次遭遇、八个构筑节点、三场 Boss 和完整通关路径。测试结果不会写入出航、通关、最高分等生涯统计，也不会在正式域名或 Electron 文件协议下启用；`qa-voxel` 保持 1 倍速度，避免建模验收场被跳过。
 
-自动化或人工检查可以读取 `#game` 上的 `data-mode`、`data-language`、`data-stage`、`data-stage-time`、`data-events`、`data-enemies`、`data-enemy-bullets`、`data-enemy-beams`、`data-enemy-homing-bullets`、`data-enemy-blast-bullets`、`data-enemy-bullet-speed`、`data-enemy-homing-speed`、`data-enemy-beam-finite`、`data-combat-invalid-projectiles`、`data-enemy-overlap-pairs`、`data-enemy-close-pairs`、`data-enemy-min-clearance`、`data-enemy-spread`、`data-enemy-standoff-error`、`data-enemy-telegraph-patterns`、`data-boss-phase`、`data-player-hp`、`data-player-max-hp`、`data-player-position`、`data-player-damage-taken`、`data-player-downed`、`data-player-down-count`、`data-player-rescue-count`、`data-fps` 与 `data-qa` 诊断属性。机库、合约、构筑与远征还提供 `data-frame`、`data-module`、`data-contract`、`data-talents`、`data-talent-count`、`data-score-multiplier`、`data-player-shield`、`data-player-speed`、`data-player-fire-rate`、`data-player-damage`、`data-player-energy-gain`、`data-player-shots`、`data-player-projectiles`、`data-growth-capstones`、`data-growth-capstone-procs`、`data-qa-growth`、`data-achievement-count`、`data-stardust-reward`、`data-run-seed`、`data-upgrade-count`、`data-upgrades`、`data-draft-options`、`data-protocols`、`data-protocol-count`、`data-protocol-procs`、`data-player-buffs`、`data-player-debuffs`、`data-enemy-module-slots`、`data-enemy-build-catalog`、`data-qa-enemy-build`、`data-route-signature`、`data-biome`、`data-enemy-variants`、`data-active-builds`、`data-path-plan`、`data-active-path`、`data-path-options`、`data-path-selection`、`data-path-history`、`data-encounter-plan`、`data-active-encounter`、`data-encounter-progress`、`data-encounter-objects`、`data-encounter-history` 及七项 `data-rush-*` 狂潮状态。战斗重构另提供 `data-combat-beat`、`data-combat-pressure`、`data-combat-pattern-tier`、`data-combat-bullet-cap`、`data-combat-state-transitions`、`data-combat-telegraphs`、`data-combat-patterns`、`data-enemy-ai-states`、`data-enemy-formations`、`data-enemy-hulls`、`data-enemy-weapons`、`data-enemy-species`、`data-enemy-ai-doctrines`、`data-enemy-native-count`、`data-enemy-elite-count`、`data-enemy-max-hp`、`data-enemy-max-age`、`data-enemy-max-cycles`、`data-combat-laser-hits`、`data-combat-homing-hits`、`data-combat-blast-hits`、`data-combat-deathrattles`、`data-combat-body-collisions`、`data-combat-friendly-collisions`、`data-ambient-elite-spawns`、`data-run-growth` 和 `data-ai-intent`。3D Canvas 还应为 `data-renderer="three-r185-instanced-voxel"`、`data-art-style="toon-glow-light-blocks"`、`data-pixel-grammar="coarse-emissive-012"`、`data-space-composition="open-celestial-parallax"`、`data-ecosystem-composition="9-macro-mid-sparse"`、`data-combat-negative-space="center-55-clear"`、`data-nebula-parallax="3d-additive-dust"`、`data-faction-language="human-kites-vs-void-organisms"`、`data-player-modules="4-integrated-silhouette-parts"`、`data-model-families="3-player-16-alien"`、`data-enemy-tactics="role-doctrine-6-state"`、`data-enemy-spacing="live-target-standoff"`、`data-warning-grammar="local-charge-laser-sight-ram-chevrons-blast-rings"`、`data-laser-vfx="layered-core-edge-packets"`、`data-bullet-grammar="locked-safe-lanes-curves-mines-lasers-seekers-blasts"` 和 `data-player-projectile-density="capstone-low-bloom"`。
+自动化或人工检查可以读取 `#game` 上的 `data-mode`、`data-language`、`data-stage`、`data-stage-time`、`data-events`、`data-enemies`、`data-enemy-bullets`、`data-enemy-beams`、`data-enemy-homing-bullets`、`data-enemy-blast-bullets`、`data-enemy-bullet-speed`、`data-enemy-homing-speed`、`data-enemy-beam-finite`、`data-combat-invalid-projectiles`、`data-enemy-overlap-pairs`、`data-enemy-close-pairs`、`data-enemy-min-clearance`、`data-enemy-spread`、`data-enemy-standoff-error`、`data-enemy-telegraph-patterns`、`data-boss-phase`、`data-player-hp`、`data-player-max-hp`、`data-player-position`、`data-player-damage-taken`、`data-player-downed`、`data-player-down-count`、`data-player-rescue-count`、`data-fps` 与 `data-qa` 诊断属性。机库、合约、构筑与远征还提供 `data-frame`、`data-module`、`data-contract`、`data-talents`、`data-talent-count`、`data-score-multiplier`、`data-player-shield`、`data-player-speed`、`data-player-fire-rate`、`data-player-damage`、`data-player-energy-gain`、`data-player-shots`、`data-player-projectiles`、`data-growth-capstones`、`data-growth-capstone-procs`、`data-qa-growth`、`data-achievement-count`、`data-stardust-reward`、`data-run-seed`、`data-upgrade-count`、`data-upgrades`、`data-draft-options`、`data-protocols`、`data-protocol-count`、`data-protocol-procs`、`data-player-buffs`、`data-player-debuffs`、`data-enemy-module-slots`、`data-enemy-build-catalog`、`data-qa-enemy-build`、`data-route-signature`、`data-biome`、`data-enemy-variants`、`data-active-builds`、`data-path-plan`、`data-active-path`、`data-path-options`、`data-path-selection`、`data-path-history`、`data-encounter-plan`、`data-active-encounter`、`data-encounter-progress`、`data-encounter-objects`、`data-encounter-history` 及七项 `data-rush-*` 狂潮状态。战斗重构另提供 `data-combat-beat`、`data-combat-pressure`、`data-combat-pattern-tier`、`data-combat-bullet-cap`、`data-combat-state-transitions`、`data-combat-telegraphs`、`data-combat-patterns`、`data-enemy-tactic-states`、`data-enemy-formations`、`data-enemy-hulls`、`data-enemy-weapons`、`data-enemy-species`、`data-enemy-behavior-profiles`、`data-enemy-native-count`、`data-enemy-elite-count`、`data-enemy-max-hp`、`data-enemy-max-age`、`data-enemy-max-cycles`、`data-combat-laser-hits`、`data-combat-homing-hits`、`data-combat-blast-hits`、`data-combat-deathrattles`、`data-combat-body-collisions`、`data-combat-friendly-collisions`、`data-ambient-elite-spawns`、`data-run-growth`、`data-ai-intent` 和 `data-ai-threats`。3D Canvas 还应为 `data-renderer="three-r185-instanced-voxel"`、`data-art-style="toon-glow-light-blocks"`、`data-pixel-grammar="coarse-emissive-012"`、`data-space-composition="open-celestial-parallax"`、`data-ecosystem-composition="9-macro-mid-sparse"`、`data-combat-negative-space="center-55-clear"`、`data-nebula-parallax="3d-additive-dust"`、`data-faction-language="human-kites-vs-void-organisms"`、`data-player-modules="4-integrated-silhouette-parts"`、`data-model-families="3-player-16-alien"`、`data-enemy-tactics="event-tactics-continuous-flight"`、`data-enemy-spacing="predictive-separation-arrival"`、`data-warning-grammar="muzzle-charge-committed-lasers-ram-corridors-blast-rings"`、`data-laser-vfx="layered-core-edge-packets"`、`data-bullet-grammar="locked-safe-lanes-curves-mines-lasers-seekers-blasts"` 和 `data-player-projectile-density="capstone-low-bloom"`。
 
 `data-enemy-telegraph-targets` 以 `敌机 ID|弹幕 ID|玩家索引|起点 X|起点 Y|采样目标 X|采样目标 Y|承诺终点 X|承诺终点 Y` 记录当前预警几何；策略测试据此只移动真正被激光或冲撞瞄准的战机，不把普通局部蓄力误判成跨屏方向指令。
 
@@ -182,7 +200,7 @@ http://127.0.0.1:4173/?qa-boss-gallery&qa-boss-phase=3&seed=2
 http://127.0.0.1:4173/?qa-fast&qa-boss-state&qa-boss-phase=3&qa-combat-stage=3&qa-combat-progress=0.95&qa-path=1&seed=703
 ```
 
-`#game` 会公开 `data-boss-attack-state`、`data-boss-attack`、`data-boss-attack-charge`、敌弹/伤害束/追踪/爆破数量、激光命中、累计受伤、伤害束有限性与非法弹体。运行 `npm run smoke:boss-state` 必须逐章动态捕获 phase 3 的 recover/telegraph、章别攻击组、charge ≥ 0.6、实际玩家伤害、对应光束/追踪/爆破、`telegraph-state-arena`、WebGL、50 FPS 下限、有限伤害束、非法敌弹 0 和零应用控制台错误。当前三章峰值依次为 75 弹/12 束、101 弹/2 束、128 弹/4 束；截图输出为 `spacescraft-boss-arsenal/boss-stage-1.png` 到 `boss-stage-3.png`。
+`#game` 会公开 `data-boss-weapon-state`、`data-boss-attack`、`data-boss-weapon-charge`、敌弹/伤害束/追踪/爆破数量、激光命中、累计受伤、伤害束有限性与非法弹体。运行 `npm run smoke:boss-state` 必须逐章动态捕获 phase 3 的 cooldown/windup、章别攻击组、charge ≥ 0.6、实际玩家伤害、对应光束/追踪/爆破、`telegraph-state-arena`、WebGL、50 FPS 下限、有限伤害束、非法敌弹 0 和零应用控制台错误。当前三章峰值依次为 75 弹/12 束、101 弹/2 束、128 弹/4 束；截图输出为 `spacescraft-boss-arsenal/boss-stage-1.png` 到 `boss-stage-3.png`。
 
 ### 九生态微缩世界与弹体特效矩阵
 
@@ -242,15 +260,15 @@ npm run smoke:director
 http://127.0.0.1:4173/?qa-voxel&qa-path=2&qa-threat=4&qa-combat-stage=3&qa-combat-progress=0.7&seed=2501
 ```
 
-检查 `data-combat-beat`、`data-combat-pressure`、`data-combat-pattern-tier`、`data-combat-bullet-cap`、`data-combat-hard-bullet-cap`、`data-enemy-ai-states`、`data-enemy-formations`、`data-combat-patterns`、`data-combat-telegraphs`、`data-combat-state-transitions`、`data-run-growth` 和 `data-ai-intent`。运行：
+检查 `data-combat-beat`、`data-combat-pressure`、`data-combat-pattern-tier`、`data-combat-bullet-cap`、`data-combat-hard-bullet-cap`、`data-enemy-tactic-states`、`data-enemy-formations`、`data-combat-patterns`、`data-combat-telegraphs`、`data-combat-state-transitions`、`data-run-growth` 和 `data-ai-intent`。运行：
 
 ```bash
 npm run smoke:combat
 ```
 
-脚本先以正常 1× 时间检查第一章前 20 秒的学习窗口，再强制第三章极限杀伤区并持续发送方向输入，最后逐项运行三章 × 四节拍的 12 格曲线矩阵。必须同时看到至少五种 AI 状态、三种弹幕语法、三个战术编队、60 枚以上同屏敌弹、普通/死亡机能预算零越界、敌军重叠不超过 5 对且近距挤压不超过 12 对、单人 AI 的编队/集火/闪避意图、章节压力单调递增、杀伤区高于释放段、章间压力比值跨度足以证明不是比例复制、40 FPS 下限和零应用控制台错误。当前开场为 4 敌/4 弹且双机满耐久，第三章 6 秒动态峰值为 21 敌/112 弹/8 编队/6 种实发弹幕/60 FPS；普通 132 与死亡机能 144 硬预算均零越界。12 格压力/上限数据见设计基线。高压截图与左侧紧凑模块扫描截图写入系统临时目录 `spacescraft-combat-doctrine`；这项压力样本不能替代正常 1× 三十分钟真人实玩、双人/双手柄和全部章节自然曲线回归。
+脚本先以正常 1× 时间检查第一章前 20 秒的学习窗口，再强制第三章极限杀伤区并持续发送方向输入，最后逐项运行三章 × 四节拍的 12 格曲线矩阵。必须同时看到至少五种 AI 状态、三种弹幕语法、三个战术编队、60 枚以上同屏敌弹、普通/死亡机能预算零越界、敌军重叠不超过 5 对且近距挤压不超过 12 对、单人 AI 的编队/集火/闪避意图、突入/交锋/杀伤区逐章上升、释放段保持晚期预算但允许作为第三章降压谷、杀伤区高于释放段、章间压力比值跨度足以证明不是比例复制、40 FPS 下限和零应用控制台错误。当前开场为 2 敌/1 弹且双机满耐久，第三章 10 秒动态峰值为 15 敌/67 弹/5 编队/4 种实发弹幕/60 FPS，友方威胁摘要覆盖追踪、激光、曲线和普通弹；普通 132 与死亡机能 144 硬预算均零越界。12 格压力/上限数据见设计基线。高压截图与左侧紧凑模块扫描截图写入系统临时目录 `spacescraft-combat-doctrine`；这项压力样本不能替代正常 1× 三十分钟真人实玩、双人/双手柄和全部章节自然曲线回归。
 
-运行 `npm run smoke:strategy` 会在相同第三章极限杀伤区和相同种子下各运行 12 秒：第一组完全不发送玩家输入，第二组只在新预警出现时向相反半场发送 P1 左右方向。门禁要求两组均达到 80 枚以上敌弹和 40 FPS，且预警换位后的双机累计伤害与倒地综合代价必须严格低于零输入组；同时验证实际横向位移、单人 AI 编队/集火/闪避、WebGL 与零应用控制台错误。当前被动样本为 14 点伤害、双机各倒地 1 次；换位样本为 13 点伤害、AI 倒地 1 次，P1 横移 97.3 并以 1 HP 存活，峰值 129 弹。截图写入 `spacescraft-strategy-doctrine/passive.png` 和 `evasive.png`。该对照验证空间反制有实际协作收益，不代表自然 30 分钟或所有玩家策略已经平衡。
+运行 `npm run smoke:strategy` 会在相同第三章极限杀伤区和相同种子下各运行 12 秒：第一组完全不发送玩家输入，第二组只在新预警出现时向相反半场发送 P1 左右方向。门禁要求两组均达到 80 枚以上敌弹和 40 FPS，且预警换位后的双机累计伤害与倒地综合代价必须严格低于零输入组；同时验证实际横向位移、单人 AI 编队/集火/闪避、WebGL 与零应用控制台错误。当前被动样本伤害为 0/3；换位样本为 0/0，两组均存活并保持 60 FPS。截图写入 `spacescraft-strategy-doctrine/passive.png` 和 `evasive.png`。该对照验证空间反制有实际协作收益，不代表自然 30 分钟或所有玩家策略已经平衡。
 
 ### 自适应威胁矩阵测试
 
@@ -345,7 +363,8 @@ npm start
 - `src/rush.js`：星链狂潮阈值、事件充能、共振增益/衰减和自动战斗倍率。
 - `src/director.js`：30 分钟章节时长、战区、编队/遭遇/构筑阈值、强度曲线和 QA 倍率。
 - `src/threat.js`：五级威胁配置、动态评分、首章/残血/倒地保护、迟滞与单级步进。
-- `src/combat.js`：四段压力节拍、章节/战区曲线、七职责战术、六态循环、六编队和弹幕语法选择。
+- `src/combat.js`：四段压力节拍、章节/战区曲线、职责预算、六编队和弹幕语法选择。
+- `src/enemy-ai.js`：七态战术、感知/目标持有、连续飞行、姿态与共享发射几何。
 - `src/expedition.js`：生态航线、星门协议/航道判定、动态遭遇计划/结果判定、敌型权重与模块化敌军组装规则。
 - `src/i18n.js`：简体中文/英文文案目录、插值、DOM 与元数据同步。
 - `electron/main.cjs`：安全桌面窗口与生命周期。

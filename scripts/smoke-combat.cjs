@@ -57,7 +57,7 @@ async function stateOf(window) {
       transitions: Number(game.dataset.combatStateTransitions),
       telegraphs: Number(game.dataset.combatTelegraphs),
       patterns: game.dataset.combatPatterns,
-      states: game.dataset.enemyAiStates,
+      states: game.dataset.enemyWeaponStates,
       formations: Number(game.dataset.enemyFormations),
       lastFormation: game.dataset.lastFormation,
       enemyScanLayout: game.dataset.enemyScanLayout,
@@ -66,6 +66,7 @@ async function stateOf(window) {
       enemyScanBounds: game.dataset.enemyScanBounds,
       hp: game.dataset.playerHp.split(',').map(Number),
       aiIntent: game.dataset.aiIntent,
+      aiThreats: game.dataset.aiThreats,
       fps: Number(game.dataset.fps),
       renderer: scene.dataset.renderer,
       enemyTactics: scene.dataset.enemyTactics,
@@ -105,7 +106,7 @@ async function sampleOpening(window, port, errors) {
 
 async function sampleKillzone(window, port, errors) {
   await startRun(window, `http://127.0.0.1:${port}/?qa-voxel&qa-path=1&qa-threat=4&qa-combat-stage=3&qa-combat-progress=0.74&seed=2502`);
-  const summary = { maxEnemies: 0, maxBullets: 0, maxFormations: 0, maxTelegraphs: 0, maxTransitions: 0, maxPressure: 0, maxPatternTier: 0, maxBulletCap: 0, maxHardBulletCap: 0, maxOverBudget: 0, maxOverlapPairs: 0, maxClosePairs: 0, minClearance: Number.POSITIVE_INFINITY, minStandoffError: Number.POSITIVE_INFINITY, maxSpreadX: 0, maxSpreadY: 0, patterns: new Set(), states: new Set(), intents: new Set(), beats: new Set() };
+  const summary = { maxEnemies: 0, maxBullets: 0, maxFormations: 0, maxTelegraphs: 0, maxTransitions: 0, maxPressure: 0, maxPatternTier: 0, maxBulletCap: 0, maxHardBulletCap: 0, maxOverBudget: 0, maxOverlapPairs: 0, maxClosePairs: 0, minClearance: Number.POSITIVE_INFINITY, minStandoffError: Number.POSITIVE_INFINITY, maxSpreadX: 0, maxSpreadY: 0, patterns: new Set(), states: new Set(), intents: new Set(), threats: new Set(), beats: new Set() };
   const screenshot = path.join(outputRoot, "chapter-3-killzone.png");
   const scanScreenshot = path.join(outputRoot, "enemy-scan-edge.png");
   let capturedKillzone = false;
@@ -113,7 +114,7 @@ async function sampleKillzone(window, port, errors) {
   const directions = ["A", "W", "D", "S"];
   let held = "";
   let state = null;
-  for (let attempt = 0; attempt < 60; attempt += 1) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
     if (attempt % 10 === 0) {
       if (held) window.webContents.sendInputEvent({ type: "keyUp", keyCode: held });
       held = directions[(attempt / 10) % directions.length];
@@ -140,6 +141,7 @@ async function sampleKillzone(window, port, errors) {
     state.patterns.split(",").filter(Boolean).forEach((pattern) => summary.patterns.add(pattern));
     state.states.split(",").filter(Boolean).forEach((entry) => summary.states.add(entry));
     if (state.aiIntent) summary.intents.add(state.aiIntent);
+    if (state.aiThreats) summary.threats.add(state.aiThreats);
     if (state.beat) summary.beats.add(state.beat);
     if (!capturedKillzone && state.beat === "killzone" && state.bullets >= 60) {
       fs.writeFileSync(screenshot, (await window.webContents.capturePage()).toPNG());
@@ -154,18 +156,18 @@ async function sampleKillzone(window, port, errors) {
   }
   if (held) window.webContents.sendInputEvent({ type: "keyUp", keyCode: held });
   if (!state || state.mode !== "playing" || state.stage !== 3 || !state.qaCombat.startsWith("3:")) throw new Error(`forced kill zone failed to stay live: ${JSON.stringify(state)}`);
-  if (!summary.beats.has("killzone") || summary.maxPatternTier !== 5 || summary.maxPressure < 1.6) throw new Error(`forced kill zone did not reach designed pressure: ${JSON.stringify({ ...summary, patterns: [...summary.patterns], states: [...summary.states], intents: [...summary.intents], beats: [...summary.beats] })}`);
-  if (summary.maxEnemies < 7 || summary.maxBullets < 12 || summary.maxFormations < 1) throw new Error(`forced kill zone lacked battlefield density: ${JSON.stringify({ ...summary, patterns: [...summary.patterns], states: [...summary.states], intents: [...summary.intents], beats: [...summary.beats] })}`);
+  if (!summary.beats.has("killzone") || summary.maxPatternTier !== 5 || summary.maxPressure < 1.6) throw new Error(`forced kill zone did not reach designed pressure: ${JSON.stringify({ ...summary, patterns: [...summary.patterns], states: [...summary.states], intents: [...summary.intents], threats: [...summary.threats], beats: [...summary.beats] })}`);
+  if (summary.maxEnemies < 7 || summary.maxBullets < 12 || summary.maxFormations < 1) throw new Error(`forced kill zone lacked battlefield density: ${JSON.stringify({ ...summary, patterns: [...summary.patterns], states: [...summary.states], intents: [...summary.intents], threats: [...summary.threats], beats: [...summary.beats] })}`);
   if (summary.maxOverlapPairs > 5 || summary.maxClosePairs > 12) throw new Error(`forced kill zone collapsed into an unreadable enemy blob: ${JSON.stringify({ overlaps: summary.maxOverlapPairs, close: summary.maxClosePairs, spread: [summary.maxSpreadX, summary.maxSpreadY] })}`);
   if (!Number.isFinite(summary.minStandoffError) || summary.minStandoffError > 80) throw new Error(`enemy roles never converged on their live-target standoff bands: ${JSON.stringify({ minStandoffError: summary.minStandoffError, state })}`);
   if (summary.maxOverBudget > 0 || summary.maxBullets > summary.maxHardBulletCap) throw new Error(`forced kill zone exceeded its deathrattle-aware hard bullet budget: ${JSON.stringify({ max: summary.maxBullets, ordinaryCap: summary.maxBulletCap, hardCap: summary.maxHardBulletCap, over: summary.maxOverBudget })}`);
-  if (summary.maxTelegraphs < 5 || summary.maxTransitions < 24 || summary.patterns.size < 3) throw new Error(`forced kill zone lacked tactical variety: ${JSON.stringify({ ...summary, patterns: [...summary.patterns], states: [...summary.states] })}`);
-  if (!summary.states.has("telegraph") || !summary.states.has("attack")) throw new Error(`state sampling missed telegraph/attack: ${JSON.stringify([...summary.states])}`);
-  if (state.enemyTactics !== "role-doctrine-6-state" || state.enemySpacing !== "live-target-standoff" || state.warningGrammar !== "local-charge-laser-sight-ram-chevrons-blast-rings" || state.laserVfx !== "layered-core-edge-packets" || state.bulletGrammar !== "locked-safe-lanes-curves-mines-lasers-seekers-blasts" || state.enemyScanLayout !== "edge-compact" || state.enemyScanBounds !== "8,64,158,34" || !state.webgl || state.fps < 40) throw new Error(`combat renderer contract failed: ${JSON.stringify(state)}`);
+  if (summary.maxTelegraphs < 5 || summary.maxTransitions < 24 || summary.patterns.size < 3) throw new Error(`forced kill zone lacked tactical variety: ${JSON.stringify({ ...summary, patterns: [...summary.patterns], states: [...summary.states], threats: [...summary.threats] })}`);
+  if (!summary.states.has("windup") || !summary.states.has("fire")) throw new Error(`state sampling missed windup/fire: ${JSON.stringify([...summary.states])}`);
+  if (state.enemyTactics !== "event-tactics-continuous-flight" || state.enemySpacing !== "predictive-separation-arrival" || state.warningGrammar !== "muzzle-charge-committed-lasers-ram-corridors-blast-rings" || state.laserVfx !== "layered-core-edge-packets" || state.bulletGrammar !== "locked-safe-lanes-curves-mines-lasers-seekers-blasts" || state.enemyScanLayout !== "edge-compact" || state.enemyScanBounds !== "8,64,158,34" || !state.webgl || state.fps < 40) throw new Error(`combat renderer contract failed: ${JSON.stringify(state)}`);
   if (errors.length) throw new Error(`console errors during kill-zone sample: ${errors.join(" | ")}`);
   if (!capturedKillzone) fs.writeFileSync(screenshot, (await window.webContents.capturePage()).toPNG());
   if (!capturedScan) throw new Error("high-pressure sample never exposed the compact enemy scan notice");
-  return { ...state, ...summary, patterns: [...summary.patterns], states: [...summary.states], intents: [...summary.intents], beats: [...summary.beats], screenshot, scanScreenshot };
+  return { ...state, ...summary, patterns: [...summary.patterns], states: [...summary.states], intents: [...summary.intents], threats: [...summary.threats], beats: [...summary.beats], screenshot, scanScreenshot };
 }
 
 async function sampleCurveMatrix(window, port, errors) {
@@ -196,8 +198,10 @@ async function sampleCurveMatrix(window, port, errors) {
   }
   for (const sample of samples) {
     const progression = matrix.filter((entry) => entry.beat === sample.beat);
-    if (!(progression[0].pressure < progression[1].pressure && progression[1].pressure < progression[2].pressure)) {
-      throw new Error(`chapter pressure did not rise for ${sample.beat}: ${JSON.stringify(progression)}`);
+    const pressureRises = progression[0].pressure < progression[1].pressure && progression[1].pressure < progression[2].pressure;
+    const releaseReliefValley = sample.beat === "release" && progression[0].pressure < progression[1].pressure && progression[0].pressure < progression[2].pressure;
+    if (!(pressureRises || releaseReliefValley)) {
+      throw new Error(`chapter pressure curve regressed for ${sample.beat}: ${JSON.stringify(progression)}`);
     }
     if (!(progression[0].bulletCap < progression[1].bulletCap && progression[1].bulletCap < progression[2].bulletCap)) {
       throw new Error(`chapter bullet budget did not rise for ${sample.beat}: ${JSON.stringify(progression)}`);

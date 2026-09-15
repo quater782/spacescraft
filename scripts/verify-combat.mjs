@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 
+const aiSource = fs.readFileSync(new URL("../src/enemy-ai.js", import.meta.url), "utf8");
 const combatSource = fs.readFileSync(new URL("../src/combat.js", import.meta.url), "utf8");
 const roguelikeSource = fs.readFileSync(new URL("../src/roguelike.js", import.meta.url), "utf8");
 const gameSource = fs.readFileSync(new URL("../src/game.js", import.meta.url), "utf8");
@@ -12,12 +13,14 @@ const sandbox = { window: {} };
 vm.runInNewContext(roguelikeSource, sandbox, { filename: "src/roguelike.js" });
 vm.runInNewContext(combatSource, sandbox, { filename: "src/combat.js" });
 
+vm.runInNewContext(aiSource, sandbox, { filename: "src/enemy-ai.js" });
+const roles = Object.entries(sandbox.window.SpaceEnemyAI.profiles).filter(([role]) => role !== "boss");
 const combat = sandbox.window.SpaceCombat;
 assert.deepEqual([...combat.BEATS].map((beat) => beat.id), ["breach", "engage", "killzone", "release"]);
 assert.deepEqual([...combat.CHAPTER_PROFILES].map((profile) => profile.id), ["academy", "crossfire", "predator"]);
 assert.notDeepEqual([...combat.CHAPTER_PROFILES[0].bounds], [...combat.CHAPTER_PROFILES[1].bounds], "chapters need different beat widths");
 assert.notDeepEqual([...combat.CHAPTER_PROFILES[1].bounds], [...combat.CHAPTER_PROFILES[2].bounds], "late combat cannot reuse the same rhythm window");
-assert.equal(Object.keys(combat.ROLE_DOCTRINES).length, 7, "all seven hull roles need a doctrine");
+assert.equal(roles.length, 7, "all seven hull roles need flight and weapon profiles");
 assert.equal(combat.FORMATIONS.length, 6, "the tactical director needs six readable formation families");
 for (const beat of combat.BEATS) {
   assert.match(beat.nameKey, /^combatBeat\./);
@@ -58,20 +61,13 @@ assert.ok(combat.ambientEliteChance({ stageIndex: 0, progress: .8, threatTier: 2
 assert.ok(combat.ambientEliteChance({ stageIndex: 2, progress: .8, threatTier: 2, beatId: "killzone" }) >= .21, "late kill zones need a materially higher elite frequency");
 assert.ok(combat.ambientEliteChance({ stageIndex: 2, progress: 1, threatTier: 2, beatId: "killzone" }) <= .24, "elite probability needs a bounded concurrency-safe ceiling");
 
-for (const [role, doctrine] of Object.entries(combat.ROLE_DOCTRINES)) {
-  for (const key of ["stationY", "engagementRange", "rangeBand", "entrySpeed", "lateral", "telegraph", "attack", "recover", "breakaway"]) assert.ok(doctrine[key] > 0, `${role}.${key} must be positive`);
-  assert.ok(doctrine.engagementRange > doctrine.rangeBand * 3, `${role} needs a meaningful live-target standoff distance`);
-  let state = "entry";
-  const visited = new Set([state]);
-  for (let step = 0; step < 8; step += 1) {
-    state = combat.nextState(role, state);
-    visited.add(state);
-  }
-  assert.ok(visited.has("position") && visited.has("telegraph") && visited.has("attack"), `${role} must enter telegraphed attacks`);
+for (const [role, profile] of roles) {
+  for (const key of ["engagementRange", "rangeBand", "speed", "turn", "accel", "brake", "windup", "fireDuration", "cooldown"]) assert.ok(profile[key] > 0, `${role}.${key} must be positive`);
+  assert.ok(profile.engagementRange > profile.rangeBand * 3, `${role} needs a usable firing distance band`);
 }
 
 const patterns = new Set();
-for (const role of Object.keys(combat.ROLE_DOCTRINES)) {
+for (const [role] of roles) {
   for (const weaponId of ["pulse", "twin", "sniper", "orbit", "laser", "seeker", "bomb"]) {
     const weaponPattern = { laser: "laserLance", seeker: "hunterSeeker", bomb: "blastSeed" }[weaponId] || "";
     for (let tier = 0; tier <= 5; tier += 1) patterns.add(combat.patternFor({ role, weaponId, weaponPattern, patternTier: tier, cycle: tier }));
@@ -90,17 +86,17 @@ for (const formation of combat.FORMATIONS) {
 
 assert.match(indexSource, /src\/combat\.js\?v=2[\s\S]*src\/anomalies\.js/);
 assert.match(gameSource, /COMBAT\.curveFor/);
+assert.match(gameSource, /ENEMY_AI\.flight/);
+assert.doesNotMatch(gameSource, /COMBAT\.nextState|function resolveEnemyCrowding|function updateEnemyIntelligence/);
+assert.match(aiSource, /other\.packId === e\.packId/);
+assert.match(aiSource, /e\.targetHold = 1\.2/);
 assert.match(gameSource, /REQUESTED_QA_COMBAT_STAGE = LOCAL_QA_HOST \?/);
 assert.match(gameSource, /REQUESTED_QA_COMBAT_PROGRESS = LOCAL_QA_HOST \?/);
-assert.match(gameSource, /COMBAT\.nextState/);
 assert.match(gameSource, /function leastCrowdedFormationCenter/);
 assert.match(gameSource, /COMBAT\.ambientEliteChance/, "ambient elite frequency must use the tested combat curve");
 assert.match(gameSource, /const baseHealth = \[340, 490, 690\]/, "boss durability must match the independent-weapon baseline");
 assert.match(gameSource, /stationYBias/);
 assert.match(gameSource, /stationYBias: \(enemyId % 3 - 1\) \* 20/, "formation members must occupy three readable depth bands");
-assert.match(gameSource, /enemy\.formationId \? \.34 : \.68/, "formations must follow the live target without collapsing onto one coordinate");
-assert.match(gameSource, /target\.y - doctrine\.engagementRange \+ enemy\.stationYBias/, "enemy roles must pursue the live target while keeping their own standoff range");
-assert.match(gameSource, /currentRange < doctrine\.engagementRange - doctrine\.rangeBand/, "enemy roles must back away when the player breaches their safe band");
 assert.match(gameSource, /threatConfig\(\)\.fireRate \* anomalyConfig\(\)\.enemyFireRate \* combat\.fireRate/, "combat beats must change real attack cadence");
 assert.match(gameSource, /function executeEnemyPattern/);
 assert.match(gameSource, /behavior === "mine"/);
@@ -111,13 +107,20 @@ assert.match(gameSource, /function enemyBeam/);
 assert.match(gameSource, /debuff: source\.debuff \|\| ""/, "laser beams must carry modular payloads");
 assert.match(gameSource, /const angleDelta = Math\.atan2\(Math\.sin\(targetAngle - currentAngle\)/, "seekers must steer by angle without losing speed");
 assert.match(gameSource, /const guidanceScale = lerp\(1, \.32, guidanceProgress \* guidanceProgress\)/, "seekers need a readable terminal juke window");
-assert.match(gameSource, /targetedHoming[\s\S]*?perpendicularX[\s\S]*?dodgeSide/, "the solo wingmate must cut across targeted seekers instead of fleeing their turn arc");
+assert.match(gameSource, /function aiPilotPartner[\s\S]*?pilot !== player/, "the production wingmate controller must resolve a symmetric teammate for dual-AI smoke adapters");
+assert.match(gameSource, /function aiForecastBullet[\s\S]*?bullet\.behavior === "curve"/, "the solo wingmate must predict curved bullets instead of treating them as straight lines");
+assert.match(gameSource, /function evaluateAiThreats[\s\S]*?targetedHoming[\s\S]*?perpendicularX[\s\S]*?dodgeSide/, "the solo wingmate must cut across targeted seekers instead of fleeing their turn arc");
+assert.match(gameSource, /function aiForecastBullet[\s\S]*?bullet\.anchored[\s\S]*?function aiThreatAtPoint[\s\S]*?bullet\.behavior === "blast"[\s\S]*?blastRadius/, "the solo wingmate must treat anchored death blasts as danger zones");
+for (const name of ["aiThreatAtPoint", "evaluateAiThreats"]) {
+  const controller = gameSource.split(`function ${name}(`)[1].split("\nfunction ")[0];
+  assert.match(controller, /enemy\.weaponState === "windup" && enemy\.attackPattern === "ramCharge"[\s\S]*?enemy\.attackCommit\?\.ram/, "wingmate threat scoring must use the actual committed ram corridor");
+  assert.doesNotMatch(controller, /ENEMY_AI\.ramPath/, "moving the target must not redirect the perceived committed corridor");
+}
 assert.match(gameSource, /const academy = world\.stageIndex === 0;[\s\S]*?academy \? \(cluster \? 2 : 1\)[\s\S]*?homingDuration: academy \? \(cluster \? 1\.45 : 1\.7\)/, "chapter one must teach a bounded single-seeker dodge before later multi-locks");
 assert.match(gameSource, /targetIndex: target\.index, pattern, behavior: tier >= 3 \? "homing"/, "every homing branch must preserve the player locked during telegraph");
-assert.match(gameSource, /function telegraphedBeamSegments[\s\S]*?for \(const beam of world\.enemyBeams\) avoidBeamLine/, "the solo wingmate must evade both beam telegraphs and live laser geometry");
+assert.match(gameSource, /function evaluateAiThreats[\s\S]*?for \(const line of telegraphedBeamSegments\(enemy\)\)[\s\S]*?for \(const beam of world\.enemyBeams\)/, "the solo wingmate must evade both beam telegraphs and live laser geometry");
 assert.match(gameSource, /enemy\.attackPattern === "laserLance"[\s\S]*?1\.12/, "single lasers need a longer readable warning floor");
 assert.match(gameSource, /enemy\.attackPattern === "laserSweep"[\s\S]*?1\.28/, "sweeping lasers need the longest ordinary-enemy warning floor");
-assert.match(gameSource, /enemy\.attackEndX = clamp[\s\S]*?enemy\.attackTargetX \+ dx \/ range \* 48/, "rammers must commit through the sampled lane instead of homing onto the pilot point");
 assert.match(gameSource, /projectile\.triggerAge = clamp\(\(travelDistance - blastRadius \* \.58\) \/ Math\.max\(1, projectile\.baseSpeed\)/, "blast fuses must use their real post-multiplier travel speed");
 assert.match(gameSource, /const blastProximity = bullet\.behavior === "blast"[\s\S]*?bullet\.blastRadius \* \.78/, "blast seeds need a reliable proximity fuse before direct-contact collapse");
 assert.match(gameSource, /const blastProximity = bullet\.behavior === "blast" && !bullet\.anchored/, "anchored death blasts must preserve their full warning window");
@@ -133,11 +136,10 @@ const spawnBossBody = gameSource.slice(gameSource.indexOf("function spawnBoss()"
 assert.doesNotMatch(spawnBossBody, /world\.enemies\s*=\s*\[\]/, "boss arrival must not erase surviving pursuers");
 assert.match(gameSource, /const addBudget = Math\.max\(0, \[8, 10, 12\]\[stage\] - liveAdds\)/, "boss reinforcements need a hard concurrent cap while survivors remain active");
 assert.match(gameSource, /updateStage\(dt\);[\s\S]*?if \(world\.clearTimer > 0\)[\s\S]*?input\.endFrame\(\);[\s\S]*?return;/, "stage-clear cinematics must freeze residual enemy damage after the boss is defeated");
-assert.match(gameSource, /weaveAmplitude[\s\S]*enemy\.moveSway/, "weave movement must change real flight paths");
-assert.match(gameSource, /other\.packId === enemy\.packId/, "pack AI must coordinate inside cohorts rather than across the entire battlefield");
 assert.match(gameSource, /dataset\.combatStateTransitions/);
 assert.match(gameSource, /dataset\.aiIntent/);
-assert.match(gameSource, /player\.aiIntent = "resupply"/, "solo wing AI must recognize reachable sustain pickups");
+assert.match(gameSource, /dataset\.aiThreats/);
+assert.match(gameSource, /function chooseAiStrategicGoal[\s\S]*?setGoal\([^;]+?"resupply"/, "solo wing AI must recognize reachable sustain pickups");
 assert.match(gameSource, /healthRatio <= \.72/, "low-health crews must receive deterministic resupply priority");
 assert.match(gameSource, /dataset\.enemyOverlapPairs/);
 assert.match(gameSource, /dataset\.enemyClosePairs/);
@@ -152,9 +154,7 @@ assert.match(gameSource, /dataset\.playerDamageTaken/);
 assert.match(gameSource, /dataset\.playerDowned/);
 assert.match(gameSource, /dataset\.playerDownCount/);
 assert.match(gameSource, /dataset\.playerRescueCount/);
-for (const diagnostic of ["enemyBeams", "enemyHomingBullets", "enemyBlastBullets", "enemyHomingSpeed", "enemyBeamFinite", "combatLaserHits", "combatHomingHits", "combatBlastHits", "combatDeathrattles", "combatBodyCollisions", "combatInvalidProjectiles", "combatBossFragments", "combatHardBulletCap", "bossAddCap", "bossAdds", "ambientEliteSpawns", "enemySpecies", "enemyNativeCount", "enemyMaxCycles", "enemyAiDoctrines"]) assert.match(gameSource, new RegExp(`dataset\\.${diagnostic}`), `missing combat diagnostic ${diagnostic}`);
-assert.match(gameSource, /enemy\.aiModule === "pack"/);
-assert.match(gameSource, /enemy\.aiModule === "ambusher"/);
+for (const diagnostic of ["enemyBeams", "enemyHomingBullets", "enemyBlastBullets", "enemyHomingSpeed", "enemyBeamFinite", "combatLaserHits", "combatHomingHits", "combatBlastHits", "combatDeathrattles", "combatBodyCollisions", "combatInvalidProjectiles", "combatBossFragments", "combatHardBulletCap", "bossAddCap", "bossAdds", "ambientEliteSpawns", "enemySpecies", "enemyNativeCount", "enemyMaxCycles", "enemyBehaviorProfiles"]) assert.match(gameSource, new RegExp(`dataset\\.${diagnostic}`), `missing combat diagnostic ${diagnostic}`);
 assert.match(gameSource, /dataset\.enemyScanLayout = "edge-compact"/, "variant discovery must stay outside the central fire lane");
 assert.match(gameSource, /dataset\.enemyScanBounds = "8,64,158,34"/, "enemy scan diagnostics must preserve the compact edge bounds");
 assert.match(rendererSource, /drawEnemyTelegraph/);
@@ -165,9 +165,9 @@ assert.match(rendererSource, /drawLaserTelegraph\(enemy, charge\)/);
 assert.match(rendererSource, /drawRamTelegraph\(enemy, charge\)/);
 assert.match(rendererSource, /voxelEllipse\(warningBase, radiusX, radiusZ/, "blast fuses must show their actual local danger footprint");
 assert.match(rendererSource, /laserVfx = "layered-core-edge-packets"/);
-assert.match(rendererSource, /warningGrammar = "local-charge-laser-sight-ram-chevrons-blast-rings"/);
-assert.match(rendererSource, /enemySpacing = "live-target-standoff"/);
-assert.match(rendererSource, /enemyTactics = "role-doctrine-6-state"/);
+assert.match(rendererSource, /warningGrammar = "muzzle-charge-committed-lasers-ram-corridors-blast-rings"/);
+assert.match(rendererSource, /enemySpacing = "predictive-separation-arrival"/);
+assert.match(rendererSource, /enemyTactics = "event-tactics-continuous-flight"/);
 assert.match(rendererSource, /bulletGrammar = "locked-safe-lanes-curves-mines-lasers-seekers-blasts"/);
 
 console.log(`Combat doctrine verified: four-beat pressure waves, seven live-target standoff roles, ${patterns.size} barrage patterns, six formations, laser-only sights, local ram/blast warnings, bounded bullet budgets, and layered WebGL beams.`);

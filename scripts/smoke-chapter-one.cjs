@@ -28,8 +28,6 @@ function instrumentGame(source) {
   if (dualAi) {
     replaceOnce('if (index === 1 && world.gameMode === "solo") return aiPilotControls(world.players[1]);',
       'if (world.gameMode === "solo") { window.__pilotQA.controlCalls[index]++; return aiPilotControls(world.players[index]); }');
-    // The production wingman assumes P1 is its partner; P1 must not target itself.
-    replaceOnce('const partner = world.players[0];', 'const partner = world.players[1 - player.index];');
   }
   replaceOnce('world.power.shots[source] = (world.power.shots[source] || 0) + 1;',
     'world.power.shots[source] = (world.power.shots[source] || 0) + 1; window.__pilotQA.pilots[player.index].shots++;');
@@ -93,6 +91,9 @@ async function stateOf(window) {
       species: game.dataset.enemySpecies,
       eliteCount: Number(game.dataset.enemyEliteCount),
       eliteSpawns: Number(game.dataset.ambientEliteSpawns),
+      chipCount: Number(game.dataset.enemyChipCount),
+      chipCap: Number(game.dataset.enemyChipCap),
+      chips: game.dataset.enemyChips,
       invalidProjectiles: Number(game.dataset.combatInvalidProjectiles),
       laserHits: Number(game.dataset.combatLaserHits),
       homingHits: Number(game.dataset.combatHomingHits),
@@ -107,6 +108,7 @@ async function stateOf(window) {
       rescues: pair(game.dataset.playerRescueCount),
       positions,
       aiIntent: game.dataset.aiIntent,
+      aiThreats: game.dataset.aiThreats,
       pilotQA: window.__pilotQA,
       kills: Number(game.dataset.kills),
       powerDamage: JSON.parse(game.dataset.powerDamage || '{}'),
@@ -115,7 +117,7 @@ async function stateOf(window) {
       linkSupport: JSON.parse(game.dataset.linkSupport || '{}'),
       masteryTasks: JSON.parse(game.dataset.masteryTasks || '{}'),
       bossPhase: Number(game.dataset.bossPhase),
-      bossAttackState: game.dataset.bossAttackState,
+      bossWeaponState: game.dataset.bossWeaponState,
       bossAttack: game.dataset.bossAttack,
       fps: Number(game.dataset.fps),
       renderer: scene.dataset.renderer,
@@ -181,6 +183,9 @@ function updateSummary(summary, state, previousPosition) {
   summary.maxBeams = Math.max(summary.maxBeams, state.beams);
   summary.maxNative = Math.max(summary.maxNative, state.nativeCount);
   summary.maxElites = Math.max(summary.maxElites, state.eliteCount);
+  summary.maxChips = Math.max(summary.maxChips, state.chipCount);
+  if(state.chipCount>state.chipCap)throw new Error('chip population exceeded its chapter cap');
+  if(state.chipCount>0&&summary.firstChipTime==null)summary.firstChipTime=state.stageTime;
   summary.eliteSpawns = Math.max(summary.eliteSpawns, state.eliteSpawns);
   summary.invalidProjectiles = Math.max(summary.invalidProjectiles, state.invalidProjectiles);
   summary.laserHits = Math.max(summary.laserHits, state.laserHits);
@@ -195,9 +200,10 @@ function updateSummary(summary, state, previousPosition) {
   summary.maxBossPhase = Math.max(summary.maxBossPhase, state.bossPhase);
   summary.maxKills = Math.max(summary.maxKills, state.kills);
   if (state.bossAttack) summary.bossAttacks.add(state.bossAttack);
-  if (state.bossAttackState !== "off") summary.bossStates.add(state.bossAttackState);
+  if (state.bossWeaponState !== "off") summary.bossStates.add(state.bossWeaponState);
   if (state.activeEncounter) summary.encounterKinds.add(state.activeEncounter);
   if (state.aiIntent) summary.aiIntents.add(state.aiIntent);
+  if (state.aiThreats) summary.aiThreats.add(state.aiThreats);
   if (state.species) summary.species.add(state.species);
   if (state.mode === "playing" && state.stageTime >= 5 && state.fps > 0) {
     summary.minFps = Math.min(summary.minFps, state.fps);
@@ -234,13 +240,13 @@ async function run() {
 
   const summary = {
     maxStageTime: 0, maxEvents: 0, maxEncounters: 0, maxEnemies: 0, maxBullets: 0, maxBeams: 0,
-    maxNative: 0, maxElites: 0, eliteSpawns: 0, invalidProjectiles: 0,
+    maxNative: 0, maxElites: 0, maxChips: 0, firstChipTime: null, eliteSpawns: 0, invalidProjectiles: 0,
     laserHits: 0, homingHits: 0, blastHits: 0, bodyCollisions: 0, deathrattles: 0,
     minHp: [Infinity, Infinity],
     maxDamageTaken: [0, 0], downs: [0, 0], rescues: [0, 0], maxBossPhase: 0, maxKills: 0,
     bossSeen: false, bossDefeated: false, pilotDistance: 0, minFps: Infinity, fpsTotal: 0, fpsSamples: 0,
     draftChoices: [], screenshots: [], bossAttacks: new Set(), bossStates: new Set(), encounterKinds: new Set(),
-    aiIntents: new Set(), species: new Set(), pilotCells: new Set(),
+    aiIntents: new Set(), aiThreats: new Set(), species: new Set(), pilotCells: new Set(),
   };
   const startedAt = Date.now();
   let bossSeenAt = 0;
@@ -308,14 +314,14 @@ async function run() {
   const result = {
     ...summary,
     bossAttacks: [...summary.bossAttacks], bossStates: [...summary.bossStates], encounterKinds: [...summary.encounterKinds],
-    aiIntents: [...summary.aiIntents], species: [...summary.species], pilotCells: summary.pilotCells.size,
+    aiIntents: [...summary.aiIntents], aiThreats: [...summary.aiThreats], species: [...summary.species], pilotCells: summary.pilotCells.size,
     averageFps: summary.fpsSamples ? Number((summary.fpsTotal / summary.fpsSamples).toFixed(1)) : 0,
     encounterHistory, handledDrafts, wallSeconds: Number(((Date.now() - startedAt) / 1000).toFixed(1)), finalState,
   };
   delete result.fpsTotal;
   delete result.fpsSamples;
   result.buildPolicy = offenseBuild ? 'offense' : 'survival';
-  result.controller = dualAi ? 'dual-production-ai-peer-partner' : 'direction-script-plus-wingman';
+  result.controller = dualAi ? 'dual-production-ai-symmetric-partner' : 'direction-script-plus-wingman';
   result.sampleSeconds = sampleSeconds;
   result.survived = finalState?.mode !== 'ended';
   summary.screenshots.push(await capture(window, 'final.png'));
@@ -333,7 +339,7 @@ async function run() {
   if (summary.maxStageTime < CHAPTER_SECONDS - .75 || summary.maxEvents !== 9 || summary.maxEncounters !== 4 || encounterHistory.length !== 4) throw new Error(`chapter-one director coverage incomplete: ${JSON.stringify(result)}`);
   if (handledDrafts !== 4 || summary.draftChoices.length !== 4) throw new Error(`chapter-one mid-stage builds incomplete: ${JSON.stringify(result)}`);
   if (summary.maxNative < 1 || summary.species.size !== 1 || summary.eliteSpawns < 1 || summary.maxElites < 1) throw new Error(`chapter-one ecology coverage incomplete: ${JSON.stringify(result)}`);
-  if (!summary.bossSeen || (!summary.bossDefeated && summary.maxBossPhase < 2) || summary.bossAttacks.size < 1 || !summary.bossStates.has("telegraph")) throw new Error(`chapter-one Boss coverage incomplete: ${JSON.stringify(result)}`);
+  if (!summary.bossSeen || (!summary.bossDefeated && summary.maxBossPhase < 2) || summary.bossAttacks.size < 1 || !summary.bossStates.has("windup")) throw new Error(`chapter-one Boss coverage incomplete: ${JSON.stringify(result)}`);
   if (finalState.mode === "ended" || finalState.hp.every((value) => value <= 0)) throw new Error(`chapter-one crew did not survive: ${JSON.stringify(result)}`);
   if (summary.maxEnemies < 5 || summary.maxBullets < 8 || summary.maxKills < 12) throw new Error(`chapter-one battlefield intensity was not exercised: ${JSON.stringify(result)}`);
   if (summary.invalidProjectiles > 0) throw new Error(`chapter-one emitted invalid projectile geometry: ${JSON.stringify(result)}`);

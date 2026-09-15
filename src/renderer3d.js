@@ -141,9 +141,11 @@ class SpaceRenderer3D {
     this.canvas.dataset.bossChoreography = "telegraph-state-arena";
     this.canvas.dataset.expeditionSectors = "9-progressive-voxel-gates";
     this.canvas.dataset.adaptiveThreat = "5-tier-telegraphed";
-    this.canvas.dataset.enemyTactics = "role-doctrine-6-state";
-    this.canvas.dataset.enemySpacing = "live-target-standoff";
-    this.canvas.dataset.warningGrammar = "local-charge-laser-sight-ram-chevrons-blast-rings";
+    this.canvas.dataset.enemyTactics = "event-tactics-continuous-flight";
+    this.canvas.dataset.enemyOrientation = "target-facing-omnidirectional-thrust";
+    this.canvas.dataset.enemyChip = "adaptive-dorsal-circuit";
+    this.canvas.dataset.enemySpacing = "predictive-separation-arrival";
+    this.canvas.dataset.warningGrammar = "muzzle-charge-committed-lasers-ram-corridors-blast-rings";
     this.canvas.dataset.laserVfx = "layered-core-edge-packets";
     this.canvas.dataset.bulletGrammar = "locked-safe-lanes-curves-mines-lasers-seekers-blasts";
     this.canvas.dataset.sectorAnomalies = "9-seeded-gameplay-fields";
@@ -952,9 +954,9 @@ class SpaceRenderer3D {
   }
 
   enemyArtPose(enemy) {
-    const charge = enemy.attackState === "telegraph" ? clamp(enemy.attackCharge || 0, 0, 1) : 0;
-    const firing = enemy.attackState === "attack";
-    const recovery = enemy.attackState === "recover" ? Math.max(0, 1 - (enemy.aiStateAge || 0) / .28) : 0;
+    const charge = enemy.weaponState === "windup" ? clamp(enemy.weaponCharge || 0, 0, 1) : 0;
+    const firing = enemy.weaponState === "fire";
+    const recovery = enemy.weaponState === "cooldown" ? Math.max(0, 1 - (enemy.weaponAge || 0) / .28) : 0;
     return { charge, firing, recoil: firing ? .18 : recovery * .12, clock: Math.floor(this.time * 12) / 12 };
   }
 
@@ -980,19 +982,7 @@ class SpaceRenderer3D {
   }
 
   enemyHardpoints(enemy) {
-    // Hull-owned sockets keep all five equipment slots apart even on a narrow body.
-    // [weapon z, rear z, dorsal y, lateral x]; these are presentation data only.
-    const sockets = {
-      scout: [-.65, .72, .51, .5], dart: [-.92, .86, .53, .38],
-      tank: [-.73, .72, .8, .86], spinner: [-.51, .64, .58, .48],
-      mine: [-.61, .71, .7, .66], lancer: [-.62, .7, .6, .42],
-      carrier: [-.8, .94, .75, 1.04], nectarMoth: [-.62, .72, .54, .44],
-      prismRay: [-.85, .85, .59, .65], cometRammer: [-.54, .86, .68, .65],
-      auroraLeech: [-.7, .82, .63, .53], railBeetle: [-.76, .82, .94, .91],
-      reefMedusa: [-.77, .8, .89, .86], eclipseReaper: [-.76, .78, .66, .55],
-      graveMirror: [-.8, .84, .6, .61], gardenSpore: [-.84, .96, .89, .96],
-    };
-    return sockets[enemy.type] || sockets.scout;
+    return window.SpaceEnemyAI.hardpoints[enemy.type] || window.SpaceEnemyAI.hardpoints.scout;
   }
 
   drawIntegratedEnemyModules(enemy, base, palette, moduleColor) {
@@ -1005,16 +995,27 @@ class SpaceRenderer3D {
       const x = side * (enemy.movementModule === "drift" ? flank : .26);
       body([x, .1, rear], [.23, .23, .35], palette[0], "metal");
       body([x, .1, rear + .19], [.22, .22, .1], palette[1], "metal", "ring");
-      const length = enemy.movementModule === "rush" ? .95 : .43;
+      const length = (enemy.movementModule === "rush" ? .95 : .43) * (.08 + (enemy.forwardThrust ?? .55) * 1.1 + (enemy.attackPattern === "ramCharge" ? pose.charge * .55 : 0));
       this.surfaces.solid(base, [x, .1, rear + .22], [.28, .28, length], moduleColor, "flame", "flame", [0, enemy.movementModule === "drift" ? side * -.6 : 0, 0]);
       if (enemy.movementModule === "weave") body([side * .48, .2, rear], [.42, .1, .38], palette[1], "shell", "plate", [0, side * .4, Math.sin(pose.clock * 5) * .25]);
+    }
+    if (Math.abs(enemy.sideThrust || 0) > .08) {
+      const side = Math.sign(enemy.sideThrust);
+      this.surfaces.solid(base, [-side * flank, .1, .12], [.2, .18, .25 + Math.abs(enemy.sideThrust) * .35], moduleColor, "flame", "flame", [0, side * Math.PI / 2, 0]);
+    }
+    if ((enemy.reverseThrust || 0) > .08) {
+      for (const side of [-1, 1]) {
+        body([side * flank * .58, .1, nose + .25], [.18, .16, .2], palette[1], "metal");
+        this.surfaces.solid(base, [side * flank * .58, .1, nose + .12], [.17, .17, .18 + enemy.reverseThrust * .35], moduleColor, "flame", "flame", [0, Math.PI, 0]);
+      }
     }
     if (enemy.movementModule === "rush") body([0, .22, rear - .08], [.6, .28, .42], palette[1], "metal");
 
     // Installed weapon identity is stable. Species abilities live in the chassis;
     // a different attack pattern must not replace the installed module mid-cycle.
     const weapon = enemy.weaponModule || "pulse";
-    const mount = multiply(base, compose([0, .23, nose + pose.recoil]));
+    const mount = multiply(base, compose([0, .23, nose + pose.recoil], [0, enemy.weaponYaw || 0, 0]));
+    if (Math.abs(enemy.weaponYaw || 0) > .02) body([0, .23, nose], [.44, .14, .44], palette[1], "metal", "ring", [Math.PI / 2, 0, 0]);
     const part = (p, size, color = palette[1], finish = "shell", shape = "plate", rotation) => this.surfaces.solid(mount, p, size, color, finish, shape, rotation);
     part([0, 0, .13], [.48, .2, .42], palette[0], "metal");
     if (weapon === "laser" || weapon === "sniper") {
@@ -1076,6 +1077,15 @@ class SpaceRenderer3D {
     if (enemy.aiModule === "ambusher") this.surfaces.solid(sensor, [0, .2, .03], [.34, .12, .34], palette[0], "shell");
     if (enemy.aiModule === "flanker") wire([.22, dorsal, -.4], [.44, dorsal + .12, -.34]);
     if (enemy.aiModule === "pack") wire([-.25, dorsal + .08, -.38], [.25, dorsal + .08, -.38]);
+    if (enemy.chipId === "adaptive") {
+      // A raised circuit package and paired white contacts remain readable at low quality.
+      body([0, dorsal + .32, -.4], [.5, .12, .36], "#582a63", "metal");
+      body([0, dorsal + .41, -.4], [.26, .1, .22], "#ff7edb", "energy");
+      for (const side of [-1, 1]) {
+        body([side * .3, dorsal + .36, -.4], [.12, .12, .3], "#ffe8f7", "metal");
+        wire([side * .13, dorsal + .4, -.4], [side * .32, dorsal + .4, -.4], "#ff7edb");
+      }
+    }
 
     // Payload cartridge: a cooling cell, split jammer, or three-tooth penetrator.
     if (enemy.payloadModule && enemy.payloadModule !== "clean") {
@@ -1090,38 +1100,14 @@ class SpaceRenderer3D {
   }
 
   laserTelegraphRays(enemy) {
-    const ray = (sourceX, sourceY, radius, targetX, targetY, angleOffset = 0, color = "#ffd86a") => {
-      const x1 = sourceX;
-      const y1 = sourceY + radius * .45;
-      const angle = Math.atan2(targetY - y1, targetX - x1) + angleOffset;
-      const reach = Math.hypot(this.width, this.height) * 1.45;
-      return {
-        start: this.toWorld(x1, y1, .24),
-        end: this.toWorld(x1 + Math.cos(angle) * reach, y1 + Math.sin(angle) * reach, .24),
-        color,
-      };
-    };
-    if (enemy.boss) {
-      if (enemy.attackId === "sunLance") {
-        const offsets = enemy.phaseLevel >= 3 ? [-.12, .12] : [0];
-        return offsets.map((offset) => ray(enemy.x, enemy.y, enemy.r, enemy.attackTargetX, enemy.attackTargetY, offset));
-      }
-      if (enemy.attackId === "railWall") {
-        return [-1, 0, 1].map((lane) => ray(enemy.x + lane * 28, enemy.y, enemy.r, enemy.attackTargetX + lane * 92, this.height + 20, 0, lane ? "#70eaff" : "#ffe16c"));
-      }
-      if (enemy.attackId === "doubleRail") {
-        return [-1, 1].map((side) => ray(enemy.x + side * 24, enemy.y, enemy.r, enemy.attackTargetX + side * 34, this.height + 16, 0, side > 0 ? "#ffe16c" : "#70eaff"));
-      }
-      return [];
-    }
-    if (!["laserLance", "laserSweep"].includes(enemy.attackPattern)) return [];
-    const offsets = enemy.attackPattern === "laserSweep" ? [-.12, .12] : [0];
-    return offsets.map((offset) => ray(enemy.x, enemy.y, enemy.r, enemy.attackTargetX, enemy.attackTargetY, offset, enemy.payloadColor || "#ffd86a"));
+    return window.SpaceEnemyAI.beamRays(enemy, this.width, this.height).map(ray => ({
+      start: this.toWorld(ray.x1, ray.y1, .48), end: this.toWorld(ray.x2, ray.y2, .48), color: ray.color || "#ff5964",
+    }));
   }
 
   warningFlash(enemy, charge) {
     // Integral of a rising 1.1–7.1 Hz rate: no clock-reset jitter as charge changes.
-    const duration = Math.max(.1, enemy.aiStateDuration || enemy.attackDuration || 1.28);
+    const duration = Math.max(.1, enemy.weaponDuration || 1.28);
     const phase = duration * (1.1 * charge + 2 * charge ** 3);
     return phase % 1 < .42 ? 1 : .18;
   }
@@ -1140,8 +1126,15 @@ class SpaceRenderer3D {
   drawRamTelegraph(enemy, charge) {
     const targetX = Number.isFinite(enemy.attackEndX) ? enemy.attackEndX : enemy.attackTargetX;
     const targetY = Number.isFinite(enemy.attackEndY) ? enemy.attackEndY : enemy.attackTargetY;
-    const a = this.toWorld(enemy.x, enemy.y, .24);
+    const origin = enemy.attackCommit?.ram || enemy;
+    const a = this.toWorld(origin.x, origin.y, .24);
     const b = this.toWorld(targetX, targetY, .24);
+    const dx = targetX - origin.x, dy = targetY - origin.y, length = Math.max(1, Math.hypot(dx, dy));
+    const radius = enemy.bodyRadius || enemy.r * .8;
+    for (const side of [-1, 1]) {
+      const ox = -dy / length * radius * side, oy = dx / length * radius * side;
+      this.surfaces.line(compose(), this.toWorld(origin.x + ox, origin.y + oy, .24), this.toWorld(targetX + ox, targetY + oy, .24), "#e64b56", .22);
+    }
     const flash = this.warningFlash(enemy, charge);
     this.surfaces.line(compose(), a, b, "#ff4257", .12 + flash * .7);
     for (let index = 0; index < 12; index += 1) {
@@ -1152,7 +1145,7 @@ class SpaceRenderer3D {
 
   drawRamWake(enemy) {
     let trail = this.ramTrails.get(enemy);
-    const attacking = enemy.attackState === "attack" && enemy.attackPattern === "ramCharge";
+    const attacking = enemy.weaponState === "fire" && enemy.attackPattern === "ramCharge";
     if (!trail && !attacking) return;
     if (!trail) { trail = []; this.ramTrails.set(enemy, trail); }
     if (attacking && (!trail.length || this.time - trail[trail.length - 1].time >= 1 / 65)) {
@@ -1174,44 +1167,43 @@ class SpaceRenderer3D {
   }
 
   drawEnemyTelegraph(enemy, base) {
-    if (enemy.attackState !== "telegraph") return;
-    const charge = clamp(enemy.attackCharge || 0, 0, 1);
-    const laser = ["laserLance", "laserSweep"].includes(enemy.attackPattern);
-    const ram = enemy.attackPattern === "ramCharge";
-    const blast = ["blastSeed", "proximityBloom"].includes(enemy.attackPattern);
-    const color = laser ? "#ff5964" : ram ? "#ff765f" : blast ? "#ff9b55" : enemy.payloadColor || "#ff668c";
-    if (laser || ram) {
-      const flash = this.warningFlash(enemy, charge);
-      for (let index = 0; index < 20; index += 1) {
-        const t = (index / 20 + this.time * .65) % 1;
-        const angle = index * 2.4;
-        const r = (1 - t) * (.65 - charge * .2);
-        this.pixelEffects.spark(base, [Math.cos(angle) * r, .4 + Math.sin(angle) * r, -.95], .1 + t * .12, color, t * (.3 + flash * .6));
-      }
-      if (laser) this.drawLaserTelegraph(enemy, charge);
-      else this.drawRamTelegraph(enemy, charge);
-      return;
+    if (enemy.weaponState !== "windup") return;
+    const charge = clamp(enemy.weaponCharge || 0, 0, 1);
+    if (enemy.attackPattern === "ramCharge") { this.drawRamTelegraph(enemy, charge); return; }
+    if (["laserLance", "laserSweep"].includes(enemy.attackPattern)) this.drawLaserTelegraph(enemy, charge);
+    const origin = window.SpaceEnemyAI.muzzle(enemy);
+    const point = this.toWorld(origin.x, origin.y, origin.height);
+    // Small local muzzle heat; movement has no gathering field or full-body charge halo.
+    this.pixelEffects.spark(null, point, .14 + charge * .16, "#ff8961", .2 + charge * .45, .7);
+  }
+
+  drawEnemyEmitters(enemy) {
+    if (!SpaceEnemyAI.committed(enemy)) return;
+    for (const node of enemy.remoteEmitters || []) {
+      const base = compose(this.toWorld(node.x, node.y, .35));
+      this.voxel(base, [0, 0, 0], [.3, .12, .3], "#732941", .15);
+      for (const side of [-1, 1]) this.voxel(base, [side * .2, .04, 0], [.07, .08, .36], "#ff6b8c", .6);
     }
-    const pulse = 1 + Math.sin(this.time * 20 + enemy.seed) * .08;
-    this.voxel(base, [0, .56, -1.05], [.18 + charge * .26, .14 + charge * .14, .26 + charge * .34], color, 1, [0, this.time * 2.2, 0]);
-    if (blast) {
-      this.voxelRing(base, .58 + charge * .58, .34, color, 10, -.72, enemy.seed, .1 * pulse, .72, .62);
-      this.voxelHalo(base, .48 + charge * .34, .38, "#ffe279", 6, 1.4, enemy.seed, .08 + charge * .025);
-    } else {
-      this.voxelRing(base, .58 + charge * .24, .34, color, 7, .62, enemy.seed, .08 * pulse, .56, .46);
+    if (enemy.boss) for (const ray of window.SpaceEnemyAI.beamRays(enemy, this.width, this.height)) {
+      const origin = this.toWorld(ray.x1, ray.y1, .48);
+      const dx = ray.x2 - ray.x1, dy = ray.y2 - ray.y1, length = Math.hypot(dx, dy);
+      const nose = this.toWorld(ray.x1 + dx / length * 6, ray.y1 + dy / length * 6, .48);
+      this.surfaces.segment(compose(), origin, nose, .13, "#ad5b68", "metal");
+      this.pixelEffects.spark(null, nose, .18, "#ffbf74", .55);
     }
   }
 
   drawEnemy(enemy) {
     const position = this.toWorld(enemy.x, enemy.y, .32);
-    const spin = enemy.type === "spinner" ? Math.sin(enemy.age * 2) * .08 : 0;
+    const bodyYaw = Number.isFinite(enemy.heading) ? window.SpaceEnemyAI.yaw(enemy.heading) : Math.PI;
     const galleryScale = enemy.galleryScale || 1;
-    const rotation = [0, Math.PI + spin + (enemy.galleryYaw || 0), Math.sin(enemy.age * 2 + enemy.seed) * .04];
+    const rotation = [enemy.pitch || 0, bodyYaw + (enemy.galleryYaw || 0), enemy.bank || 0];
     const moduleScale = enemy.moduleScale || 1;
     const modelScale = (enemy.boss ? BOSS_MODEL_SCALE : enemy.elite ? ELITE_ENEMY_SCALE : REGULAR_ENEMY_SCALE) * moduleScale * galleryScale;
     const telegraphScale = (enemy.boss ? BOSS_TELEGRAPH_SCALE : enemy.elite ? ELITE_TELEGRAPH_SCALE : REGULAR_TELEGRAPH_SCALE) * moduleScale * galleryScale;
     const base = compose(position, rotation, [modelScale, modelScale, modelScale]);
     const telegraphBase = compose(position, rotation, [telegraphScale, telegraphScale, telegraphScale]);
+    this.drawEnemyEmitters(enemy);
     if (enemy.boss) {
       this.drawBoss(enemy, base, this.stageIndex, telegraphBase);
       return;
@@ -1310,8 +1302,8 @@ class SpaceRenderer3D {
   }
 
   drawBossTelegraph(enemy, base, palette, stage) {
-    if (enemy.attackState !== "telegraph") return;
-    const charge = clamp(enemy.attackCharge || 0, 0, 1);
+    if (enemy.weaponState !== "windup") return;
+    const charge = clamp(enemy.weaponCharge || 0, 0, 1);
     const phase = enemy.phaseLevel || 1;
     const color = ["#ffca58", "#ffd45f", "#c98aff"][stage];
     const pulse = .82 + charge * .48 + Math.sin(this.time * (10 + phase * 2)) * .08;
@@ -1330,16 +1322,16 @@ class SpaceRenderer3D {
   drawBossArena(boss) {
     const stage = this.stageIndex;
     const colors = [["#ff72ac", "#ffca58"], ["#70eaff", "#ffe45c"], ["#c183ff", "#ff6680"]][stage];
-    const charge = boss.attackState === "telegraph" ? clamp(boss.attackCharge || 0, 0, 1) : 0;
+    const charge = boss.weaponState === "windup" ? clamp(boss.weaponCharge || 0, 0, 1) : 0;
     for (let row = 0; row < 6; row += 1) {
-      const z = this.streamZ(row, 5.8, boss.attackState === "telegraph" ? 4.2 : 2.2, -30, 6);
+      const z = this.streamZ(row, 5.8, boss.weaponState === "windup" ? 4.2 : 2.2, -30, 6);
       for (const side of [-1, 1]) {
         const base = compose([side * 7.65, -.45, z]);
         this.voxel(base, [0, .42, 0], [.2 + charge * .08, .84 + charge * .34, .58], colors[(row + stage) % 2], .34 + charge * .42);
         this.voxel(base, [side * -.34, .92, 0], [.58, .13 + charge * .05, .46], colors[(row + stage + 1) % 2], .62 + charge * .3);
       }
     }
-    if (boss.attackState === "telegraph" && ["sunLance", "railWall", "doubleRail"].includes(boss.attackId)) this.drawLaserTelegraph(boss, charge);
+    if (boss.weaponState === "windup" && ["sunLance", "railWall", "doubleRail"].includes(boss.attackId)) this.drawLaserTelegraph(boss, charge);
   }
 
   drawBoss(enemy, base, stageOverride = this.stageIndex, telegraphBase = base) {
@@ -1361,7 +1353,7 @@ class SpaceRenderer3D {
     layout.forEach(([x, y, yaw], stage) => {
       const base = compose(this.toWorld(x, y, .34), [0, Math.PI + yaw, 0], [1.3, 1.3, 1.3]);
       const attackIds = [["petalBurst", "seedSpiral", "twinBloom"], ["railWall", "forgeCross", "doubleRail"], ["spiralCrown", "eclipseTwin", "tripleEclipse"]];
-      this.drawBoss({ phaseLevel, phaseShield: 0, hitFlash: 0, seed: stage + 1, attackState: "recover", attackCharge: 0, attackId: attackIds[stage][phaseLevel - 1] }, base, stage);
+      this.drawBoss({ phaseLevel, phaseShield: 0, hitFlash: 0, seed: stage + 1, weaponState: "cooldown", weaponCharge: 0, attackId: attackIds[stage][phaseLevel - 1] }, base, stage);
       this.drawProjectile({
         x,
         y: 181,
@@ -1421,8 +1413,8 @@ class SpaceRenderer3D {
         coreModule,
         aiModule,
         payloadModule,
-        attackState: "telegraph",
-        attackCharge: (Math.sin(this.time * 2 + index) + 1) * .5,
+        weaponState: "windup",
+        weaponCharge: (Math.sin(this.time * 2 + index) + 1) * .5,
         moduleColor: moduleColors[index],
         moduleBarrier: coreModule === "barrier" ? 4 : 0,
         seed: index + 1,
