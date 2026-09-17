@@ -86,4 +86,30 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           NOTES="docs/RELEASE-${VERSION}.md"
           test -f "$NOTES"
-          gh release create "$GITHUB_REF_NAME" release/* --verify-tag --title "SPACECRAFT ${VERSION}" --notes-file "$NOTES"
+          RELEASE_STATE="$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft 2>/dev/null || true)"
+          if [ "$RELEASE_STATE" = "false" ]; then
+            echo "Release ${GITHUB_REF_NAME} is already public."
+            exit 0
+          fi
+          if [ "$RELEASE_STATE" = "true" ]; then
+            gh release edit "$GITHUB_REF_NAME" --title "SPACECRAFT ${VERSION}" --notes-file "$NOTES" --draft
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "SPACECRAFT ${VERSION}" --notes-file "$NOTES" --draft
+          fi
+          for ASSET in release/*; do
+            UPLOADED=false
+            for ATTEMPT in 1 2 3 4; do
+              if gh release upload "$GITHUB_REF_NAME" "$ASSET" --clobber; then
+                UPLOADED=true
+                break
+              fi
+              if [ "$ATTEMPT" -lt 4 ]; then
+                sleep "$((ATTEMPT * 15))"
+              fi
+            done
+            if [ "$UPLOADED" != "true" ]; then
+              echo "Failed to upload ${ASSET} after four attempts."
+              exit 1
+            fi
+          done
+          gh release edit "$GITHUB_REF_NAME" --draft=false

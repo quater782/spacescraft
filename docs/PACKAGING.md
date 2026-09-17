@@ -2,7 +2,7 @@
 
 ## 2026-09-18 — 0.28.0 正式桌面发行链
 
-推送 `v*` 标签会触发 `.github/workflows/build-windows.yml`：先在 Ubuntu 执行完整 `npm run verify`，再分别在 Windows x64 与 Apple Silicon macOS arm64 构建。标签发布只有在两个桌面任务全部完成后才会创建稳定 GitHub Release。
+推送 `v*` 标签会触发 `.github/workflows/build-windows.yml`：先在 Ubuntu 执行完整 `npm run verify`，再分别在 Windows x64 与 Apple Silicon macOS arm64 构建。标签发布只有在两个桌面任务全部完成后才会创建 GitHub Release 草稿；发行文件逐个上传并在短暂网络故障时最多重试四次，全部成功后才转为稳定公开版。
 
 0.28.0 目标附件：
 
