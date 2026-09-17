@@ -1,6 +1,10 @@
 const { app, BrowserWindow, Menu } = require("electron");
 const path = require("node:path");
 
+// Squirrel starts the app briefly while installing, updating and removing it.
+// Handle those lifecycle invocations before creating the game window.
+if (require("electron-squirrel-startup")) app.quit();
+
 app.commandLine.appendSwitch("high-dpi-support", "1");
 app.commandLine.appendSwitch("force-device-scale-factor", "1");
 

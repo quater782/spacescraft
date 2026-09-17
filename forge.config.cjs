@@ -1,4 +1,5 @@
 const path = require("node:path");
+const { version } = require("./package.json");
 
 module.exports = {
   packagerConfig: {
@@ -28,15 +29,26 @@ module.exports = {
   makers: [
     {
       name: "@electron-forge/maker-squirrel",
+      platforms: ["win32"],
       config: {
         name: "spacescraft",
         authors: "SPACECRAFT Team",
-        description: "SPACECRAFT 星航双子"
+        description: "SPACECRAFT 星航双子",
+        setupExe: `SPACECRAFT-${version}-windows-x64-Setup.exe`,
+        setupIcon: path.join(__dirname, "assets", "icon.ico")
       }
     },
     {
       name: "@electron-forge/maker-zip",
-      platforms: ["darwin"]
+      platforms: ["darwin", "win32"]
+    },
+    {
+      name: "@electron-forge/maker-dmg",
+      platforms: ["darwin"],
+      config: () => ({
+        name: `SPACECRAFT ${version}`,
+        format: "ULFO"
+      })
     }
   ]
 };

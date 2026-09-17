@@ -1,5 +1,21 @@
 # 桌面与 Windows EXE 打包
 
+## 2026-09-18 — 0.28.0 正式桌面发行链
+
+推送 `v*` 标签会触发 `.github/workflows/build-windows.yml`：先在 Ubuntu 执行完整 `npm run verify`，再分别在 Windows x64、macOS arm64 和 macOS Intel 构建。标签发布只有在三个桌面任务全部完成后才会创建稳定 GitHub Release。
+
+0.28.0 目标附件：
+
+- `SPACECRAFT-0.28.0-windows-x64-Setup.exe`
+- `SPACECRAFT-0.28.0-windows-x64-portable.zip`
+- `SPACECRAFT-0.28.0-macOS-arm64.dmg` / `.zip`
+- `SPACECRAFT-0.28.0-macOS-x64.dmg` / `.zip`
+- 三份 `SHA256SUMS-*.txt`
+
+每个平台先由 Forge 的裁剪后钩子检查 HTML 与 import/export 资源闭包，再从产物内 `app.asar` 以正式 `file://` 打开菜单、机库、设置、中英切换和真实 WebGL2。随后测试进程把同一 ASAR 临时映射到 `127.0.0.1`，通过只在 localhost 生效的快速模式确认航线、双机存活与自动发弹。这样既覆盖旧包遗漏 `three.core.min.js` 的故障，也不会因无显示器 CI 将 `requestAnimationFrame` 节流到 1 FPS 而误报失败；QA 参数不会在正式域名或 Electron 文件协议生效。
+
+Windows 安装器使用 Squirrel，主进程通过 `electron-squirrel-startup` 处理安装、更新和卸载调用；免安装 ZIP 必须完整解压，不能只复制 `SPACECRAFT.exe`。macOS 同时提供 arm64 与 x64，当前没有 Developer ID 签名或 Apple 公证。
+
 ## 2026-09-08 — 桌面启动依赖修复（fix1）
 
 本次主题：恢复桌面包的 3D 初始化和菜单交互，并将当前完整源码上传至私有仓库 `quater782/spacescraft`。
@@ -58,7 +74,7 @@ npm run make:win
 
 `npm run package:win` 会生成包含 `SPACECRAFT.exe` 的免安装目录；`npm run make:win` 进一步生成安装器。
 
-当前已验证产物：
+历史已验证产物（0.23.0）：
 
 - `out/SPACECRAFT 星航双子-win32-x64/SPACECRAFT.exe`
 - `dist/SPACECRAFT-0.23.0-windows-x64.zip`
@@ -77,13 +93,13 @@ ZIP 为 157,798,943 字节，EXE 为 244,440,576 字节，共 76 个归档条目
 
 0.24.0 macOS arm64 开发快照已执行 `npm run package` 并从包内可执行文件实际启动。其 ASAR 已逐项读取确认包含 v25 `renderer3d.js` 入口、`three.module.min.js`、EffectComposer、RenderPass、UnrealBloomPass、SMAAPass、OutputPass、SMAAShader 与 LuminosityHighPassShader。`forge.config.cjs` 必须同时放行 `examples`、`examples/jsm` 父目录及 `postprocessing`/`shaders` 子树；只放行叶子目录会被 Forge 在遍历父目录时提前排除。该本机快照仅作为 0.24.0 视觉发行链证据，不替代 Windows x64 签名归档。
 
-0.27.0「协同反应堆」是当前源码开发快照，尚未执行同版本 `npm run package` 或生成 Windows 归档。当前可追溯的 macOS 包仍为 0.24.0，Windows ZIP 仍为 0.23.0；不得把旧 ASAR、旧哈希或旧启动记录描述为 0.27.0 产物。
+0.27.0「协同反应堆」仅发布过开发快照；其 macOS 初始包和 Windows 初始包均有未完成验证或已知启动缺陷。0.28.0 发行前不得把下方旧 ASAR、旧哈希或旧启动记录描述为当前产物。
 
 Windows EXE 使用 `assets/icon.ico`，其中包含从 `favicon.svg` 直接渲染的 16、24、32、48、64、128 和 256px 图像。macOS 上可运行 `npm run icons` 重新生成 ICO、PNG 与 ICNS。
 
 注意：Windows 免安装版必须保留同目录的 DLL、resources 和 locales，不能只复制单独的 EXE。
 
-仓库包含 `.github/workflows/build-windows.yml`。手动运行该工作流后会上传 Windows x64 构建产物。
+仓库包含 `.github/workflows/build-windows.yml`。手动运行会生成三平台 Actions 构建物但不创建 Release；推送版本标签且所有门禁通过后才自动创建稳定 Release。
 
 ## 正式售卖前仍需完成
 

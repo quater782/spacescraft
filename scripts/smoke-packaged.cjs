@@ -1,6 +1,7 @@
 const { app, BrowserWindow } = require('electron');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 
@@ -14,6 +15,18 @@ app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const errors = [];
 const deadline = setTimeout(() => { console.error('Packaged startup timed out'); app.exit(1); }, 60000);
+const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png' };
+const server = http.createServer((request, response) => {
+  const pathname = new URL(request.url, 'http://127.0.0.1').pathname;
+  const relative = pathname === '/' ? 'index.html' : decodeURIComponent(pathname.slice(1));
+  const target = path.resolve(archive, relative);
+  if (!target.startsWith(`${archive}${path.sep}`) || !fs.existsSync(target) || fs.statSync(target).isDirectory()) {
+    response.writeHead(404).end('not found');
+    return;
+  }
+  response.setHeader('Content-Type', mime[path.extname(target)] || 'application/octet-stream');
+  response.end(fs.readFileSync(target));
+});
 
 app.whenReady().then(async () => {
   const window = new BrowserWindow({ show: process.platform === 'win32', width: 1280, height: 800,
@@ -40,11 +53,15 @@ app.whenReady().then(async () => {
   assert.equal(await window.webContents.executeJavaScript(`document.querySelector('#settingsPanel').hidden`), false);
   await window.webContents.executeJavaScript(`const language = document.querySelector('#languageSetting'); language.value = 'en'; language.dispatchEvent(new Event('change'));`);
   assert.equal(await window.webContents.executeJavaScript(`document.documentElement.lang`), 'en');
-  await window.webContents.executeJavaScript(`document.querySelector('#closeSettingsButton').click(); document.querySelector('#startButton').click(); if (!document.querySelector('#tutorial').hidden) document.querySelector('#tutorialContinueButton').click()`);
-  // The opening route selection precedes the chapter clock. Wait for actual
-  // chapter time instead of mistaking wall time at the route gate for combat.
+  // Keep the production file:// launch above, then serve that exact ASAR from
+  // loopback so the existing localhost-only fast QA path can overcome display-
+  // less CI frame throttling without exposing a packaged test bridge.
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  await window.loadURL(`http://127.0.0.1:${port}/?qa-fast&qa-path=1&seed=2809`);
+  await window.webContents.executeJavaScript(`document.querySelector('#startButton').click(); if (!document.querySelector('#tutorial').hidden) document.querySelector('#tutorialContinueButton').click()`);
   let playing;
-  for (let attempt = 0; attempt < 45; attempt++) {
+  for (let attempt = 0; attempt < 45; attempt += 1) {
     await delay(1000);
     playing = await window.webContents.executeJavaScript(`({...document.querySelector('#game').dataset})`);
     if (Number(playing.stageTime) >= 20 || playing.mode !== 'playing') break;
@@ -59,5 +76,6 @@ app.whenReady().then(async () => {
   assert.equal(errors.length, 0, errors.join('\n'));
   console.log(JSON.stringify({ archive, output, stageTime: playing.stageTime, hp: playing.playerHp, shots: playing.playerShots, fps: playing.fps, errors }));
   clearTimeout(deadline);
+  server.close();
   app.exit(0);
-}).catch((error) => { console.error(error); clearTimeout(deadline); app.exit(1); });
+}).catch((error) => { console.error(error); clearTimeout(deadline); server.close(); app.exit(1); });

@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build desktop release
 
 on:
   workflow_dispatch:
@@ -6,9 +6,12 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
-  build-windows:
-    runs-on: windows-latest
+  verify:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,7 +20,18 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify
-      - run: npm run package:win
+
+  build-windows:
+    needs: verify
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run make:win
       - run: npm run smoke:packaged
         env:
           SPACECRAFT_SMOKE_OUTPUT: ${{ runner.temp }}/spacecraft-packaged-smoke
@@ -28,10 +42,68 @@ jobs:
           path: |
             ${{ runner.temp }}/spacecraft-packaged-smoke/*.png
             ${{ runner.temp }}/spacecraft-packaged-smoke/*.json
-      - run: npm run make:win
+      - run: node scripts/stage-release.mjs windows x64
       - uses: actions/upload-artifact@v4
         with:
-          name: spacecraft-windows-x64
-          path: |
-            out/make/**
-            out/*-win32-x64/**
+          name: release-windows-x64
+          path: release/windows-x64/**
+
+  build-macos-arm64:
+    needs: verify
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run make:mac:arm64
+      - run: npm run smoke:packaged -- "out/SPACECRAFT 星航双子-darwin-arm64/SPACECRAFT 星航双子.app/Contents/Resources/app.asar"
+        env:
+          SPACECRAFT_SMOKE_OUTPUT: ${{ runner.temp }}/spacecraft-packaged-smoke
+      - run: node scripts/stage-release.mjs macOS arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macOS-arm64
+          path: release/macOS-arm64/**
+
+  build-macos-x64:
+    needs: verify
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run make:mac:x64
+      - run: npm run smoke:packaged -- "out/SPACECRAFT 星航双子-darwin-x64/SPACECRAFT 星航双子.app/Contents/Resources/app.asar"
+        env:
+          SPACECRAFT_SMOKE_OUTPUT: ${{ runner.temp }}/spacecraft-packaged-smoke
+      - run: node scripts/stage-release.mjs macOS x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macOS-x64
+          path: release/macOS-x64/**
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-windows, build-macos-arm64, build-macos-x64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release
+          merge-multiple: true
+      - name: Publish stable GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          NOTES="docs/RELEASE-${VERSION}.md"
+          test -f "$NOTES"
+          gh release create "$GITHUB_REF_NAME" release/* --verify-tag --title "SPACECRAFT ${VERSION}" --notes-file "$NOTES"

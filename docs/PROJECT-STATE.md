@@ -1,5 +1,15 @@
 # 当前项目状态
 
+## 2026-09-18 — 0.28.0 发行候选：GitHub 门面与正式跨平台发行
+
+Major 主题：让访客能在第一屏理解游戏、看到真实玩法并下载可运行的完整桌面包。版本提升到 0.28.0「双子协同」，汇总 0.27.0 快照后的友方 AI 威胁场、敌军连续飞行/自适应芯片、星链任务卡、护盾与连续像素激光反馈；不新增战斗按键，不改存档结构或首章数值。
+
+README 已改为中英简介、真实 WebGL GIF/截图、操作表、平台下载与签名提示；素材由 `npm run capture:readme` 在 localhost QA 隔离下生成，本轮实际输出 30 帧/5 秒 GIF、战斗英雄图和机库图，零页面控制台错误。仓库发行工作流改为 Ubuntu 集中验证、Windows x64、macOS arm64 与 macOS Intel 三个平台构建；目标产物为 Windows 安装器/免安装 ZIP、两架构 macOS DMG/ZIP及逐平台 SHA-256 清单。
+
+旧 Windows 工作流的两次失败已定位为冒烟脚本停在开场航线选择且无显示器时 `requestAnimationFrame` 仅约 1 FPS；日志中的菜单、Three.js WebGL2 与资源加载实际成功。新冒烟先以正式 `file://` 打开同一 ASAR，检查包内资源、菜单/机库/设置和英文切换；随后只在测试进程的 `127.0.0.1` 映射该 ASAR，使用现有 localhost-only 快速模式完成航线与战斗，检查双机存活和自动开火。增加 `electron-squirrel-startup` 处理安装/更新/卸载事件；免安装 ZIP 保留完整运行目录。
+
+当前状态为待 GitHub tag 构建的发行候选。`npm run verify` 已完整通过（含 506 个双语引用与生产依赖 0 漏洞），`npm start` 可启动；本机 macOS arm64 已完成 Forge DMG/ZIP、包内资源检查和 ASAR 冒烟：正式 `file://` 菜单/Three.js WebGL2 正常，localhost 快速战斗到 28.50 秒，双机 7/7、各 5 发、44 FPS、零页面错误。Windows x64、macOS Intel 与 GitHub 自动发布仍待标签工作流；在这些门禁完成前，不把三平台 0.28.0 描述为全部已验证。Windows 签名、Apple 公证、完整 30 分钟真人双人、双手柄和多显卡仍是明确缺口。
+
 ## 2026-09-15 — 未发布：友方 AI 威胁场与优先级重排
 
 Major 主题：僚机先处理真实威胁，再执行救援、续航、任务、集火、共振和顺路拾取。`game.js` 中的友方控制器已拆为 `aiPilotPartner`、`chooseAiStrategicGoal`、`evaluateAiThreats` 和最终移动合成；威胁评估覆盖普通/制动/曲线/弹墙/锁定追踪、种雷、移动爆破、锚定死亡爆点、激光预警/实体束、冲撞走廊、敌机身体和陨石。补给落点按风险降权，战略目标拉力封顶，高危闪避可以临时接管移动方向。

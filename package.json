@@ -1,8 +1,9 @@
 {
   "name": "spacescraft",
   "productName": "SPACECRAFT 星航双子",
-  "version": "0.27.0",
-  "description": "双人合作 WebGL 3D 太空射击游戏 / Local co-op WebGL 3D space shooter",
+  "version": "0.28.0",
+  "description": "只需移动的双人合作 WebGL 3D 太空射击游戏 / Move-only local co-op WebGL 3D space shooter",
+  "author": "SPACECRAFT Team",
   "main": "electron/main.cjs",
   "type": "module",
   "private": true,
@@ -33,17 +34,22 @@
     "package:win": "electron-forge package --platform=win32 --arch=x64",
     "make": "electron-forge make",
     "make:win": "electron-forge make --platform=win32 --arch=x64",
+    "make:mac:arm64": "electron-forge make --platform=darwin --arch=arm64",
+    "make:mac:x64": "electron-forge make --platform=darwin --arch=x64",
+    "capture:readme": "electron scripts/capture-readme.cjs",
     "smoke:packaged": "electron scripts/smoke-packaged.cjs",
     "smoke:projectiles": "electron scripts/smoke-projectiles.cjs",
     "smoke:effects": "electron scripts/smoke-effects.cjs"
   },
   "devDependencies": {
-    "@electron-forge/cli": "latest",
-    "@electron-forge/maker-squirrel": "latest",
-    "@electron-forge/maker-zip": "latest",
-    "electron": "latest"
+    "@electron-forge/cli": "7.11.2",
+    "@electron-forge/maker-dmg": "7.11.2",
+    "@electron-forge/maker-squirrel": "7.11.2",
+    "@electron-forge/maker-zip": "7.11.2",
+    "electron": "44.0.0"
   },
   "dependencies": {
+    "electron-squirrel-startup": "1.0.1",
     "three": "0.185.1"
   }
 }

@@ -9,7 +9,7 @@ Unicode true
   !error "OUTPUT_FILE is required"
 !endif
 !ifndef APP_VERSION
-  !define APP_VERSION "0.27.0"
+  !define APP_VERSION "0.28.0"
 !endif
 
 Name "SPACECRAFT 星航双子"
