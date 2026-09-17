@@ -12,7 +12,7 @@
 - `SPACECRAFT-0.28.0-macOS-x64.dmg` / `.zip`
 - 三份 `SHA256SUMS-*.txt`
 
-每个平台先由 Forge 的裁剪后钩子检查 HTML 与 import/export 资源闭包，再从产物内 `app.asar` 以正式 `file://` 打开菜单、机库、设置、中英切换和真实 WebGL2。随后测试进程把同一 ASAR 临时映射到 `127.0.0.1`，通过只在 localhost 生效的快速模式确认航线、双机存活与自动发弹。这样既覆盖旧包遗漏 `three.core.min.js` 的故障，也不会因无显示器 CI 将 `requestAnimationFrame` 节流到 1 FPS 而误报失败；QA 参数不会在正式域名或 Electron 文件协议生效。
+每个平台先由 Forge 的裁剪后钩子检查 HTML 与 import/export 资源闭包。Windows x64 与 macOS arm64 还会从产物内 `app.asar` 以正式 `file://` 打开菜单、机库、设置、中英切换和真实 WebGL2；随后测试进程把同一 ASAR 临时映射到 `127.0.0.1`，通过只在 localhost 生效的快速模式确认航线、双机存活与自动发弹。GitHub 标准 Intel macOS runner 没有 EGL/WebGL 设备，只执行包内资源闭包门禁；动态 Intel WebGL 必须在实体 Intel Mac 补验，不能把云机 `GL_VENDOR = Disabled` 伪装成游戏回归。QA 参数不会在正式域名或 Electron 文件协议生效。
 
 Windows 安装器使用 Squirrel，主进程通过 `electron-squirrel-startup` 处理安装、更新和卸载调用；免安装 ZIP 必须完整解压，不能只复制 `SPACECRAFT.exe`。macOS 同时提供 arm64 与 x64，当前没有 Developer ID 签名或 Apple 公证。
 

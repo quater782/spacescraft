@@ -8,7 +8,7 @@ README 已改为中英简介、真实 WebGL GIF/截图、操作表、平台下�
 
 旧 Windows 工作流的两次失败已定位为冒烟脚本停在开场航线选择且无显示器时 `requestAnimationFrame` 仅约 1 FPS；日志中的菜单、Three.js WebGL2 与资源加载实际成功。新冒烟先以正式 `file://` 打开同一 ASAR，检查包内资源、菜单/机库/设置和英文切换；随后只在测试进程的 `127.0.0.1` 映射该 ASAR，使用现有 localhost-only 快速模式完成航线与战斗，检查双机存活和自动开火。增加 `electron-squirrel-startup` 处理安装/更新/卸载事件；免安装 ZIP 保留完整运行目录。
 
-当前状态为待 GitHub tag 构建的发行候选。`npm run verify` 已完整通过（含 506 个双语引用与生产依赖 0 漏洞），`npm start` 可启动；本机 macOS arm64 已完成 Forge DMG/ZIP、包内资源检查和 ASAR 冒烟：正式 `file://` 菜单/Three.js WebGL2 正常，localhost 快速战斗到 28.50 秒，双机 7/7、各 5 发、44 FPS、零页面错误。Windows x64、macOS Intel 与 GitHub 自动发布仍待标签工作流；在这些门禁完成前，不把三平台 0.28.0 描述为全部已验证。Windows 签名、Apple 公证、完整 30 分钟真人双人、双手柄和多显卡仍是明确缺口。
+当前状态为待 GitHub tag 构建的发行候选。`npm run verify` 已完整通过（含 506 个双语引用与生产依赖 0 漏洞），`npm start` 可启动；本机 macOS arm64 已完成 Forge DMG/ZIP、包内资源检查和 ASAR 冒烟：正式 `file://` 菜单/Three.js WebGL2 正常，localhost 快速战斗到 28.50 秒，双机 7/7、各 5 发、44 FPS、零页面错误。首次标签流水线中 Windows x64 与 macOS arm64 的构建/动态包内冒烟通过，macOS Intel 的 DMG/ZIP 构建通过，但 GitHub 标准 Intel runner 报 `GL_VENDOR = Disabled`、无 EGL/WebGL 设备；Intel 门禁因此改为 ASAR 静态资源闭包验证，动态 WebGL 明确保留为实体 Intel Mac 缺口。自动发布仍待重跑，在完成前不把三平台 0.28.0 描述为全部已验证。Windows 签名、Apple 公证、完整 30 分钟真人双人、双手柄和多显卡仍是明确缺口。
 
 ## 2026-09-15 — 未发布：友方 AI 威胁场与优先级重排
 

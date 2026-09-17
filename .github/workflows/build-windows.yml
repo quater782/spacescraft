@@ -13,8 +13,8 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -25,8 +25,8 @@ jobs:
     needs: verify
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -52,8 +52,8 @@ jobs:
     needs: verify
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -72,16 +72,17 @@ jobs:
     needs: verify
     runs-on: macos-15-intel
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run make:mac:x64
-      - run: npm run smoke:packaged -- "out/SPACECRAFT 星航双子-darwin-x64/SPACECRAFT 星航双子.app/Contents/Resources/app.asar"
-        env:
-          SPACECRAFT_SMOKE_OUTPUT: ${{ runner.temp }}/spacecraft-packaged-smoke
+      # Standard Intel macOS runners expose no EGL/WebGL device. Keep the
+      # package/resource gate here; Windows and arm64 macOS run the dynamic
+      # packaged WebGL smoke on real hosted GPU surfaces.
+      - run: node scripts/verify-package.cjs "out/SPACECRAFT 星航双子-darwin-x64/SPACECRAFT 星航双子.app/Contents/Resources/app.asar"
       - run: node scripts/stage-release.mjs macOS x64
       - uses: actions/upload-artifact@v4
         with:
@@ -93,8 +94,8 @@ jobs:
     needs: [build-windows, build-macos-arm64, build-macos-x64]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
         with:
           pattern: release-*
           path: release
