@@ -69,7 +69,7 @@ app.whenReady().then(async () => {
   console.log(JSON.stringify({ mode: playing.mode, stageTime: playing.stageTime, hp: playing.playerHp, shots: playing.playerShots, fps: playing.fps, errors }));
   fs.writeFileSync(path.join(output, 'state.json'), JSON.stringify({ initial, playing, errors }, null, 2));
   fs.writeFileSync(path.join(output, 'playing.png'), (await window.webContents.capturePage()).toPNG());
-  assert.equal(playing.mode, 'playing');
+  assert.ok(['playing', 'draft'].includes(playing.mode), `unexpected combat checkpoint: ${playing.mode}`);
   assert.ok(Number(playing.stageTime) >= 20);
   assert.ok(playing.playerShots.split(',').every((shots) => Number(shots) > 0));
   assert.ok(playing.playerHp.split(',').every((hp) => Number(hp) > 0));

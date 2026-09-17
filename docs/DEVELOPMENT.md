@@ -2,7 +2,7 @@
 
 ## GitHub 首页素材
 
-运行 `npm run capture:readme` 会在隔离存档、localhost QA 参数与真实 Electron/WebGL 中生成 `docs/media/gameplay.gif`、`gameplay-hero.png` 和 `hangar.png`。需要本机安装 `ffmpeg`；脚本录制 30 帧实机战斗并检查页面控制台错误，不替代正常速度难度验收。
+运行 `npm run capture:readme` 会在隔离存档、localhost QA 参数与真实 Electron/WebGL 中生成终阶军械齐射、星链狂潮和共享 Nova 三段约 5 秒的首页 GIF，以及 `gameplay-hero.png` 和 `hangar.png`。三段战斗各录制 45 帧，并检查双机存活、终阶军械卡完整生效、对应自动技能触发与页面控制台错误。需要本机安装 `ffmpeg`；此素材流程不替代正常速度难度验收。
 
 ## 2026-09-15 友方 AI 威胁场与优先级
 

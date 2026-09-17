@@ -14,7 +14,7 @@
 **[下载 Windows / macOS 最新稳定版](https://github.com/quater782/spacescraft/releases/latest)** · [查看更新日志](CHANGELOG.md) · [开发者文档](docs/README.md)
 </div>
 
-![SPACECRAFT 实机战斗：双机在 3D 体素深空中自动射击并躲避弹幕](docs/media/gameplay.gif)
+![SPACECRAFT 终阶卡牌构筑：双机在棱晶星域释放满级重炮、折射弹幕与无人机齐射](docs/media/capstone-barrage.gif)
 
 ## 这是什么？ // What is it?
 
@@ -27,6 +27,15 @@ SPACECRAFT is an offline, pixel-styled WebGL 3D co-op shooter. Players steer whi
 - **每局可构筑 // Build every run:** 四条成长路线、23 张升级卡、7 种双组件遗物协议、三种机体与四枚核心模组。
 - **会读局势的战场 // Reactive battlefield:** 三章九战区、动态遭遇、Boss、多类弹幕、自适应威胁与拥有独立战术/武器状态的敌军。
 - **完整双语与 8-bit 声场 // Bilingual & synthesized audio:** 简体中文/English 即时切换；音乐和音效由 Web Audio 实时合成。
+
+## 满级构筑实战 // Maxed-out builds
+
+以下均为当前版本的真实 WebGL 3D 实机录制：双机保持存活，战斗技能仍然全部自动触发。<br>
+Captured from the current WebGL 3D build—with both pilots alive and every combat skill firing automatically.
+
+| 终阶军械齐射 // Capstone barrage | 星链狂潮 // Starlink Rush | 共享 Nova // Shared Nova |
+| --- | --- | --- |
+| ![满级重炮、棱镜与无人机卡牌同时触发](docs/media/capstone-barrage.gif) | ![满级构筑在彗潮战区触发星链狂潮](docs/media/starlink-rush.gif) | ![终章 Boss 战中自动释放共享 Nova](docs/media/shared-nova.gif) |
 
 ## 实机画面 // In-game
 
