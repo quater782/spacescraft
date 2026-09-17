@@ -4,11 +4,11 @@
 
 Major 主题：让访客能在第一屏理解游戏、看到真实玩法并下载可运行的完整桌面包。版本提升到 0.28.0「双子协同」，汇总 0.27.0 快照后的友方 AI 威胁场、敌军连续飞行/自适应芯片、星链任务卡、护盾与连续像素激光反馈；不新增战斗按键，不改存档结构或首章数值。
 
-README 已改为中英简介、真实 WebGL GIF/截图、操作表、平台下载与签名提示；素材由 `npm run capture:readme` 在 localhost QA 隔离下生成，本轮实际输出 30 帧/5 秒 GIF、战斗英雄图和机库图，零页面控制台错误。仓库发行工作流改为 Ubuntu 集中验证、Windows x64、macOS arm64 与 macOS Intel 三个平台构建；目标产物为 Windows 安装器/免安装 ZIP、两架构 macOS DMG/ZIP及逐平台 SHA-256 清单。
+README 已改为中英简介、真实 WebGL GIF/截图、操作表、平台下载与签名提示；素材由 `npm run capture:readme` 在 localhost QA 隔离下生成，本轮实际输出 30 帧/5 秒 GIF、战斗英雄图和机库图，零页面控制台错误。仓库发行工作流改为 Ubuntu 集中验证，并为 Windows x64 与 Apple Silicon macOS arm64 构建；目标产物为 Windows 安装器/免安装 ZIP、M 系列 Mac DMG/ZIP 及逐平台 SHA-256 清单。
 
 旧 Windows 工作流的两次失败已定位为冒烟脚本停在开场航线选择且无显示器时 `requestAnimationFrame` 仅约 1 FPS；日志中的菜单、Three.js WebGL2 与资源加载实际成功。新冒烟先以正式 `file://` 打开同一 ASAR，检查包内资源、菜单/机库/设置和英文切换；随后只在测试进程的 `127.0.0.1` 映射该 ASAR，使用现有 localhost-only 快速模式完成航线与战斗，检查双机存活和自动开火。增加 `electron-squirrel-startup` 处理安装/更新/卸载事件；免安装 ZIP 保留完整运行目录。
 
-当前状态为待 GitHub tag 构建的发行候选。`npm run verify` 已完整通过（含 506 个双语引用与生产依赖 0 漏洞），`npm start` 可启动；本机 macOS arm64 已完成 Forge DMG/ZIP、包内资源检查和 ASAR 冒烟：正式 `file://` 菜单/Three.js WebGL2 正常，localhost 快速战斗到 28.50 秒，双机 7/7、各 5 发、44 FPS、零页面错误。首次标签流水线中 Windows x64 与 macOS arm64 的构建/动态包内冒烟通过，macOS Intel 的 DMG/ZIP 构建通过，但 GitHub 标准 Intel runner 报 `GL_VENDOR = Disabled`、无 EGL/WebGL 设备；Intel 门禁因此改为 ASAR 静态资源闭包验证，动态 WebGL 明确保留为实体 Intel Mac 缺口。自动发布仍待重跑，在完成前不把三平台 0.28.0 描述为全部已验证。Windows 签名、Apple 公证、完整 30 分钟真人双人、双手柄和多显卡仍是明确缺口。
+当前状态为待 GitHub tag 构建的发行候选。`npm run verify` 已完整通过（含 506 个双语引用与生产依赖 0 漏洞），`npm start` 可启动；本机 macOS arm64 已完成 Forge DMG/ZIP、包内资源检查和 ASAR 冒烟：正式 `file://` 菜单/Three.js WebGL2 正常，localhost 快速战斗到 28.50 秒，双机 7/7、各 5 发、44 FPS、零页面错误。首次标签流水线中 Windows x64 与 macOS arm64 的构建/动态包内冒烟均通过；按产品范围只正式支持 Windows x64 与 Apple Silicon Mac，不发布 Intel Mac 版本。自动发布仍待按两平台范围重跑。Windows 签名、Apple 公证、完整 30 分钟真人双人、双手柄和多显卡仍是明确缺口。
 
 ## 2026-09-15 — 未发布：友方 AI 威胁场与优先级重排
 

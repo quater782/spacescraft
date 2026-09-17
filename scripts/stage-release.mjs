@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const { version } = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 const [platform, arch] = process.argv.slice(2);
-if (![["windows", "x64"], ["macOS", "arm64"], ["macOS", "x64"]].some(([p, a]) => p === platform && a === arch)) {
-  throw new Error("Usage: node scripts/stage-release.mjs windows x64 | macOS arm64 | macOS x64");
+if (![["windows", "x64"], ["macOS", "arm64"]].some(([p, a]) => p === platform && a === arch)) {
+  throw new Error("Usage: node scripts/stage-release.mjs windows x64 | macOS arm64");
 }
 
 const makeRoot = path.join(root, "out", "make");

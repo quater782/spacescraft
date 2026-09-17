@@ -68,30 +68,9 @@ jobs:
           name: release-macOS-arm64
           path: release/macOS-arm64/**
 
-  build-macos-x64:
-    needs: verify
-    runs-on: macos-15-intel
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run make:mac:x64
-      # Standard Intel macOS runners expose no EGL/WebGL device. Keep the
-      # package/resource gate here; Windows and arm64 macOS run the dynamic
-      # packaged WebGL smoke on real hosted GPU surfaces.
-      - run: node scripts/verify-package.cjs "out/SPACECRAFT 星航双子-darwin-x64/SPACECRAFT 星航双子.app/Contents/Resources/app.asar"
-      - run: node scripts/stage-release.mjs macOS x64
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release-macOS-x64
-          path: release/macOS-x64/**
-
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-windows, build-macos-arm64, build-macos-x64]
+    needs: [build-windows, build-macos-arm64]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

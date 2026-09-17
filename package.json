@@ -35,7 +35,6 @@
     "make": "electron-forge make",
     "make:win": "electron-forge make --platform=win32 --arch=x64",
     "make:mac:arm64": "electron-forge make --platform=darwin --arch=arm64",
-    "make:mac:x64": "electron-forge make --platform=darwin --arch=x64",
     "capture:readme": "electron scripts/capture-readme.cjs",
     "smoke:packaged": "electron scripts/smoke-packaged.cjs",
     "smoke:projectiles": "electron scripts/smoke-projectiles.cjs",

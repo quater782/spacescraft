@@ -842,5 +842,5 @@ Major 主题：用功能器官、阶梯甲片和状态驱动动画强化复古 3
 - 星链加入基础有限净空、充能保留、近身余效及“折光护网”“Nova 回响”自动任务卡，卡池扩为 23 张。
 - 护盾与连续像素激光读取真实入射、伤害、宽度、身份和载荷数据，补齐分级粒子、辉光与实时 8-bit 音色。
 - GitHub 首页增加中英简介、实机 GIF/截图、下载入口、操作说明与平台提示；素材可通过 `npm run capture:readme` 从当前 WebGL 游戏重新生成。
-- 新增稳定桌面发行工作流：Windows x64 安装器/免安装 ZIP，macOS arm64/x64 DMG/ZIP，包内 WebGL 启动冒烟与逐平台 SHA-256 清单。
+- 新增稳定桌面发行工作流：Windows x64 安装器/免安装 ZIP，Apple Silicon macOS arm64 DMG/ZIP，包内 WebGL 启动冒烟与逐平台 SHA-256 清单。
 - 修复旧 Windows CI 的错误失败：测试先用正式 `file://` 检查同一 ASAR，再通过 localhost-only 快速模式完成航线与战斗，不再因无显示器时的 `requestAnimationFrame` 节流停在 0 秒；Squirrel 生命周期也在创建窗口前处理。

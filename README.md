@@ -42,9 +42,8 @@ SPACECRAFT is an offline, pixel-styled WebGL 3D co-op shooter. Players steer whi
 | --- | --- | --- |
 | Windows 10/11 x64 | `windows-x64-Setup.exe` | 当前用户安装；也提供免安装 `portable.zip`，请完整解压后运行，不能只复制 EXE。 |
 | Apple Silicon Mac | `macOS-arm64.dmg` | 适用于 M1/M2/M3/M4 及后续 Apple 芯片。 |
-| Intel Mac | `macOS-x64.dmg` | 适用于 Intel 处理器 Mac。 |
 
-Windows 10/11 x64 users can choose the installer or the portable ZIP. Keep every DLL, `resources` and `locales` folder beside the EXE. macOS builds are currently unsigned and not notarized, so Gatekeeper may ask you to confirm the first launch in **System Settings → Privacy & Security**.
+Windows 10/11 x64 users can choose the installer or the portable ZIP. Keep every DLL, `resources` and `locales` folder beside the EXE. The macOS build supports Apple Silicon (M-series) Macs. It is currently unsigned and not notarized, so Gatekeeper may ask you to confirm the first launch in **System Settings → Privacy & Security**.
 
 > 当前为独立开发版本，尚未配置 Windows 代码签名或 Apple 公证。下载页同时提供 SHA-256 校验文件。<br>
 > This indie build is not yet code-signed or Apple-notarized. SHA-256 manifests are included on the release page.

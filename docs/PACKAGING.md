@@ -2,19 +2,18 @@
 
 ## 2026-09-18 — 0.28.0 正式桌面发行链
 
-推送 `v*` 标签会触发 `.github/workflows/build-windows.yml`：先在 Ubuntu 执行完整 `npm run verify`，再分别在 Windows x64、macOS arm64 和 macOS Intel 构建。标签发布只有在三个桌面任务全部完成后才会创建稳定 GitHub Release。
+推送 `v*` 标签会触发 `.github/workflows/build-windows.yml`：先在 Ubuntu 执行完整 `npm run verify`，再分别在 Windows x64 与 Apple Silicon macOS arm64 构建。标签发布只有在两个桌面任务全部完成后才会创建稳定 GitHub Release。
 
 0.28.0 目标附件：
 
 - `SPACECRAFT-0.28.0-windows-x64-Setup.exe`
 - `SPACECRAFT-0.28.0-windows-x64-portable.zip`
 - `SPACECRAFT-0.28.0-macOS-arm64.dmg` / `.zip`
-- `SPACECRAFT-0.28.0-macOS-x64.dmg` / `.zip`
-- 三份 `SHA256SUMS-*.txt`
+- 两份 `SHA256SUMS-*.txt`
 
-每个平台先由 Forge 的裁剪后钩子检查 HTML 与 import/export 资源闭包。Windows x64 与 macOS arm64 还会从产物内 `app.asar` 以正式 `file://` 打开菜单、机库、设置、中英切换和真实 WebGL2；随后测试进程把同一 ASAR 临时映射到 `127.0.0.1`，通过只在 localhost 生效的快速模式确认航线、双机存活与自动发弹。GitHub 标准 Intel macOS runner 没有 EGL/WebGL 设备，只执行包内资源闭包门禁；动态 Intel WebGL 必须在实体 Intel Mac 补验，不能把云机 `GL_VENDOR = Disabled` 伪装成游戏回归。QA 参数不会在正式域名或 Electron 文件协议生效。
+两个平台先由 Forge 的裁剪后钩子检查 HTML 与 import/export 资源闭包，再从产物内 `app.asar` 以正式 `file://` 打开菜单、机库、设置、中英切换和真实 WebGL2；随后测试进程把同一 ASAR 临时映射到 `127.0.0.1`，通过只在 localhost 生效的快速模式确认航线、双机存活与自动发弹。QA 参数不会在正式域名或 Electron 文件协议生效。
 
-Windows 安装器使用 Squirrel，主进程通过 `electron-squirrel-startup` 处理安装、更新和卸载调用；免安装 ZIP 必须完整解压，不能只复制 `SPACECRAFT.exe`。macOS 同时提供 arm64 与 x64，当前没有 Developer ID 签名或 Apple 公证。
+Windows 安装器使用 Squirrel，主进程通过 `electron-squirrel-startup` 处理安装、更新和卸载调用；免安装 ZIP 必须完整解压，不能只复制 `SPACECRAFT.exe`。macOS 只发布 Apple Silicon arm64，当前没有 Developer ID 签名或 Apple 公证。
 
 ## 2026-09-08 — 桌面启动依赖修复（fix1）
 
@@ -99,7 +98,7 @@ Windows EXE 使用 `assets/icon.ico`，其中包含从 `favicon.svg` 直接渲�
 
 注意：Windows 免安装版必须保留同目录的 DLL、resources 和 locales，不能只复制单独的 EXE。
 
-仓库包含 `.github/workflows/build-windows.yml`。手动运行会生成三平台 Actions 构建物但不创建 Release；推送版本标签且所有门禁通过后才自动创建稳定 Release。
+仓库包含 `.github/workflows/build-windows.yml`。手动运行会生成 Windows x64 与 macOS arm64 Actions 构建物但不创建 Release；推送版本标签且所有门禁通过后才自动创建稳定 Release。
 
 ## 正式售卖前仍需完成
 
