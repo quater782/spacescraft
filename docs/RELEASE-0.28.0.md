@@ -15,7 +15,7 @@
 ## 正式桌面发行
 
 - Windows 10/11 x64：当前用户安装器与完整免安装 ZIP。
-- macOS：Apple Silicon arm64（M 系列芯片）的 DMG 和 ZIP。
+- macOS：Apple Silicon arm64（M 系列芯片）的 DMG。
 - 所有平台在发布前校验包内资源链；Windows x64 与 macOS arm64 还从包内 ASAR 打开菜单、机库、设置、语言切换和真实 WebGL 战斗。
 - 包内冒烟先以正式 `file://` 检查菜单、设置、语言与 WebGL2，再只在测试进程的 localhost 映射同一 ASAR，以快速模式完成航线和战斗，确认双机存活与自动开火；不再依赖 CI 是否有活跃显示器。
 - Squirrel 安装、更新和卸载事件在创建游戏窗口前处理；Windows 免安装包始终包含 EXE 所需的 DLL、`resources` 与 `locales`。

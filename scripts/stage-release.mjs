@@ -28,7 +28,6 @@ const wanted = platform === "windows"
     ]
   : [
       { suffix: ".dmg", match: (file) => file.toLowerCase().endsWith(".dmg") },
-      { suffix: ".zip", match: (file) => file.toLowerCase().endsWith(".zip") },
     ];
 
 const output = path.join(root, "release", `${platform}-${arch}`);

@@ -4,11 +4,11 @@
 
 Major 主题：让访客能在第一屏理解游戏、看到真实玩法并下载可运行的完整桌面包。版本提升到 0.28.0「双子协同」，汇总 0.27.0 快照后的友方 AI 威胁场、敌军连续飞行/自适应芯片、星链任务卡、护盾与连续像素激光反馈；不新增战斗按键，不改存档结构或首章数值。
 
-README 已改为中英简介、真实 WebGL GIF/截图、操作表、平台下载与签名提示；素材由 `npm run capture:readme` 在 localhost QA 隔离下生成，本轮实际输出终阶军械齐射、星链狂潮和共享 Nova 三段 5 秒 GIF，以及战斗英雄图和机库图。三段均确认双机存活、满级展示构筑生效、对应自动技能触发且零页面控制台错误；GIF 压缩为 720 像素宽、8 FPS、96 色以控制首页体积。仓库发行工作流改为 Ubuntu 集中验证，并为 Windows x64 与 Apple Silicon macOS arm64 构建；目标产物为 Windows 安装器/免安装 ZIP、M 系列 Mac DMG/ZIP 及逐平台 SHA-256 清单。
+README 已改为中英简介、真实 WebGL GIF/截图、操作表、平台下载与签名提示；素材由 `npm run capture:readme` 在 localhost QA 隔离下生成，本轮实际输出终阶军械齐射、星链狂潮和共享 Nova 三段 5 秒 GIF，以及战斗英雄图和机库图。三段均确认双机存活、满级展示构筑生效、对应自动技能触发且零页面控制台错误；GIF 压缩为 720 像素宽、8 FPS、96 色以控制首页体积。仓库发行工作流改为 Ubuntu 集中验证，并为 Windows x64 与 Apple Silicon macOS arm64 构建；目标产物为 Windows 安装器/免安装 ZIP、M 系列 Mac DMG 及逐平台 SHA-256 清单。Mac ZIP 与 DMG 内容重复且在 GitHub 大文件上传阶段连续超时，因此不再作为正式附件。
 
 旧 Windows 工作流的两次失败已定位为冒烟脚本停在开场航线选择且无显示器时 `requestAnimationFrame` 仅约 1 FPS；日志中的菜单、Three.js WebGL2 与资源加载实际成功。新冒烟先以正式 `file://` 打开同一 ASAR，检查包内资源、菜单/机库/设置和英文切换；随后只在测试进程的 `127.0.0.1` 映射该 ASAR，使用现有 localhost-only 快速模式完成航线与战斗，检查双机存活和自动开火。增加 `electron-squirrel-startup` 处理安装/更新/卸载事件；免安装 ZIP 保留完整运行目录。
 
-当前状态为待 GitHub tag 发布重试的发行候选。`npm run verify` 已完整通过（含 506 个双语引用与生产依赖 0 漏洞），`npm start` 可启动；本机 macOS arm64 已完成 Forge DMG/ZIP、包内资源检查和 ASAR 冒烟：正式 `file://` 菜单/Three.js WebGL2 正常，localhost 快速战斗到 28.50 秒，双机 7/7、各 5 发、44 FPS、零页面错误。最新标签流水线中 Windows x64 与 macOS arm64 的构建、资源归档及动态包内 WebGL 冒烟均已通过；发布阶段上传大体积 DMG 时遇到 GitHub HTTP 500，只留下未公开草稿。工作流现改为逐文件最多四次重试且全部上传后才公开。按产品范围只正式支持 Windows x64 与 Apple Silicon Mac，不发布 Intel Mac 版本。Windows 签名、Apple 公证、完整 30 分钟真人双人、双手柄和多显卡仍是明确缺口。
+当前状态为待 GitHub tag 发布重试的发行候选。`npm run verify` 已完整通过（含 506 个双语引用与生产依赖 0 漏洞），`npm start` 可启动；本机 macOS arm64 已完成 Forge DMG/ZIP、包内资源检查和 ASAR 冒烟：正式 `file://` 菜单/Three.js WebGL2 正常，localhost 快速战斗到 28.50 秒，双机 7/7、各 5 发、44 FPS、零页面错误。最新标签流水线中 Windows x64 与 macOS arm64 的构建、资源归档及动态包内 WebGL 冒烟均已通过；发布阶段的大文件上传出现 GitHub HTTP 500，只留下未公开草稿。工作流现改为逐文件最多四次重试且全部上传后才公开，并取消与 DMG 重复的 Mac ZIP 附件。按产品范围只正式支持 Windows x64 与 Apple Silicon Mac，不发布 Intel Mac 版本。Windows 签名、Apple 公证、完整 30 分钟真人双人、双手柄和多显卡仍是明确缺口。
 
 ## 2026-09-15 — 未发布：友方 AI 威胁场与优先级重排
 
