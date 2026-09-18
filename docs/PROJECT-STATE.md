@@ -4,7 +4,7 @@
 
 Major 主题：让无需安装的网页版本与桌面正式版使用同一套真实 WebGL 3D 源码和可验证发行门禁。新增 `stage:web`，从 `index.html`、样式、传统脚本、ES module/import map 和 Three.js 传递依赖生成最小静态资源闭包；输出不提交仓库，也不包含文档、打包缓存或 Electron 运行时。GitHub Pages 工作流在完整 `npm run verify` 后构建该闭包，并用隔离 Electron 从产物本身检查菜单、机库、设置、中英切换、WebGL2、快速航线、双机存活与自动开火，通过后才部署。
 
-正式地址为 <https://quater782.github.io/spacescraft/>。网页端保持单人 + AI、本地双人键盘和双手柄，不增加手动战斗技能；浏览器存档使用当前站点的本地存储，不提供跨设备云同步或网络联机。正式域名不能启用 localhost-only QA 参数。后续稳定 Release 的 `published` 事件会以对应标签源码重新构建网页端；0.28.0 首次上线使用手动发行入口。完整 30 分钟真人双人、双手柄和多浏览器/多显卡矩阵仍是明确缺口。
+正式地址为 <https://quater782.github.io/spacescraft/>。首次正式部署已通过 [GitHub Actions #35321398725](https://github.com/quater782/spacescraft/actions/runs/35321398725)：生成 38 个文件、1.53 MiB 的未压缩资源闭包；CI 从该产物确认菜单、`three-r185-instanced-voxel`、WebGL2、零页面错误，并在快速战斗达到 22.50 秒时记录双机 7/7、各 4 发自动射击。随后已从公网地址复核主菜单和实时 3D 背景。网页端保持单人 + AI、本地双人键盘和双手柄，不增加手动战斗技能；浏览器存档使用当前站点的本地存储，不提供跨设备云同步或网络联机。正式域名不能启用 localhost-only QA 参数。后续稳定 Release 的 `published` 事件会以对应标签源码重新构建网页端；完整 30 分钟真人双人、双手柄和多浏览器/多显卡矩阵仍是明确缺口。
 
 ## 2026-09-18 — 0.28.0 正式发布：GitHub 门面与跨平台发行
 
