@@ -30,6 +30,7 @@ jobs:
       - run: npm run stage:web
       - name: Configure Electron sandbox for Linux smoke test
         run: |
+          node node_modules/electron/install.js
           sudo chown root:root node_modules/electron/dist/chrome-sandbox
           sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
       - run: xvfb-run -a npm run smoke:web
