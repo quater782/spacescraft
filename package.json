@@ -37,6 +37,8 @@
     "make:mac:arm64": "electron-forge make --platform=darwin --arch=arm64",
     "capture:readme": "electron scripts/capture-readme.cjs",
     "smoke:packaged": "electron scripts/smoke-packaged.cjs",
+    "stage:web": "node scripts/stage-web.mjs",
+    "smoke:web": "electron scripts/smoke-packaged.cjs dist/web",
     "smoke:projectiles": "electron scripts/smoke-projectiles.cjs",
     "smoke:effects": "electron scripts/smoke-effects.cjs"
   },

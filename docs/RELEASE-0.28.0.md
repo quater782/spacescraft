@@ -1,5 +1,7 @@
 # SPACECRAFT 0.28.0 — 双子协同 / Twinship Synergy
 
+正式 Web Edition：<https://quater782.github.io/spacescraft/>。网页端与桌面包使用同一套 WebGL 3D 游戏源码；GitHub Pages 只在完整验证、资源闭包检查和产物内动态冒烟通过后部署。进度保存在当前浏览器，不包含云同步或网络联机。
+
 发布日期：2026-09-18
 
 0.28.0 是第一个同时面向 Windows 与 macOS 的稳定 GitHub Release。它汇总 0.27.0 快照之后的协作、敌军 AI 与反馈更新，并重建桌面发行链，解决旧 Windows 包资源缺失、测试停在航线选择以及只能获得单独 EXE 的问题。

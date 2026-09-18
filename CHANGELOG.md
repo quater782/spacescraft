@@ -8,6 +8,7 @@
 - 护盾与连续像素激光读取真实入射、伤害、宽度、身份和载荷数据，补齐分级粒子、辉光与实时 8-bit 音色。
 - GitHub 首页增加中英简介、三段 5 秒实机 GIF、截图、下载入口、操作说明与平台提示；素材可通过 `npm run capture:readme` 从当前 WebGL 游戏重新生成。
 - 新增稳定桌面发行工作流：Windows x64 安装器/免安装 ZIP，Apple Silicon macOS arm64 DMG，包内 WebGL 启动冒烟与逐平台 SHA-256 清单。
+- 发布正式 Web Edition：GitHub Pages 只部署实际浏览器资源闭包，通过完整验证与独立 WebGL/菜单/战斗冒烟后上线；正式版本发布后可自动同步网页端。
 - 修复旧 Windows CI 的错误失败：测试先用正式 `file://` 检查同一 ASAR，再通过 localhost-only 快速模式完成航线与战斗，不再因无显示器时的 `requestAnimationFrame` 节流停在 0 秒；Squirrel 生命周期也在创建窗口前处理。
 
 ## 2026-09-15 — 未发布：友方 AI 威胁场与优先级重排

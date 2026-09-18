@@ -8,10 +8,12 @@
 
 [![Latest release](https://img.shields.io/github/v/release/quater782/spacescraft?display_name=tag&sort=semver&label=stable)](https://github.com/quater782/spacescraft/releases/latest)
 [![Desktop release](https://github.com/quater782/spacescraft/actions/workflows/build-windows.yml/badge.svg?branch=v0.28.0)](https://github.com/quater782/spacescraft/actions/runs/35303342836)
+[![Web release](https://img.shields.io/badge/Web%20Edition-play-55e6d1)](https://quater782.github.io/spacescraft/)
 [![WebGL 3D](https://img.shields.io/badge/WebGL-真实%203D-55e6d1)](#这是什么--what-is-it)
 [![Languages](https://img.shields.io/badge/语言-简中%20%7C%20English-9f8cff)](#操作--controls)
 
-**[下载 Windows / macOS 最新稳定版](https://github.com/quater782/spacescraft/releases/latest)** · [查看更新日志](CHANGELOG.md) · [开发者文档](docs/README.md)
+**[▶ 立即游玩网页版 // Play Web Edition](https://quater782.github.io/spacescraft/)**<br>
+[下载 Windows / macOS 最新稳定版](https://github.com/quater782/spacescraft/releases/latest) · [查看更新日志](CHANGELOG.md) · [开发者文档](docs/README.md)
 </div>
 
 ![SPACECRAFT 终阶卡牌构筑：双机在棱晶星域释放满级重炮、折射弹幕与无人机齐射](docs/media/capstone-barrage.gif)
@@ -49,6 +51,7 @@ Captured from the current WebGL 3D build—with both pilots alive and every comb
 
 | 平台 | 推荐下载 | 说明 |
 | --- | --- | --- |
+| 浏览器 // Web | **[立即游玩](https://quater782.github.io/spacescraft/)** | 无需安装；进度保存在当前浏览器。 |
 | Windows 10/11 x64 | `windows-x64-Setup.exe` | 当前用户安装；也提供免安装 `portable.zip`，请完整解压后运行，不能只复制 EXE。 |
 | Apple Silicon Mac | `macOS-arm64.dmg` | 适用于 M1/M2/M3/M4 及后续 Apple 芯片。 |
 

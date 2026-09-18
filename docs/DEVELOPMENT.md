@@ -104,6 +104,8 @@
 
 ## Web 版本
 
+正式 Web Edition 发布在 <https://quater782.github.io/spacescraft/>。运行 `npm run stage:web` 会在被忽略的 `dist/web` 中生成只包含实际浏览器资源闭包的静态站点；`npm run smoke:web` 从该目录启动同一套包内冒烟，检查菜单、WebGL2 与自动战斗。`.github/workflows/deploy-pages.yml` 仅在手动触发或正式 Release 发布时部署，避免普通开发提交覆盖稳定网页版本。
+
 直接打开 `index.html`，或使用仅监听本机的静态服务器：
 
 ```bash

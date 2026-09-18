@@ -1,5 +1,11 @@
 # 桌面与 Windows EXE 打包
 
+## 2026-09-18 — 0.28.0 正式网页发行链
+
+`.github/workflows/deploy-pages.yml` 在手动触发或正式 Release 发布时运行完整验证，以对应 ref 执行 `npm run stage:web`，并从 `dist/web` 进行 WebGL2、菜单、机库、设置、中英切换及快速自动战斗冒烟；全部通过后由 GitHub Pages 部署到 <https://quater782.github.io/spacescraft/>。
+
+网页产物沿用桌面版的依赖闭包解析器，包含入口、CSS、favicon、生产脚本及实际使用到的 Three.js build/postprocessing/shader 模块，不携带 Electron、文档、测试脚本或完整 `node_modules`。浏览器存档仅属于该站点 origin；网页端不提供云存档或网络联机。
+
 ## 2026-09-18 — 0.28.0 正式桌面发行链
 
 推送 `v*` 标签会触发 `.github/workflows/build-windows.yml`：先在 Ubuntu 执行完整 `npm run verify`，再分别在 Windows x64 与 Apple Silicon macOS arm64 构建。标签发布只有在两个桌面任务全部完成后才会创建 GitHub Release 草稿；发行文件逐个上传并在短暂网络故障时最多重试四次，全部成功后才转为稳定公开版。
@@ -8,7 +14,7 @@
 
 - `SPACECRAFT-0.28.0-windows-x64-Setup.exe`
 - `SPACECRAFT-0.28.0-windows-x64-portable.zip`
-- `SPACECRAFT-0.28.0-macOS-arm64.dmg` / `.zip`
+- `SPACECRAFT-0.28.0-macOS-arm64.dmg`
 - 两份 `SHA256SUMS-*.txt`
 
 两个平台先由 Forge 的裁剪后钩子检查 HTML 与 import/export 资源闭包，再从产物内 `app.asar` 以正式 `file://` 打开菜单、机库、设置、中英切换和真实 WebGL2；随后测试进程把同一 ASAR 临时映射到 `127.0.0.1`，通过只在 localhost 生效的快速模式确认航线、双机存活与自动发弹。QA 参数不会在正式域名或 Electron 文件协议生效。

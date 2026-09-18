@@ -44,6 +44,7 @@ function verifyPackage(root, ignore = []) {
     visit(resolve(match[1], 'index.html'));
   }
   console.log(`Packaged browser assets verified: ${visited.size} files and their module dependencies.`);
+  return ['index.html', ...visited].sort();
 }
 
 module.exports = { verifyPackage };
