@@ -28,10 +28,14 @@ jobs:
       - run: npm ci
       - run: npm run verify
       - run: npm run stage:web
+      - name: Configure Electron sandbox for Linux smoke test
+        run: |
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
       - run: xvfb-run -a npm run smoke:web
         env:
           SPACECRAFT_SMOKE_OUTPUT: ${{ runner.temp }}/spacecraft-web-smoke
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: spacecraft-web-smoke
