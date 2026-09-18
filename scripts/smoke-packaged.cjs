@@ -12,6 +12,12 @@ app.setPath('userData', path.join(output, 'profile'));
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+if (process.env.SPACECRAFT_SOFTWARE_WEBGL === '1') {
+  app.commandLine.appendSwitch('use-gl', 'angle');
+  app.commandLine.appendSwitch('use-angle', 'swiftshader-webgl');
+  app.commandLine.appendSwitch('enable-unsafe-swiftshader');
+  app.commandLine.appendSwitch('ignore-gpu-blocklist');
+}
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const errors = [];
 const deadline = setTimeout(() => { console.error('Packaged startup timed out'); app.exit(1); }, 60000);

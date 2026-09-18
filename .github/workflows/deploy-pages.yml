@@ -36,6 +36,7 @@ jobs:
       - run: xvfb-run -a npm run smoke:web
         env:
           SPACECRAFT_SMOKE_OUTPUT: ${{ runner.temp }}/spacecraft-web-smoke
+          SPACECRAFT_SOFTWARE_WEBGL: "1"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
