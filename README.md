@@ -7,7 +7,7 @@
 **Move. Dodge. Stay linked. Your weapons, energy skills and rescues fire automatically.**
 
 [![Latest release](https://img.shields.io/github/v/release/quater782/spacescraft?display_name=tag&sort=semver&label=stable)](https://github.com/quater782/spacescraft/releases/latest)
-[![Desktop release](https://github.com/quater782/spacescraft/actions/workflows/build-windows.yml/badge.svg)](https://github.com/quater782/spacescraft/actions/workflows/build-windows.yml)
+[![Desktop release](https://github.com/quater782/spacescraft/actions/workflows/build-windows.yml/badge.svg?branch=v0.28.0)](https://github.com/quater782/spacescraft/actions/runs/35303342836)
 [![WebGL 3D](https://img.shields.io/badge/WebGL-真实%203D-55e6d1)](#这是什么--what-is-it)
 [![Languages](https://img.shields.io/badge/语言-简中%20%7C%20English-9f8cff)](#操作--controls)
 
