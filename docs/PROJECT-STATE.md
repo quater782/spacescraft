@@ -1,14 +1,16 @@
 # 当前项目状态
 
-## 2026-09-21 — 0.29.0 发行准备：棱彩前线 / Prismatic Front
+## 2026-09-21 — 0.29.0 正式发布：棱彩前线 / Prismatic Front
 
-Major 主题：以有明暗面的像素碎片和破碎冲击波统一战斗反馈，同时让智能芯片敌机的意图与机动强度可辨识。版本元数据、界面构建号和 GitHub 发行链均已准备为 0.29.0；9 月 19 日的各项开发记录将由本稳定版发布。GitHub Release、桌面附件和 Pages 部署结果须待标签工作流完成后记录。
+Major 主题：以有明暗面的像素碎片和破碎冲击波统一战斗反馈，同时让智能芯片敌机的意图与机动强度可辨识。版本元数据、界面构建号和 GitHub 发行链均为 0.29.0；9 月 19 日的各项开发记录已合入本稳定版。
 
 护盾只在真实来袭侧呈现局部切面与反射碎片，星链、电弧、炮口、命中、拦截与余烬使用克制的短促碎片层次。Nova/爆炸不再有固定范围轮廓或全屏白闪；种雷/爆破种以弹体热芯与临爆脉动表达引信，激光与冲刺预警保持。碎片与亮点共享 4096 总预算及复用 GPU 批次，低画质只减装饰密度。
 
 同型芯片机血量 +25%、最大移速 +18%、转速/角加速度 +30%、推进加速度 +35%、制动 +25%；三章概率 14%/22%/28%、在场上限 2/3/4。首章 25% 前和成长缓冲仍保护；弹速、伤害、预警及全场攻击/弹量预算不变。背部芯片与双翼灯条编码攻击、闪避与防御后撤，并提供中英扫描与稳定诊断。未新增手动战斗操作、存档字段、依赖或生产声音改动。
 
-发布门禁：本地 `npm run verify`、文档链接和静态检查均已通过；`npm run smoke:effects -- --visual-only --motion` 通过，108 帧动态检查覆盖护盾、星链过载与激光，低档 96 粒子、零丢弃，正常开局 20.18 秒双机 7/7 HP、60 FPS、零页面错误。智能精英专项覆盖 16 船体、三章 Boss 与四种芯片机持续来弹；正常速度双生产 AI 样本至 210.22 秒，双机 7/7 HP、零倒地、98 击杀、60 FPS。GitHub Actions 会在 Windows x64 与 macOS arm64 生成并从包内动态检查桌面附件，随后从相同标签源码部署网页端；具体结果见本次 Release 与 Actions。
+发布门禁：本地 `npm run verify`、文档链接和静态检查均已通过；`npm run smoke:effects -- --visual-only --motion` 通过，108 帧动态检查覆盖护盾、星链过载与激光，低档 96 粒子、零丢弃，正常开局 20.18 秒双机 7/7 HP、60 FPS、零页面错误。智能精英专项覆盖 16 船体、三章 Boss 与四种芯片机持续来弹；正常速度双生产 AI 样本至 210.22 秒，双机 7/7 HP、零倒地、98 击杀、60 FPS。[桌面发行工作流 #35521929067](https://github.com/quater782/spacescraft/actions/runs/35521929067) 已完成 Ubuntu 验证、Windows x64/macOS arm64 构建及包内动态冒烟，并公开 [v0.29.0 Release](https://github.com/quater782/spacescraft/releases/tag/v0.29.0)，附件为 Windows 安装器、Windows 免安装 ZIP、Apple Silicon DMG 与两份 SHA-256 清单。
+
+Pages：Release 事件没有自动触发工作流，因此首次以 `v0.29.0` 手动分发的 [Pages 运行 #35522153912](https://github.com/quater782/spacescraft/actions/runs/35522153912) 已通过构建、网页闭包和 WebGL 冒烟，却被 GitHub Pages 环境保护规则拒绝部署（标签不获准进入 `github-pages`）。确认 `main` 与标签均解析为发布提交 `5281714056b16b368298cf9c4fba99644f827264` 后，从 `main` 运行的 [Pages 运行 #35522214705](https://github.com/quater782/spacescraft/actions/runs/35522214705) 构建和部署均成功。公网 <https://quater782.github.io/spacescraft/> 已读回 `BUILD 3D.29 // PRISMATIC FRONT 0.29.0`，并确认模块资源引用正常。
 
 验证限制：声音专项未重验（生产声音未改）；完整首章、真人本地双人/双手柄、Windows 实机和历史完整首章难度缺口未因本版消除。Windows 代码签名、Apple 公证和多显卡矩阵仍未完成。
 

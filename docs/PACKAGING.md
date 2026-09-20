@@ -2,7 +2,7 @@
 
 ## 2026-09-21 — 0.29.0 正式发行链
 
-`v0.29.0` 使用既有标签工作流生成 Windows x64 安装器、Windows x64 免安装 ZIP、Apple Silicon macOS arm64 DMG 及两份平台 SHA-256 清单。桌面 Release 公开后，`deploy-pages.yml` 从相同标签源码执行完整验证、网页资源闭包和 WebGL 冒烟，再部署 GitHub Pages。实际附件、校验清单和运行结果以 GitHub Release 与 Actions 为准。
+`v0.29.0` 已由[桌面工作流 #35521929067](https://github.com/quater782/spacescraft/actions/runs/35521929067)生成 Windows x64 安装器、Windows x64 免安装 ZIP、Apple Silicon macOS arm64 DMG 及两份平台 SHA-256 清单，并从两个桌面包内完成动态启动检查；附件见[v0.29.0 Release](https://github.com/quater782/spacescraft/releases/tag/v0.29.0)。标签分发的 Pages 构建和 WebGL 冒烟通过，但环境规则拒绝标签部署；确认 `main` 与标签同一提交后，[main Pages 运行 #35522214705](https://github.com/quater782/spacescraft/actions/runs/35522214705)成功部署网页端。
 
 ## 2026-09-18 — 0.28.0 正式网页发行链
 
