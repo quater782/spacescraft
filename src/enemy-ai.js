@@ -28,7 +28,7 @@
   const isRadial = pattern => ["spiral", "counterSpiral", "eliteHalo", "seedMine", "seedCluster", "laneWall", "pincer", "commandCross", "eliteCross"].includes(pattern);
   const committed = e => e.weaponState === "windup" || e.weaponState === "fire";
   const hasChip = e => e.chipId === "adaptive";
-  const CHIP = Object.freeze({ id: "adaptive", chance: [.1, .18, .24], cap: [1, 2, 3] });
+  const CHIP = Object.freeze({ id: "adaptive", chance: [.14, .22, .28], cap: [2, 3, 4], hp: 1.25, speed: 1.18, turn: 1.3, accel: 1.35, brake: 1.25 });
 
   function chipFor({ runSeed, id, stageIndex, progress, active = 0, relief = false }) {
     const stage = clamp(stageIndex, 0, 2);
@@ -51,6 +51,7 @@
     e.flightSide = Math.sin(e.seed * 2.17) >= 0 ? 1 : -1;
     e.pathId = 0; e.evadeCooldown = 0; e.stableAim = 0;
     e.boundaryCorrections = 0; e.contactCorrections = 0; e.tacticTransitions = 0;
+    e.chipDefenseCooldown = 0; e.chipDefenses = 0;
     e.chipReplanTimer = 0; e.chipDecisions = 0; e.chipEvades = 0; e.chipReason = "";
   }
   function transition(e, state, reason) {
@@ -116,7 +117,11 @@
       if (chosen.offset !== e.chipLaneOffset) { e.chipDecisions++; e.chipReason = "clear-fire-lane"; }
       e.chipLaneOffset = chosen.offset; e.chipReplanTimer = .75;
     }
-    return { x: clamp(predicted.x + (e.chipLaneOffset || 0), 32, ctx.width - 32), y: predicted.y };
+    // Keep lateral choices inside a reachable firing band, including flanker/ambusher offsets.
+    const reach = profile(e).engagementRange;
+    const x = clamp(predicted.x + (e.chipLaneOffset || 0), Math.max(32, target.x - reach * .8), Math.min(ctx.width - 32, target.x + reach * .8));
+    const depth = Math.sqrt(Math.max(0, reach * reach - (x - target.x) ** 2));
+    return { x, y: clamp(Math.max(predicted.y, target.y - depth), 32, ctx.height - 90) };
   }
   function aimLead(e) {
     return Math.min(.65, (e.aiLead || 0) + (profile(e).aimLead || 0) + (hasChip(e) ? .16 : 0));
@@ -164,6 +169,7 @@
     const d = profile(e), p = d;
     e.stateAge += dt; e.evadeCooldown = Math.max(0, e.evadeCooldown - dt);
     e.chipReplanTimer = Math.max(0, e.chipReplanTimer - dt);
+    e.chipDefenseCooldown = Math.max(0, e.chipDefenseCooldown - dt);
     if (!target) {
       transition(e, "acquire", "no-target");
       return { x: ctx.width / 2, y: 65, speed: p.speed * .4 };
@@ -200,9 +206,19 @@
         transition(e, "evade", "perceived-intercept"); e.evadeCooldown = hasChip(e) ? 2.2 : 1.8;
       }
     }
+    if (hasChip(e) && e.sensedThisStep && !committed(e) && e.chipDefenseCooldown <= 0
+      && ["maneuver", "engage"].includes(e.tacticState) && e.hp < e.maxHp * .45 && laneRisk(e, e, { ...ctx, enemies: [] }) > 12) {
+      const candidates = [-1, 1].map(side => ({ x: clamp(e.x + side * 48, 32, ctx.width - 32), y: clamp(e.y - 28, 32, ctx.height - 90) }));
+      const cover = candidates.reduce((a, b) => laneRisk(e, a, ctx) <= laneRisk(e, b, ctx) ? a : b);
+      setPath(e, cover.x, cover.y, ctx, "defensive-withdrawal");
+      transition(e, "disengage", "defensive-withdrawal");
+      e.chipDefenses++; e.chipReason = "defensive-withdrawal"; e.chipDefenseCooldown = 6;
+    }
     if (["disengage", "reposition", "evade"].includes(e.tacticState)) {
       const arrived = length(e.pathX - e.x, e.pathY - e.y) < 14;
-      if (arrived || e.stateAge > 4) {
+      const timeout = hasChip(e) ? (e.tacticState === "evade" ? .65 : 1.1) : 4;
+      if (arrived || e.stateAge > timeout) {
+        if (hasChip(e) && e.tacticState === "evade") e.evadeCooldown = 2.2;
         if (e.tacticState !== "reposition") {
           setPath(e, goal.x, goal.y, ctx, "new-approach"); transition(e, "reposition", "clear-of-pass");
         } else transition(e, "maneuver", arrived ? "new-lane-ready" : "replan-blocked-lane");
@@ -223,11 +239,11 @@
   }
   function flight(e, intent, ctx, dt) {
     init(e);
-    const p = profile(e), scale = e.moveSpeed || 1;
+    const p = profile(e), scale = (e.moveSpeed || 1) * (hasChip(e) ? CHIP.speed : 1);
     const dx = intent.x - e.x, dy = intent.y - e.y, range = length(dx, dy);
     let maxSpeed = (intent.speed ?? p.speed) * scale;
-    const accel = intent.ram ? 360 : p.accel * Math.min(1.4, scale);
-    const brake = intent.ram || e.postChargeBrake ? 320 : p.brake;
+    const accel = intent.ram ? 360 : p.accel * Math.min(1.4, e.moveSpeed || 1) * (hasChip(e) ? CHIP.accel : 1);
+    const brake = intent.ram || e.postChargeBrake ? 320 : p.brake * (hasChip(e) ? CHIP.brake : 1);
     if (e.postChargeBrake && length(e.vx, e.vy) < p.speed) e.postChargeBrake = false;
     const remaining = Math.max(0, range - (intent.arrivalRadius ?? 2));
     let speed = Math.min(maxSpeed, Math.sqrt(remaining * brake), remaining * 3);
@@ -256,7 +272,7 @@
     const vlen = length(vx, vy); if (vlen > maxSpeed && vlen > 0) { vx *= maxSpeed / vlen; vy *= maxSpeed / vlen; }
     const face = Number.isFinite(intent.face) ? intent.face : e.heading;
     const delta = angleDelta(face, e.heading);
-    const turnLimit = p.turn * (e.movementModule === "weave" ? 1.1 : 1);
+    const turnLimit = p.turn * (hasChip(e) ? CHIP.turn : 1) * (e.movementModule === "weave" ? 1.1 : 1);
     e.turnRate = approach(e.turnRate, clamp(delta * 7, -turnLimit, turnLimit), turnLimit * 10 * dt);
     const turn = e.turnRate * dt;
     e.heading += Math.abs(turn) > Math.abs(delta) && Math.sign(turn) === Math.sign(delta) ? delta : turn;

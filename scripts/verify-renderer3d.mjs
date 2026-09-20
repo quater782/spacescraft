@@ -15,11 +15,11 @@ const packageJson = JSON.parse(fs.readFileSync(new URL("../package.json", import
 const methodBody = (name, nextName) => renderer.slice(renderer.indexOf(`  ${name}(`), renderer.indexOf(`  ${nextName}(`));
 
 assert.equal(packageJson.dependencies?.three, "0.185.1", "Three.js must be an exact production dependency");
-assert.equal(packageJson.version, "0.28.0", "package metadata must match the Twinship Synergy release");
+assert.equal(packageJson.version, "0.29.0", "package metadata must match the Prismatic Front release");
 assert.match(html, /<script type="importmap">\{"imports":\{"three":"\.\/node_modules\/three\/build\/three\.module\.min\.js"\}\}<\/script>/);
 assert.match(html, /<script type="module" src="\.\/src\/renderer3d\.js\?v=30"><\/script>/);
 assert.match(html, /<script type="module" src="\.\/src\/game\.js\?v=35"><\/script>/);
-assert.match(html, /TWINSHIP SYNERGY 0\.28\.0/);
+assert.match(html, /PRISMATIC FRONT 0\.29\.0/);
 assert.match(renderer, /import \* as THREE from "three"/);
 assert.match(renderer, /UnrealBloomPass/);
 assert.match(renderer, /SMAAPass/);

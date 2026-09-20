@@ -62,6 +62,32 @@ export class PixelEffects {
     this.points.renderOrder = 4;
     this.geometry.setDrawRange(0, 0);
     scene.add(this.points);
+    // Coloured chips use alpha blending and two value planes, independent of hot sparks.
+    this.fleckGeometry = this.geometry.clone();
+    this.fleckMaterial = new THREE.ShaderMaterial({
+      uniforms: this.material.uniforms,
+      transparent: true, depthWrite: false, depthTest: true,
+      blending: THREE.NormalBlending, toneMapped: false,
+      vertexShader: this.material.vertexShader,
+      fragmentShader: `
+        varying vec3 tint;
+        varying float opacity;
+        varying vec3 style;
+        void main() {
+          vec2 q = gl_PointCoord - 0.5;
+          float c = cos(style.z), s = sin(style.z);
+          q = mat2(c, -s, s, c) * q;
+          q.y *= max(1.0, style.y);
+          q = floor(q * 12.0 + 0.5) / 12.0;
+          if (max(abs(q.x), abs(q.y)) > 0.34 || abs(q.x) + abs(q.y) > 0.53) discard;
+          float face = q.x + q.y > 0.0 ? 0.95 : 0.48;
+          gl_FragColor = vec4(tint * face, opacity);
+        }`,
+    });
+    this.flecks = new THREE.Points(this.fleckGeometry, this.fleckMaterial);
+    this.flecks.frustumCulled = false;
+    this.flecks.renderOrder = 4;
+    scene.add(this.flecks);
     this.beamCapacity = 64;
     this.beamCount = 0;
     this.beamGeometry = new THREE.BufferGeometry();
@@ -112,9 +138,75 @@ export class PixelEffects {
     this.beamGeometry.setDrawRange(0, 0);
     scene.add(this.beamMesh);
 
+    // Normal-alpha wave sheets preserve colour and cap overlap brightness; no bloom halo.
+    this.waveCapacity = 56;
+    this.waveCount = 0;
+    this.waveGeometry = new THREE.BufferGeometry();
+    for (const [name, width] of [['position', 3], ['waveUv', 2], ['waveState', 3], ['waveTint', 3]]) {
+      this.waveGeometry.setAttribute(name, new THREE.BufferAttribute(new Float32Array(this.waveCapacity * 6 * width), width).setUsage(THREE.DynamicDrawUsage));
+    }
+    this.waveMaterial = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, depthTest: true, side: THREE.DoubleSide,
+      blending: THREE.NormalBlending, toneMapped: false,
+      vertexShader: `
+        attribute vec2 waveUv;
+        attribute vec3 waveState;
+        attribute vec3 waveTint;
+        varying vec2 uvWave;
+        varying vec3 state;
+        varying vec3 tint;
+        void main() {
+          uvWave = waveUv; state = waveState; tint = waveTint;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: `
+        varying vec2 uvWave;
+        varying vec3 state;
+        varying vec3 tint;
+        float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        void main() {
+          // World-anchored coarse cells: tiny stair steps, not a necklace of billboard squares.
+          float grid = max(20.0, state.y / 1.25);
+          vec2 p = (floor(uvWave * grid) + 0.5) / grid;
+          float r = length(p);
+          if (r > 1.0) discard;
+          float t = state.x;
+          float expansion = 1.0 - pow(1.0 - min(t / 0.82, 1.0), 2.5);
+          float angle = atan(p.y, p.x);
+          float sector = floor((angle + 3.141593) * 5.09296);
+          float seed = hash(vec2(sector, state.z));
+          float scallop = sin(angle * 9.0 + state.z) * 0.008 + sin(angle * 17.0) * 0.006;
+          float front = expansion * (0.985 + scallop);
+          float distanceBehind = front - r;
+          float width = mix(0.095, 0.028, t) * (0.5 + seed);
+          float body = step(0.0, distanceBehind) * (1.0 - smoothstep(0.0, width, distanceBehind));
+          float cutout = hash(floor(p * grid / 2.0) + state.z);
+          float erosion = smoothstep(0.25, 0.95, t);
+          body *= smoothstep(erosion * 0.8, erosion * 0.8 + 0.18, cutout);
+          // Broken, darker secondary tongues trail the front at varied depths.
+          float wake = max(0.0, 1.0 - abs(distanceBehind - width * 1.7) / (width * 0.65));
+          wake *= step(0.6, seed) * step(0.45 + erosion * 0.4, cutout) * 0.18;
+          float crest = (1.0 - smoothstep(0.0, 0.012, max(0.0, distanceBehind))) * step(0.0, distanceBehind);
+          crest *= step(0.72, seed) * body;
+          float fade = (1.0 - smoothstep(0.48, 1.0, t)) * smoothstep(0.0, 0.045, t);
+          vec3 color = mix(tint * (0.4 + seed * 0.28), min(vec3(0.8), tint * 0.7 + 0.18), crest);
+          float alpha = (body * (0.32 + seed * 0.24) + wake) * fade;
+          if (alpha < 0.01) discard;
+          gl_FragColor = vec4(color, alpha);
+        }`,
+    });
+    this.waveMesh = new THREE.Mesh(this.waveGeometry, this.waveMaterial);
+    this.waveMesh.frustumCulled = false;
+    this.waveMesh.renderOrder = 3;
+    this.waveGeometry.setDrawRange(0, 0);
+    scene.add(this.waveMesh);
+
   }
 
   begin(height, fov) {
+    this.waveCount = 0;
+    this.sparkCount = 0;
+    this.fleckCount = 0;
     this.beamCount = 0;
     this.count = 0;
     this.dropped = 0;
@@ -122,17 +214,28 @@ export class PixelEffects {
   }
 
   spark(base, position, size, color, alpha = 1, glow = 0, stretch = 1, rotation = 0) {
+    this.emit(false, base, position, size, color, alpha, glow, stretch, rotation);
+  }
+
+  fleck(base, position, size, color, alpha = 1, glow = 0, stretch = 1, rotation = 0) {
+    this.emit(true, base, position, size, color, alpha, 0, stretch, rotation);
+  }
+
+  emit(flat, base, position, size, color, alpha, glow, stretch, rotation) {
     if (alpha <= .005) return;
     if (this.count >= this.capacity) { this.dropped += 1; return; }
     this.position.set(...position);
     if (base) this.position.applyMatrix4(base);
     if (![this.position.x, this.position.y, this.position.z, size, alpha, glow, stretch, rotation].every(Number.isFinite)) return;
+    const attributes = (flat ? this.fleckGeometry : this.geometry).attributes;
+    const index = flat ? this.fleckCount++ : this.sparkCount++;
+    this.count += 1;
     this.color.set(color);
-    this.position.toArray(this.geometry.attributes.position.array, this.count * 3);
-    this.color.toArray(this.geometry.attributes.color.array, this.count * 3);
-    this.geometry.attributes.sparkSize.array[this.count] = size;
-    this.geometry.attributes.sparkStyle.array.set([glow, stretch, rotation], this.count * 3);
-    this.geometry.attributes.sparkAlpha.array[this.count++] = alpha;
+    this.position.toArray(attributes.position.array, index * 3);
+    this.color.toArray(attributes.color.array, index * 3);
+    attributes.sparkSize.array[index] = size;
+    attributes.sparkStyle.array.set([glow, stretch, rotation], index * 3);
+    attributes.sparkAlpha.array[index] = Math.min(1, alpha);
   }
 
   beam(a, b, nx, nz, length, age, alpha, source = {}) {
@@ -156,10 +259,31 @@ export class PixelEffects {
     }
   }
 
+  shockwave(base, radius, progress, color, seed) {
+    if (this.waveCount >= this.waveCapacity) { this.dropped += 1; return; }
+    if (!(radius > 0) || progress >= 1) return;
+    const first = this.waveCount++ * 6;
+    const attributes = this.waveGeometry.attributes;
+    this.color.set(color);
+    const corners = [[-1,-1],[1,-1],[1,1],[-1,-1],[1,1],[-1,1]];
+    for (let i = 0; i < 6; i += 1) {
+      const [x,z] = corners[i];
+      this.position.set(x * radius / 21.5, .035, z * radius / 13.3).applyMatrix4(base);
+      attributes.position.setXYZ(first+i, this.position.x, this.position.y, this.position.z);
+      attributes.waveUv.setXY(first+i, x, z);
+      attributes.waveState.setXYZ(first+i, progress, radius, seed);
+      attributes.waveTint.setXYZ(first+i, this.color.r, this.color.g, this.color.b);
+    }
+  }
+
   end() {
+    this.waveGeometry.setDrawRange(0, this.waveCount * 6);
+    for (const attribute of Object.values(this.waveGeometry.attributes)) attribute.needsUpdate = true;
     this.beamGeometry.setDrawRange(0, this.beamCount * 6);
     for (const attribute of Object.values(this.beamGeometry.attributes)) attribute.needsUpdate = true;
-    this.geometry.setDrawRange(0, this.count);
+    this.fleckGeometry.setDrawRange(0, this.fleckCount);
+    for (const attribute of Object.values(this.fleckGeometry.attributes)) attribute.needsUpdate = true;
+    this.geometry.setDrawRange(0, this.sparkCount);
     for (const attribute of Object.values(this.geometry.attributes)) attribute.needsUpdate = true;
   }
 }

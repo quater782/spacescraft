@@ -54,6 +54,25 @@ async function run(){
       }
       all.push({hull:hull.id,chip:e.chipId,chipDecisions:e.chipDecisions,weapon:build.weaponId,states:[...states],weapons:[...weapons],cycles:e.attackCycle,boundaries:e.boundaryCorrections,maxStep,maxTurn,turnSpan:Math.max(...headings)-Math.min(...headings),position:[e.x,e.y],locked,ramDone});
     }
+    // Continuous incoming fire used to renew evasion before the craft could ever shoot.
+    const pressure=[];
+    for(const type of ['scout','dart','tank','lancer']) {
+      clean();
+      const build=SpaceExpedition.build('standard','pulse','light','ambusher','clean',1,type);
+      const e=makeEnemy(type,240,70,{build});e.chipId='adaptive';world.enemies=[e];
+      let emitted=0,maxEvade=0;
+      for(let frame=0;frame<2400;frame++) {
+        world.bullets=[{x:e.x,y:e.y+80,vx:0,vy:-120,dead:false}];
+        world.enemyBullets=[];world.enemyBeams=[];
+        world.time+=1/60;world.stageTime+=1/60;updateEnemy(e,1/60);
+        emitted+=world.enemyBullets.length+world.enemyBeams.length;
+        if(e.tacticState==='evade')maxEvade=Math.max(maxEvade,e.stateAge);
+      }
+      check(emitted>0,type+' chip never emitted a projectile under sustained pressure');
+      check(e.chipEvades>0&&maxEvade<.7,type+' evasion did not recover');
+      pressure.push({type,emitted,evades:e.chipEvades,cycles:e.attackCycle,maxEvade});
+    }
+    console.log(JSON.stringify({chipPressure:pressure}));
     clean(); const e=makeEnemy('scout',230,70);SpaceEnemyAI.init(e);e.tacticState='engage';e.targetId=0;e.targetHold=1.2;
     const first=SpaceEnemyAI.chooseTarget(e,world.players,1/60).index;
     world.players[1].x=e.x;const held=SpaceEnemyAI.chooseTarget(e,world.players,.2).index;
@@ -83,9 +102,9 @@ async function run(){
     clean();world.stageIndex=0;world.stageTime=20;
     for(let i=0;i<40;i++){const e=makeEnemy('scout');world.enemies.push(e);check(!e.chipId,'chip entered protected opening');}
     world.stageTime=400;world.enemies=[];world.growthGrace=0;
-    for(let i=0;i<100;i++){world.enemies.push(makeEnemy('scout'));check(world.enemies.filter(SpaceEnemyAI.hasChip).length<=1,'natural chip cap exceeded');}
+    for(let i=0;i<100;i++){world.enemies.push(makeEnemy('scout'));check(world.enemies.filter(SpaceEnemyAI.hasChip).length<=2,'natural chip cap exceeded');}
     check(world.enemies.some(SpaceEnemyAI.hasChip),'natural spawn never assigned a chip');
-    return {all,bosses,targetHold:true,staleRam:true,chipSpawnProtection:true};
+    return {all,bosses,pressure,targetHold:true,staleRam:true,chipSpawnProtection:true};
     } catch(error) {return {failure:error.stack,all:window.aiResults};}
   })()`);
   fs.writeFileSync(path.join(output,'report.json'),JSON.stringify(report,null,2));
@@ -104,24 +123,34 @@ async function run(){
     for(let frame=0;frame<150;frame++)await win.webContents.executeJavaScript(`world.time+=1/60;for(const e of world.enemies)updateEnemy(e,1/60);draw();true`);
     await delay(80);fs.writeFileSync(path.join(output,`flight-${quality}.png`),(await win.webContents.capturePage()).toPNG());
   }
-  // Actual reverse thrust plus visible chip board and bilingual scan, with equal base craft statistics.
+  // Actual reverse thrust plus visible chip board and bilingual scan, with enhanced hull statistics.
   for(const [language,quality] of [['zh','balanced'],['en','low']]) {
     const comparison=await win.webContents.executeJavaScript(`(() => {
-      resetWorld();world.mode='inspection';world.stageIndex=0;world.stageTime=20;world.introTimer=0;world.cinematic=null;world.stageEvent=null;world.routeChoice=null;world.enemies=[];
+      resetWorld();world.mode='inspection';world.stageIndex=0;world.stageTime=285;world.growthGrace=0;world.introTimer=0;world.cinematic=null;world.stageEvent=null;world.routeChoice=null;world.enemies=[];
       const build=SpaceExpedition.build('standard','pulse','light','sentry','clean',0,'scout');
-      const pair=[makeEnemy('scout',160,125,{build}),makeEnemy('scout',320,125,{build})];
-      pair[0].chipId='';pair[1].chipId='adaptive';world.enemies=pair;
+      const spawn=(chipped,x)=>{
+        let id=world.enemySerial+1;
+        while(Boolean(SpaceEnemyAI.chipFor({runSeed:world.runSeed,id,stageIndex:0,progress:.5}))!==chipped)id++;
+        world.enemySerial=id-1;return makeEnemy('scout',x,125,{build});
+      };
+      const pair=[spawn(false,160),spawn(true,320)];world.enemies=pair;
       for(const e of pair){SpaceEnemyAI.init(e);e.tacticState='maneuver';e.galleryScale=1.5;}
       for(let frame=0;frame<20;frame++){world.time+=1/60;for(const e of pair)SpaceEnemyAI.flight(e,{x:e.id===pair[0].id?135:295,y:60,face:Math.PI/2,speed:45},{width:480,height:270,enemies:pair},1/60);}
       SpaceI18n.setLanguage('${language}');profile.settings.quality='${quality}';
       world.variantNotice={enemy:pair[1],timer:2,total:3.2};draw();
       return pair.map(e=>({hp:e.maxHp,speed:e.moveSpeed,cooldown:e.weaponCooldown,x:e.x,y:e.y,heading:e.heading,reverse:e.reverseThrust,chip:e.chipId}));
     })()`);
-    assert.equal(comparison[0].hp,comparison[1].hp);assert.equal(comparison[0].speed,comparison[1].speed);assert.equal(comparison[0].cooldown,comparison[1].cooldown);
+    assert.equal(comparison[0].hp*1.25,comparison[1].hp);assert.equal(comparison[0].speed,comparison[1].speed);assert.equal(comparison[0].cooldown,comparison[1].cooldown);
     for(const e of comparison){assert.ok(e.y<125&&e.reverse>.1);assert.ok(Math.abs(e.heading-Math.PI/2)<1e-8);}
     await delay(80);fs.writeFileSync(path.join(output,`chip-reverse-${language}.png`),(await win.webContents.capturePage()).toPNG());
     console.log(JSON.stringify({chipVisual:language,quality,comparison}));
   }
+  await win.webContents.executeJavaScript(`world.mode='inspection';world.enemies=[];world.variantNotice=null;world.toast=null;
+    for(const [i,state] of ['maneuver','evade','disengage','engage'].entries()) {
+      const e=makeEnemy('scout',75+i*110,125);SpaceEnemyAI.init(e);e.chipId='adaptive';e.galleryScale=1.6;e.tacticState=state;
+      e.stateReason=state==='disengage'?'defensive-withdrawal':'';e.weaponState=state==='engage'?'align':'cooldown';world.enemies.push(e);
+    } draw();true`);
+  fs.writeFileSync(path.join(output,'chip-intents.png'),(await win.webContents.capturePage()).toPNG());
   // Normal opening, normal clock, solo and local coop UI/input paths, no fixture invulnerability.
   for(const mode of ['solo','coop']){
     await win.loadURL(url);await win.webContents.executeJavaScript(`document.querySelector('.mode-button[data-mode="${mode}"]').click();document.querySelector('#startButton').click();if(!document.querySelector('#tutorial').hidden)document.querySelector('#tutorialContinueButton').click();true`);

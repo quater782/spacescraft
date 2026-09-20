@@ -163,7 +163,9 @@ assert.doesNotMatch(ordinaryTelegraph, /attackTargetX[\s\S]*?voxelSegment/, "ord
 assert.match(rendererSource, /laserTelegraphRays\(enemy\)/);
 assert.match(rendererSource, /drawLaserTelegraph\(enemy, charge\)/);
 assert.match(rendererSource, /drawRamTelegraph\(enemy, charge\)/);
-assert.match(rendererSource, /voxelEllipse\(warningBase, radiusX, radiusZ/, "blast fuses must show their actual local danger footprint");
+assert.match(rendererSource, /drawRadialShockwave\(effect, base\)/, "explosions must visualize their actual radius with a shockwave");
+assert.match(rendererSource, /const rx = effect\.radius \/ 21\.5, rz = effect\.radius \/ 13\.3/, "shockwave must use the actual effect radius");
+assert.doesNotMatch(rendererSource, /drawFuseTimer\(/, "fuse countdown must use body heat without a guide ring");
 assert.match(rendererSource, /laserVfx = "layered-core-edge-packets"/);
 assert.match(rendererSource, /warningGrammar = "muzzle-charge-committed-lasers-ram-corridors-blast-rings"/);
 assert.match(rendererSource, /enemySpacing = "predictive-separation-arrival"/);

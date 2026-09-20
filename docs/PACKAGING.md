@@ -1,5 +1,9 @@
 # 桌面与 Windows EXE 打包
 
+## 2026-09-21 — 0.29.0 正式发行链
+
+`v0.29.0` 使用既有标签工作流生成 Windows x64 安装器、Windows x64 免安装 ZIP、Apple Silicon macOS arm64 DMG 及两份平台 SHA-256 清单。桌面 Release 公开后，`deploy-pages.yml` 从相同标签源码执行完整验证、网页资源闭包和 WebGL 冒烟，再部署 GitHub Pages。实际附件、校验清单和运行结果以 GitHub Release 与 Actions 为准。
+
 ## 2026-09-18 — 0.28.0 正式网页发行链
 
 `.github/workflows/deploy-pages.yml` 在手动触发或正式 Release 发布时运行完整验证，以对应 ref 执行 `npm run stage:web`，并从 `dist/web` 进行 WebGL2、菜单、机库、设置、中英切换及快速自动战斗冒烟；全部通过后由 GitHub Pages 部署到 <https://quater782.github.io/spacescraft/>。

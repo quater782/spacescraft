@@ -9,7 +9,7 @@ const path = require('node:path');
 // The bridge exists only in this isolated loopback server, never shipped source.
 const root = path.resolve(__dirname, '..');
 const output = path.join(os.tmpdir(), 'spacescraft-particle-effects');
-const bridge = 'enemyBeam, fireLaser, audio, AudioEngine, researchShield, renderer3D, damagePlayer, world, resetWorld, applyRunUpgrade, UPGRADE_DEFS, advanceStage, relicBonuses, makeEnemy, handleCollisions, updatePlayers, updatePlayerStatus, playerShoot, emitPlayerShot, updateAuxiliaryWeapons, updateRush, startRush, updateObjects, detonateEnemyBlast, enemyBullet, applyPickup, addNovaCharge, draw, renderUpgradeDraft, renderPowerSummary';
+const bridge = 'useNova, powerEffect, enemyBeam, fireLaser, audio, AudioEngine, researchShield, renderer3D, damagePlayer, world, resetWorld, applyRunUpgrade, UPGRADE_DEFS, advanceStage, relicBonuses, makeEnemy, handleCollisions, updatePlayers, updatePlayerStatus, playerShoot, emitPlayerShot, updateAuxiliaryWeapons, updateRush, startRush, updateObjects, detonateEnemyBlast, enemyBullet, applyPickup, addNovaCharge, draw, renderUpgradeDraft, renderPowerSummary';
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
   const target = path.resolve(root, pathname === '/' ? 'index.html' : decodeURIComponent(pathname.slice(1)));
@@ -97,6 +97,9 @@ async function run() {
   impacts.angles.forEach(contact=>assert.ok(Math.abs(contact.surface-1)<1e-6));
   assert.ok(impacts.angles[0].incidence>.99&&impacts.angles[1].incidence<.5&&impacts.angles[2].incidence<.5);
   assert.ok(impacts.angles[1].reflectionZ>0&&impacts.angles[2].reflectionZ<0);
+  let audioPeaks=[];
+  // Visual iterations need not depend on the host audio device clock.
+  if (!process.argv.includes('--visual-only')) {
   const samples = await win.webContents.executeJavaScript(`(async () => {
     const engine=Object.create(AudioEngine.prototype);
     engine.context=new OfflineAudioContext(1,44100*3.6,44100);
@@ -109,20 +112,50 @@ async function run() {
     for(const [i,name] of ['shieldBlock','shieldBreak','shieldReform'].entries()){offset=i===0?.2:i*1.2;engine.sfx(name);}
     const buffer=await engine.context.startRendering();return Array.from(buffer.getChannelData(0));
   })()`);
-  const audioPeaks=[0,1,2].map(i=>samples.slice(i*52920,(i+1)*52920).reduce((max,v)=>Math.max(max,Math.abs(v)),0));
+  audioPeaks=[0,1,2].map(i=>samples.slice(i*52920,(i+1)*52920).reduce((max,v)=>Math.max(max,Math.abs(v)),0));
   audioPeaks.forEach(value=>assert.ok(value>.01&&value<1,'shield audio audible, unclipped'));
   const wav=Buffer.alloc(44+samples.length*2);wav.write('RIFF',0);wav.writeUInt32LE(wav.length-8,4);wav.write('WAVEfmt ',8);
   wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(44100,24);wav.writeUInt32LE(88200,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(samples.length*2,40);
   samples.forEach((v,i)=>wav.writeInt16LE(Math.round(Math.max(-1,Math.min(1,v))*32767),44+i*2));fs.writeFileSync(path.join(output,'shield-hit-break-reform.wav'),wav);
-  await win.webContents.executeJavaScript(`audio.toggleMute();true;`);await delay(100);
+  await win.webContents.executeJavaScript(`(async()=>{await audio.context.resume();if(!audio.enabled)audio.toggleMute();audio.toggleMute();return true;})()`,true);await delay(200);
   assert.equal(await win.webContents.executeJavaScript('audio.master.gain.value'),0);
   await win.webContents.executeJavaScript(`audio.toggleMute();true;`);
+  }
   const capture = async (name, script) => {
     await win.webContents.executeJavaScript(`(() => {${script}; draw(); document.querySelector('#game').style.visibility='hidden';document.querySelector('#toast').style.visibility='hidden';return true;})()`);
     await delay(100);
     fs.writeFileSync(path.join(output,name+'.png'),(await win.webContents.capturePage()).toPNG());
     if(['shield-directions','shield-damage','shield-angle','link-overload','link-intercept'].includes(name)) fs.writeFileSync(path.join(output,name+'-detail.png'),(await win.webContents.capturePage({x:410,y:495,width:620,height:190})).toPNG());
   };
+  // New VFX use production event creation and simulation ages, without advancing combat.
+  const skillFrames = [];
+  for (const quality of ['low', 'balanced', 'high']) {
+    for (const age of [.04, .18, .42]) {
+      await capture(`pixel-skills-${quality}-${age}`, `cleanEffects();
+        document.querySelector('#qualitySetting').value='${quality}';document.querySelector('#qualitySetting').dispatchEvent(new Event('change'));
+        world.players.forEach(p=>p.shield=0);world.novaCharge=SpaceRush.NOVA_CONFIG.threshold;world.novaCooldown=0;useNova();
+        world.flash=0;world.shake=0;world.particles=[];
+        powerEffect('impact',140,105,12,'#dfac58',3);powerEffect('muzzle',240,105,7,'#59d8c9',3);
+        powerEffect('blast',340,105,28,'#ff965d',3);powerEffect('arc',140,105,0,'#adefff',2,{x:240,y:105});
+        world.power.effects.forEach(e=>e.age=${age});world.power.effects=world.power.effects.filter(e=>e.age<e.duration);`);
+      skillFrames.push(await win.webContents.executeJavaScript(`({quality:'${quality}',age:${age},nova:world.power.effects.filter(e=>e.kind==='nova').length,novaRadius:world.power.effects.find(e=>e.kind==='nova')?.radius,clearRadius:world.novaLastRadius,...document.querySelector('#scene').dataset})`));
+    }
+  }
+  for (const frame of skillFrames) {assert.equal(frame.nova,2);assert.equal(frame.novaRadius,frame.clearRadius);assert.ok(Number(frame.effectWaves)>=2);assert.equal(frame.effectDropped,'0');assert.ok(Number(frame.effectParticles)>0);}
+  await win.webContents.executeJavaScript(`document.querySelector('#qualitySetting').value='balanced';document.querySelector('#qualitySetting').dispatchEvent(new Event('change'));true;`);
+  if (process.argv.includes('--pulse-motion')) {
+    await win.webContents.executeJavaScript(`cleanEffects();world.players.forEach((p,i)=>{p.shield=0;p.x=180+i*120;p.y=165;});
+      world.novaCharge=SpaceRush.NOVA_CONFIG.threshold;world.novaCooldown=0;useNova();world.shake=0;
+      window.pulseEffects=world.power.effects.map(e=>({...e}));
+      window.pulseShots=Array.from({length:12},(_,i)=>({x:105+i*24,y:105+i%3*22,vx:0,vy:60,r:3,age:.2,behavior:'linear',weaponModule:'pulse'}));
+      document.querySelector('#game').style.visibility='hidden';document.querySelector('#toast').style.visibility='hidden';true;`);
+    for(let frame=0;frame<36;frame++) {
+      await win.webContents.executeJavaScript(`world.time=2+${frame/30};world.power.effects=pulseEffects.filter(e=>${frame/30}<e.duration).map(e=>({...e,age:${frame/30}}));
+        world.enemyBullets=pulseShots.map(b=>({...b,y:b.y+${frame/30}*20}));draw();true;`);
+      await delay(35);
+      fs.writeFileSync(path.join(output,`pulse-${String(frame).padStart(3,'0')}.png`),(await win.webContents.capturePage()).toPNG());
+    }
+  }
   await capture('shield-directions', `cleanEffects();
     damagePlayer(world.players[0],1,{x:120,y:205});damagePlayer(world.players[1],1,{x:360,y:205});
     world.players.forEach(p=>p.shieldHitTimer=.40);world.particles=[];`);
@@ -134,6 +167,16 @@ async function run() {
   await capture('link-overload', `world.rushTimer=4;world.rushCharge=0;world.power.guardNodes=1;world.time=2.17;`);
   await capture('link-intercept', `world.power.effects=[{kind:'intercept',x:240,y:205,radius:9,color:'#b9efff',tier:2,duration:.3,age:.1}];`);
   await capture('link-cooldown', `world.rushTimer=0;world.rushCooldown=4;world.time=2.3;`);
+  for (const quality of ['low', 'balanced', 'high']) {
+    for (const age of [.02, .1, .2]) {
+      await capture(`hostile-muzzle-${quality}-${age}`, `cleanEffects();
+        document.querySelector('#qualitySetting').value='${quality}';document.querySelector('#qualitySetting').dispatchEvent(new Event('change'));
+        world.enemies=[makeEnemy('scout',170,110),makeEnemy('scout',310,110)];
+        world.enemies.forEach((e,i)=>Object.assign(e,{weaponState:'fire',weaponAge:${age},weaponAim:Math.PI/2,attackPattern:'aimed',remoteEmitters:i?[{x:285,y:125},{x:335,y:125}]:[]}));`);
+      assert.equal(await win.webContents.executeJavaScript(`document.querySelector('#scene').dataset.effectDropped`),'0');
+    }
+  }
+  await win.webContents.executeJavaScript(`document.querySelector('#qualitySetting').value='balanced';document.querySelector('#qualitySetting').dispatchEvent(new Event('change'));true;`);
   await capture('warning-early', `cleanEffects();world.players.forEach(p=>p.shield=0);
     const a=makeEnemy('cometRammer',160,80), b=makeEnemy('lancer',310,75);
     Object.assign(a,{weaponState:'windup',attackPattern:'ramCharge',weaponCharge:.12,attackTargetX:190,attackTargetY:220,attackEndX:200,attackEndY:250,weaponDuration:1.28});

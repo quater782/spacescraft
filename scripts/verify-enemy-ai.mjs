@@ -30,11 +30,11 @@ for (const role of Object.keys(ai.profiles)) {
 }
 const chipInput={runSeed:260901,stageIndex:0,progress:.5};
 const chipRolls=Array.from({length:500},(_,id)=>ai.chipFor({...chipInput,id}));
-assert.ok(chipRolls.filter(Boolean).length>20&&chipRolls.filter(Boolean).length<90,'chips must remain an uncommon random modifier');
+assert.ok(chipRolls.filter(Boolean).length>20&&chipRolls.filter(Boolean).length<110,'chips must remain an uncommon random modifier');
 assert.deepEqual(chipRolls,Array.from({length:500},(_,id)=>ai.chipFor({...chipInput,id})),'chip draws must replay from the run seed');
 for(let id=0;id<100;id++) {
   assert.equal(ai.chipFor({...chipInput,id,progress:.24}),'','opening protection must exclude chips');
-  assert.equal(ai.chipFor({...chipInput,id,active:1}),'','chapter one chip cap must hold');
+  assert.equal(ai.chipFor({...chipInput,id,active:2}),'','chapter one chip cap must hold');
   assert.equal(ai.chipFor({...chipInput,id,relief:true}),'','recovery windows must exclude new chips');
 }
 const basic=make(),smart=make();smart.chipId='adaptive';ai.init(basic);ai.init(smart);
@@ -52,6 +52,22 @@ for(const chipped of [false,true]) {
   assert.equal(c.tacticState==='evade',chipped,'chip should react earlier to a perceived interception');
   if(chipped){c.tacticState='engage';c.weaponState='windup';c.evadeCooldown=0;ai.plan(c,target,{...ctx,bullets:[incoming]},1/60);assert.equal(c.tacticState,'engage','chip must respect an attack commitment');}
 }
+// Defensive retreat responds to observed incoming fire and low hull, then respects its cooldown.
+const wounded=make();wounded.chipId='adaptive';wounded.hp=3;wounded.maxHp=10;ai.init(wounded);
+wounded.tacticState='engage';wounded.sensedThisStep=true;wounded.evadeCooldown=2;
+ai.plan(wounded,target,{...ctx,bullets:[{x:240,y:130,vx:0,vy:-120}]},1/60);
+assert.equal(wounded.stateReason,'defensive-withdrawal');assert.equal(wounded.chipDefenses,1);
+for(let frame=0;frame<120;frame++){wounded.age+=1/60;const intent=ai.plan(wounded,target,ctx,1/60);ai.flight(wounded,intent,ctx,1/60);}
+assert.notEqual(wounded.tacticState,'disengage','defense must return to combat');
+// Wide flank choices must still allow the engage transition.
+for(const x of [40,240,440]) {
+  const flank=make('flanker');flank.chipId='adaptive';flank.aiModule='ambusher';ai.init(flank);flank.tacticState='maneuver';
+  const t={...target,x};const goal=ai.plan(flank,t,ctx,1/60);
+  assert.ok(Math.hypot(goal.x-t.x,goal.y-t.y)<=ai.profile(flank).engagementRange+1e-6);
+}
+const slow=make(),fast=make();fast.chipId='adaptive';
+for(const c of [slow,fast]){ai.init(c);c.tacticState='maneuver';ai.flight(c,{x:400,y:100,face:0,speed:45},ctx,1/60);}
+assert.ok(fast.vx>slow.vx&&Math.abs(fast.turnRate)>Math.abs(slow.turnRate),'chip must improve acceleration and turning');
 const steady=make();ai.init(steady);steady.tacticState='engage';const station=ai.plan(steady,target,ctx,1/60);
 for(let frame=0;frame<120;frame++){steady.age+=1/60;const goal=ai.plan(steady,{...target,x:240+Math.sin(frame)*3},ctx,1/60);assert.equal(goal.x,station.x,'small target motion must not churn the navigation goal');}
 // Turn reversal must preserve bounded acceleration and position continuity, including angular wrapping.

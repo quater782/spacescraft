@@ -58,8 +58,8 @@ async function run() {
       ['针枪 / NEEDLE', true, { weaponModule: 'sniper' }], ['旋镰 / ORBIT', true, { weaponModule: 'orbit' }], ['弹墙 / WALL', true, { pattern: 'laneWall' }],
       ['弯刃 / SHARD', true, { pattern: 'pincer' }], ['制导中 / SEEKER', true, { behavior: 'homing', homingDuration: 1.7 }],
       ['制导结束 / COAST', true, { behavior: 'homing', homingDuration: .3 }],
-      ['种雷 / MINE', true, { behavior: 'mine' }], ['种雷待爆 / ARMED', true, { behavior: 'mine', age: .85 }],
-      ['爆破种 / BLAST', true, { behavior: 'blast', age: .2 }], ['开裂 / FUSE', true, { behavior: 'blast', age: .8 }],
+      ['种雷 / MINE', true, { behavior: 'mine', blastRadius: 18 }], ['种雷待爆 / ARMED', true, { behavior: 'mine', age: .85, blastRadius: 18 }],
+      ['爆破种 / BLAST', true, { behavior: 'blast', age: .2, blastRadius: 18 }], ['开裂 / FUSE', true, { behavior: 'blast', age: .8, blastRadius: 18 }],
       ['母巢 / BLOOM', true, { bossStage: 0 }], ['熔炉 / FORGE', true, { bossStage: 1 }], ['虚空 / VOID', true, { bossStage: 2 }],
     ];
     window.shotScale = 2.8;
@@ -111,7 +111,7 @@ async function run() {
   `);
   await delay(1800);
   const stress = await window.webContents.executeJavaScript(`({ fps: Number(document.querySelector('#game').dataset.fps), ...document.querySelector('#scene').dataset })`);
-  if (stress.projectileArt !== 'extruded-pixel-stamps' || Number(stress.projectileDropped) !== 0 || stress.fps < 40) throw new Error('Projectile render regression: ' + JSON.stringify(stress));
+  if (stress.projectileArt !== 'extruded-pixel-stamps' || Number(stress.projectileDropped) !== 0 || Number(stress.effectDropped) !== 0 || stress.fps < 40) throw new Error('Projectile render regression: ' + JSON.stringify(stress));
   fs.writeFileSync(path.join(output, 'density.png'), (await window.webContents.capturePage()).toPNG());
   // Reload removes every display override. Real opening at normal speed, unchanged simulation.
   await window.loadURL(`http://127.0.0.1:${port}/?seed=2706`);

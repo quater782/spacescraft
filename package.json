@@ -1,7 +1,7 @@
 {
   "name": "spacescraft",
   "productName": "SPACECRAFT 星航双子",
-  "version": "0.28.0",
+  "version": "0.29.0",
   "description": "只需移动的双人合作 WebGL 3D 太空射击游戏 / Move-only local co-op WebGL 3D space shooter",
   "author": "SPACECRAFT Team",
   "main": "electron/main.cjs",

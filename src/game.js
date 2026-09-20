@@ -2806,7 +2806,7 @@ function makePowerState() {
 }
 
 function powerEffect(kind, x, y, radius, color, tier = 1, target = null) {
-  const duration = kind === "blast" ? .46 : kind === "arc" ? .22 : .28;
+  const duration = kind === "nova" ? .85 : kind === "blast" ? .46 : kind === "arc" ? .22 : .28;
   if (world.power.effects.length >= 56) world.power.effects.shift();
   world.power.effects.push({ kind, x, y, radius, color, tier, target, age: 0, duration });
 }
@@ -3261,8 +3261,8 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     y,
     vx: 0,
     vy: 0,
-    hp: maxHp,
-    maxHp,
+    hp: maxHp * (chipId ? ENEMY_AI.CHIP.hp : 1),
+    maxHp: maxHp * (chipId ? ENEMY_AI.CHIP.hp : 1),
     r: enemyRadius,
     bodyRadius: enemyRadius * .8,
     score: Math.round(stats.score * (elite ? 4 : 1) * build.score),
@@ -3937,6 +3937,7 @@ function beginEnemyWindup(enemy, target) {
     enemy.attackEndX = commit.ram.endX; enemy.attackEndY = commit.ram.endY;
   }
   enemy.attackCommit = commit;
+  if (ENEMY_AI.hasChip(enemy)) enemy.chipReason = "predictive-attack";
   let duration = ENEMY_AI.profile(enemy).windup * Math.max(.78, 1 / (1 + world.stageIndex * .1 + (enemy.elite ? .16 : 0)));
   if (enemy.attackPattern === "laserLance") duration = Math.max(duration, 1.12);
   else if (enemy.attackPattern === "laserSweep") duration = Math.max(duration, 1.28);
@@ -3967,10 +3968,9 @@ function updateEnemyTactics(enemy, dt, canFire) {
   if (enemy.weaponState === "align") {
     if (!canFire || !target || !["engage", "maneuver"].includes(enemy.tacticState)) cancelEnemyAttack(enemy, "firing-lane-lost");
     else {
-      // Stabilize before precise weapons and before a forward gun slews through a large angle.
+      // Every frozen launch must settle first; residual drift used to cancel the warning.
       const heading = Math.atan2(aimTarget.y - enemy.y, aimTarget.x - enemy.x);
-      const precise = ENEMY_AI.isLaser(enemy.attackPattern) || enemy.attackPattern === "ramCharge";
-      intent = { ...intent, face: heading, stop: precise || !ENEMY_AI.profile(enemy).turret, lock: precise };
+      intent = { ...intent, face: heading, stop: true, lock: true };
     }
   }
   if (ENEMY_AI.committed(enemy)) {
@@ -3983,7 +3983,7 @@ function updateEnemyTactics(enemy, dt, canFire) {
   if (!ENEMY_AI.committed(enemy)) ENEMY_AI.aim(enemy, aimTarget, dt, enemy.attackPattern === "ramCharge");
   if (enemy.weaponState === "align") {
     const precise = ENEMY_AI.isLaser(enemy.attackPattern) || enemy.attackPattern === "ramCharge";
-    const settled = Math.hypot(enemy.vx, enemy.vy) < (precise ? .04 : 9);
+    const settled = Math.hypot(enemy.vx, enemy.vy) < .04;
     const aligned = ENEMY_AI.isRadial(enemy.attackPattern) || enemy.aimError < (precise ? .025 : .1);
     enemy.stableAim = settled && aligned ? enemy.stableAim + dt : 0;
     if (enemy.stableAim >= .15 && enemyAttackAvailable(enemy, enemy.attackPattern)) beginEnemyWindup(enemy, aimTarget);
@@ -4324,22 +4324,10 @@ function useNova() {
     if (damage.hull <= 0 && damage.barrier <= 0) enemy.hitFlash = .1;
     if (enemy.hp <= 0) killEnemy(enemy, -1, { novaSource: true, suppressDeathrattle: true });
   }
-  for (const player of pilots) for (let i = 0; i < 32; i += 1) {
-    const angle = (i / 32) * TAU;
-    world.particles.push({
-      x: player.x,
-      y: player.y,
-      vx: Math.cos(angle) * visualRand(90, 190),
-      vy: Math.sin(angle) * visualRand(90, 190),
-      life: .65,
-      maxLife: .65,
-      color: PLAYER_CONFIG[player.index].color,
-      size: i % 3 ? 1 : 2,
-    });
-  }
+  for (const player of pilots) powerEffect("nova", player.x, player.y, clearRadius, PLAYER_CONFIG[player.index].color, 3);
   syncNovaMirrors();
-  world.flash = 0.45;
-  world.shake = 0.45;
+  // Local impact carries Nova feedback; avoid whitening the entire playfield.
+  world.shake = 0.18;
   audio.sfx("nova");
   pulseGamepad(0, 260, .75, .45);
   pulseGamepad(1, 260, .75, .45);
@@ -6466,7 +6454,7 @@ function draw() {
   }).join(",");
   canvas.dataset.enemyTacticStates = [...new Set(activeEnemies.map(e => e.tacticState))].filter(Boolean).join(",");
   canvas.dataset.enemyWeaponStates = [...new Set(activeEnemies.map(e => e.weaponState))].filter(Boolean).join(",");
-  canvas.dataset.enemyChips = activeEnemies.filter(e => ENEMY_AI.hasChip(e)).map(e => `${e.id}|${e.chipId}|${e.chipDecisions || 0}|${e.chipEvades || 0}|${e.chipReason || ""}`).join(",");
+  canvas.dataset.enemyChips = activeEnemies.filter(e => ENEMY_AI.hasChip(e)).map(e => `${e.id}|${e.chipId}|${e.chipDecisions || 0}|${e.chipEvades || 0}|${e.chipReason || ""}|${e.chipDefenses || 0}|${e.attackCycle || 0}`).join(",");
   canvas.dataset.enemyChipCount = String(activeEnemies.filter(e => ENEMY_AI.hasChip(e)).length);
   canvas.dataset.enemyChipCap = String(ENEMY_AI.CHIP.cap[world.stageIndex]);
   canvas.dataset.enemyTargetSwitches = activeEnemies.reduce((sum, e) => sum + (e.targetSwitches || 0), 0);
