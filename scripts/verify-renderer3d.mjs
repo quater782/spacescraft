@@ -15,11 +15,12 @@ const packageJson = JSON.parse(fs.readFileSync(new URL("../package.json", import
 const methodBody = (name, nextName) => renderer.slice(renderer.indexOf(`  ${name}(`), renderer.indexOf(`  ${nextName}(`));
 
 assert.equal(packageJson.dependencies?.three, "0.185.1", "Three.js must be an exact production dependency");
-assert.equal(packageJson.version, "0.29.0", "package metadata must match the Prismatic Front release");
+assert.equal(packageJson.version, "0.30.0", "package metadata must match the Cooperative Front release");
 assert.match(html, /<script type="importmap">\{"imports":\{"three":"\.\/node_modules\/three\/build\/three\.module\.min\.js"\}\}<\/script>/);
-assert.match(html, /<script type="module" src="\.\/src\/renderer3d\.js\?v=30"><\/script>/);
-assert.match(html, /<script type="module" src="\.\/src\/game\.js\?v=35"><\/script>/);
-assert.match(html, /PRISMATIC FRONT 0\.29\.0/);
+assert.match(html, /<script type="module" src="\.\/src\/renderer3d\.js\?v=31"><\/script>/);
+assert.match(html, /<script type="module" src="\.\/src\/game\.js\?v=39"><\/script>/);
+assert.match(html, /COOPERATIVE FRONT 0\.30\.0/);
+assert.match(renderer, /import \{ PixelEffects \} from "\.\/pixel-effects\.js\?v=2"/);
 assert.match(renderer, /import \* as THREE from "three"/);
 assert.match(renderer, /UnrealBloomPass/);
 assert.match(renderer, /SMAAPass/);
@@ -56,7 +57,7 @@ assert.match(renderer, /const CAMERA_FOV = 55/);
 assert.match(renderer, /const PLAYER_MODEL_SCALE = \.82/);
 assert.match(renderer, /const REGULAR_ENEMY_SCALE = 1\.18/);
 assert.match(renderer, /const ELITE_ENEMY_SCALE = 1\.4/);
-assert.match(renderer, /const BOSS_MODEL_SCALE = 1\.32/);
+assert.match(renderer, /const BOSS_MODEL_SCALE = 1\.62/);
 assert.match(renderer, /const HOSTILE_PROJECTILE_SCALE = 1\.05/);
 assert.match(renderer, /new THREE\.PerspectiveCamera\(CAMERA_FOV, 16 \/ 9, \.1, 96\)/);
 assert.match(renderer, /scale\.map\(quantizePixelEdge\)/);
@@ -137,7 +138,8 @@ assert.ok(voxelCallCount(methodBody("fighterNose", "sweptWing")) <= 4, "fighter 
 assert.ok(voxelCallCount(methodBody("sweptWing", "tailFins")) <= 4, "each wing must follow the four-block Occam budget");
 assert.ok(voxelCallCount(methodBody("tailFins", "drawPlayerShield")) <= 2, "each tail side must follow the two-block Occam budget");
 const shieldSection = methodBody("drawPlayerShield", "drawPlayerDamage");
-assert.match(shieldSection, /shieldImpactX/, "shield response must follow the actual incoming side");
+assert.match(shieldSection, /this\.shieldContact\(base, profile, event\)/, "every retained contact must provide its own impact geometry");
+assert.match(methodBody("shieldContact", "shieldRingImpulse"), /shieldImpactX/, "shield contact geometry must follow the actual incoming side");
 assert.doesNotMatch(shieldSection, /voxelSegment/, "shield must use sparse particles instead of solid panels");
 assert.match(shieldSection, /shieldBreakTimer/, "the shell must visibly break when depleted");
 assert.ok(voxelCallCount(methodBody("alienCrescent", "alienTendril")) <= 3, "each alien crescent side must follow the three-block Occam budget");
@@ -150,8 +152,8 @@ for (const bossBuilder of ["drawBossBloom", "drawBossForge", "drawBossVoid"]) as
 const bossSection = methodBody("drawBossBloom", "drawModelGallery");
 assert.doesNotMatch(bossSection, /alienCrescent\(|alienTendril\(/, "bosses must not reuse ordinary alien appendages");
 assert.doesNotMatch(bossSection, /voxelThruster\(/, "organic bosses must use energy glands instead of human thrusters");
-assert.match(bossSection, /phase >= 2/);
-assert.match(bossSection, /phase >= 3/);
+assert.match(bossSection, /this\.bossPhaseGrowth\(enemy, 2\)/);
+assert.match(bossSection, /this\.bossPhaseGrowth\(enemy, 3\)/);
 for (const oldThinBossPart of ["[.09, .38, 1.12]", "[.7, .07, .16]", "[.16, .42, 1.52]"]) {
   assert.ok(!bossSection.includes(oldThinBossPart), `bosses must not regress to thin rods: ${oldThinBossPart}`);
 }

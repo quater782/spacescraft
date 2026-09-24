@@ -34,15 +34,15 @@
   const UPGRADE_BY_ID = new Map(UPGRADE_DEFS.map((upgrade) => [upgrade.id, upgrade]));
 
   const TIERS = Object.freeze({
-    overclock: [{ rate: 15 }, { rate: 30 }],
-    rail: [{ interval: 1.4, damage: 2 }, { interval: 1.1, damage: 2 }, { interval: .9, damage: 2.4 }],
-    prism: [{ interval: .55, damage: .35 }, { interval: .45, damage: .35 }, { interval: .35, damage: .35 }],
+    overclock: [{ rate: 18 }, { rate: 36 }],
+    rail: [{ interval: 1.25, damage: 2 }, { interval: 1, damage: 2 }, { interval: .85, damage: 2.4 }],
+    prism: [{ interval: .55, damage: .45 }, { interval: .45, damage: .45 }, { interval: .35, damage: .45 }],
     piercing: [{ targets: 2, second: 55, third: 0 }, { targets: 3, second: 65, third: 40 }],
     drone: [{ interval: 1.6, damage: .75 }, { interval: 1.25, damage: .75 }, { interval: 1, damage: .75 }],
     chain: [{ hits: 4, damage: .6 }, { hits: 3, damage: .75 }],
     turbo: [{ speed: 10 }, { speed: 20 }], gyro: [{ handling: 20, rescue: 15 }, { handling: 40, rescue: 30 }],
     phase: [{ radius: 6, invulnerability: .07 }, { radius: 12, invulnerability: .14 }],
-    aegisCycle: [{ interval: 24, capacity: 0 }, { interval: 18, capacity: 1 }],
+    aegisCycle: [{ interval: 21, capacity: 0 }, { interval: 16, capacity: 1 }],
     nanites: [{ hp: 1, repair: 2 }, { hp: 2, repair: 2 }],
     magnet: [{ radius: 45, energy: 0 }, { radius: 80, energy: 0 }, { radius: 105, energy: 2 }],
     capacitor: [{ charge: 15 }, { charge: 30 }, { charge: 45 }],

@@ -14,7 +14,7 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-mD8Apma8Uu0RkJppELk4UcYb7nc8LncdRfqb5GG1zpM='; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none';" />
     <title>SPACECRAFT // 星航双子</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./style.css?v=12" />
+    <link rel="stylesheet" href="./style.css?v=14" />
   </head>
   <body>
     <main class="game-shell" aria-label="SPACECRAFT 双人合作游戏" data-i18n-aria-label="app.label">
@@ -41,6 +41,25 @@
       </header>
 
       <section class="viewport" id="viewport">
+        <section id="bootSplash" class="boot-splash" role="status" aria-live="polite" aria-label="正在加载游戏" data-i18n-aria-label="loading.label">
+          <div class="boot-logo-lockup">
+            <div class="boot-mark-plate" aria-hidden="true">
+              <svg class="boot-logo-mark" viewBox="0 0 32 32" shape-rendering="crispEdges">
+                <path fill="#176d70" d="M13 4h6v5h3v5h5v9h-7v5h-8v-5H5v-9h5V9h3z"/>
+                <path fill="#68f4df" d="M14 6h4v7h4v3h3v5h-7v4h-4v-4H7v-5h3v-3h4z"/>
+                <path fill="#d5fff5" d="M15 7h2v5h-2z"/>
+                <path fill="#8667ff" d="M14 14h4v4h-4z"/>
+                <path fill="#fff28a" d="M11 25h3v5h-3zm7 0h3v5h-3z"/>
+              </svg>
+            </div>
+            <h2>SPACECRAFT</h2>
+            <p class="boot-logo-subtitle" data-i18n="loading.subtitle">星航双子</p>
+          </div>
+          <div class="boot-loading">
+            <span class="boot-loading-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span data-i18n="loading.status">正在加载 3D 星域…</span>
+          </div>
+        </section>
         <canvas id="scene" width="1280" height="720" aria-hidden="true"></canvas>
         <canvas id="game" width="480" height="270" aria-label="3D 游戏画面" data-i18n-aria-label="canvas.label" aria-describedby="combatGuide"></canvas>
         <div class="crt" aria-hidden="true"></div>
@@ -220,27 +239,27 @@
       <div id="masteryTray" class="mastery-tray" aria-live="polite" hidden></div>
       <footer class="statusbar">
         <span><i class="status-light"></i> <i data-i18n="footer.ready">本地双人系统就绪</i></span>
-        <span>BUILD 3D.29 // <b>PRISMATIC FRONT 0.29.0</b></span>
+        <span>BUILD 3D.30 // <b>COOPERATIVE FRONT 0.30.0</b></span>
       </footer>
     </main>
-    <script src="./src/i18n.js?v=10"></script>
-    <script src="./src/roguelike.js?v=4"></script>
+    <script src="./src/i18n.js?v=12"></script>
+    <script src="./src/roguelike.js?v=5"></script>
     <script src="./src/rng.js?v=1"></script>
-    <script src="./src/constellation.js?v=1"></script>
-    <script src="./src/research.js?v=1"></script>
+    <script src="./src/constellation.js?v=2"></script>
+    <script src="./src/research.js?v=2"></script>
     <script src="./src/rush.js?v=3"></script>
     <script src="./src/relics.js?v=2"></script>
     <script src="./src/director.js?v=2"></script>
     <script src="./src/threat.js?v=3"></script>
-    <script src="./src/combat.js?v=2"></script>
-    <script src="./src/enemy-ai.js?v=1"></script>
+    <script src="./src/combat.js?v=3"></script>
+    <script src="./src/enemy-ai.js?v=2"></script>
     <script src="./src/collision.js?v=1"></script>
     <script src="./src/loot.js?v=1"></script>
     <script src="./src/anomalies.js?v=1"></script>
     <script src="./src/expedition.js?v=6"></script>
     <script src="./src/status.js?v=1"></script>
   <script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.min.js"}}</script>
-    <script type="module" src="./src/renderer3d.js?v=30"></script>
-  <script type="module" src="./src/game.js?v=35"></script>
+    <script type="module" src="./src/renderer3d.js?v=31"></script>
+  <script type="module" src="./src/game.js?v=39"></script>
   </body>
 </html>

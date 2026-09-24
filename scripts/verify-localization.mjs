@@ -10,6 +10,7 @@ const expedition = fs.readFileSync(new URL("../src/expedition.js", import.meta.u
 const i18nSource = fs.readFileSync(new URL("../src/i18n.js", import.meta.url), "utf8");
 
 const keys = new Set([
+  "boss.hint.bloom", "boss.hint.forge", "boss.hint.void",
   "pickup.weapon",
   "pickup.repair",
   "pickup.shield",
@@ -41,6 +42,8 @@ for (const match of constellation.matchAll(/(?:nameKey|descriptionKey):\s*"([^"]
 for (const match of research.matchAll(/(?:nameKey|descriptionKey):\s*"([^"]+)"/g)) keys.add(match[1]);
 for (const match of expedition.matchAll(/(?:nameKey|descriptionKey|objectiveKey|riskKey|rewardKey):\s*"([^"]+)"/g)) keys.add(match[1]);
 for (const match of game.matchAll(/"(bossPhase\.\d\.\d)"/g)) keys.add(match[1]);
+
+for (const attack of ["petalBurst", "sunLance", "seedSpiral", "twinBloom", "railWall", "thunderFan", "forgeCross", "doubleRail", "spiralCrown", "voidPincer", "eclipseTwin", "tripleEclipse"]) keys.add(`boss.attack.${attack}`);
 
 const document = {
   documentElement: { lang: "zh-CN" },

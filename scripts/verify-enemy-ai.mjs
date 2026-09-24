@@ -33,8 +33,8 @@ const chipRolls=Array.from({length:500},(_,id)=>ai.chipFor({...chipInput,id}));
 assert.ok(chipRolls.filter(Boolean).length>20&&chipRolls.filter(Boolean).length<110,'chips must remain an uncommon random modifier');
 assert.deepEqual(chipRolls,Array.from({length:500},(_,id)=>ai.chipFor({...chipInput,id})),'chip draws must replay from the run seed');
 for(let id=0;id<100;id++) {
-  assert.equal(ai.chipFor({...chipInput,id,progress:.24}),'','opening protection must exclude chips');
-  assert.equal(ai.chipFor({...chipInput,id,active:2}),'','chapter one chip cap must hold');
+  assert.equal(ai.chipFor({...chipInput,id,progress:.34}),'','opening protection must exclude chips');
+  assert.equal(ai.chipFor({...chipInput,id,active:1}),'','chapter one chip cap must hold');
   assert.equal(ai.chipFor({...chipInput,id,relief:true}),'','recovery windows must exclude new chips');
 }
 const basic=make(),smart=make();smart.chipId='adaptive';ai.init(basic);ai.init(smart);
@@ -50,7 +50,7 @@ for(const chipped of [false,true]) {
   const c=make();if(chipped)c.chipId='adaptive';ai.init(c);c.tacticState='engage';c.sensedThisStep=true;
   ai.plan(c,target,{...ctx,bullets:[incoming]},1/60);
   assert.equal(c.tacticState==='evade',chipped,'chip should react earlier to a perceived interception');
-  if(chipped){c.tacticState='engage';c.weaponState='windup';c.evadeCooldown=0;ai.plan(c,target,{...ctx,bullets:[incoming]},1/60);assert.equal(c.tacticState,'engage','chip must respect an attack commitment');}
+  if(chipped){c.tacticState='engage';c.weaponState='windup';c.evadeCooldown=0;ai.plan(c,target,{...ctx,bullets:[incoming]},1/60);assert.equal(c.tacticState,'evade','ordinary fire must not disable evasion');c.tacticState='engage';c.attackPattern='ramCharge';c.evadeCooldown=0;ai.plan(c,target,{...ctx,bullets:[incoming]},1/60);assert.equal(c.tacticState,'engage','ram must preserve its movement commitment');}
 }
 // Defensive retreat responds to observed incoming fire and low hull, then respects its cooldown.
 const wounded=make();wounded.chipId='adaptive';wounded.hp=3;wounded.maxHp=10;ai.init(wounded);
@@ -68,6 +68,16 @@ for(const x of [40,240,440]) {
 const slow=make(),fast=make();fast.chipId='adaptive';
 for(const c of [slow,fast]){ai.init(c);c.tacticState='maneuver';ai.flight(c,{x:400,y:100,face:0,speed:45},ctx,1/60);}
 assert.ok(fast.vx>slow.vx&&Math.abs(fast.turnRate)>Math.abs(slow.turnRate),'chip must improve acceleration and turning');
+// Interception includes launch delay, differentiates projectile speed, and remains bounded.
+const moving={x:40,y:0,vx:0,vy:10};
+const lead=ai.interceptLead({x:0,y:0},moving,100,.4);
+assert.ok(Math.abs(Math.hypot(40,10*lead)-100*(lead-.4))<1e-8);
+assert.ok(ai.interceptLead({x:0,y:0},moving,60,.4)>lead);
+assert.equal(ai.interceptLead({x:0,y:0},{x:100,y:0,vx:1000,vy:0},60,.4),.09);
+assert.ok(Number.isFinite(ai.interceptLead({x:0,y:0},{x:100,y:0,vx:60,vy:0},60)));
+const tracker={chipId:'adaptive',attackPattern:'laserLance',weaponState:'windup',weaponTimer:.76};
+assert.equal(ai.tracksLaser(tracker),true);tracker.weaponTimer=.75;assert.equal(ai.tracksLaser(tracker),false);
+tracker.weaponTimer=1;tracker.chipId='';assert.equal(ai.tracksLaser(tracker),false);
 const steady=make();ai.init(steady);steady.tacticState='engage';const station=ai.plan(steady,target,ctx,1/60);
 for(let frame=0;frame<120;frame++){steady.age+=1/60;const goal=ai.plan(steady,{...target,x:240+Math.sin(frame)*3},ctx,1/60);assert.equal(goal.x,station.x,'small target motion must not churn the navigation goal');}
 // Turn reversal must preserve bounded acceleration and position continuity, including angular wrapping.
@@ -96,6 +106,19 @@ ram.y=248;assert.equal(ai.ramPath(ram,{x:240,y:260},480,270),null,'blocked short
 const laser=make('artillery');ai.init(laser);laser.attackPattern='laserLance';laser.weaponAim=Math.PI/2;
 const locked=ai.beamRays(laser);laser.attackCommit={rays:locked};laser.attackTargetX=10;laser.x+=40;
 assert.equal(ai.beamRays(laser),locked,'warning and damage must share the immutable attack snapshot');
+// Multi-laser intent is chosen from real allied fire; a strike includes a target-crossing ray.
+const shooter=make();ai.init(shooter);shooter.attackPattern='laserSweep';shooter.weaponAim=Math.PI/2;
+shooter.attackTargetX=240;shooter.attackTargetY=230;
+shooter.laserPlan=ai.chooseLaserPlan(shooter,target,[]);
+assert.equal(shooter.laserPlan.mode,'strike');
+let rays=ai.beamRays(shooter);
+const miss=r=>Math.abs((target.x-r.x1)*(r.y2-r.y1)-(target.y-r.y1)*(r.x2-r.x1))/Math.hypot(r.x2-r.x1,r.y2-r.y1);
+assert.ok(rays.some(r=>miss(r)<1e-8),'one beam must actually cross the aim point');
+const ally={id:3,x:300,y:100,targetId:0,attackTargetIndex:0,weaponState:'windup'};
+shooter.chipId='adaptive';shooter.laserPlan=ai.chooseLaserPlan(shooter,target,[ally]);
+assert.equal(shooter.laserPlan.mode,'corridor');assert.equal(shooter.laserPlan.allyId,3);
+rays=ai.beamRays(shooter);assert.ok(rays.every(r=>miss(r)>12),'corridor must leave a real gap at target depth');
+shooter.laserPlan=ai.chooseLaserPlan(shooter,target,[{...ally,dead:true}]);assert.equal(shooter.laserPlan.mode,'strike');
 // Rendering frequency does not invoke AI; repeat the same fixed-step input schedule.
 const simulate=()=>{const c=make();ai.init(c);for(let n=0;n<180;n++)ai.flight(c,{x:350,y:90,speed:45},ctx,1/60);return [c.x,c.y,c.heading,c.vx,c.vy]};
 assert.deepEqual(simulate(),simulate());

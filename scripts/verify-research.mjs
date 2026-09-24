@@ -36,7 +36,7 @@ for (const route of api.ROUTES) {
 const all = { ranks: Object.fromEntries(api.BLUEPRINTS.map((node) => [node.id, 3])) };
 assert.equal(api.settle(stats, all, 42).discoveries.every((entry) => entry.id === "dust" && entry.amount === 40), true);
 assert.equal(api.effects(all).markEvery, 6);
-assert.equal(api.effects(all).pickupShieldEvery, 4);
+assert.equal(api.effects(all).pickupShieldEvery, 5);
 assert.equal(api.effects(all).novaShieldEvery, 1);
 assert.equal(api.effects(all).sectorEnergy, 12);
 assert.ok(Object.values(api.effects(all)).every((effect) => effect > 0), "all six blueprints coexist");

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { RenderSurfaces } from "./render-surfaces.js";
 import { PixelProjectileArt } from "./projectile-art.js";
-import { PixelEffects } from "./pixel-effects.js";
+import { PixelEffects } from "./pixel-effects.js?v=2";
 import { EffectComposer } from "../node_modules/three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "../node_modules/three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "../node_modules/three/examples/jsm/postprocessing/UnrealBloomPass.js";
@@ -19,10 +19,10 @@ const PLAYER_MODEL_SCALE = .82;
 const PLAYER_DEMO_SCALE = .9;
 const REGULAR_ENEMY_SCALE = 1.18;
 const ELITE_ENEMY_SCALE = 1.4;
-const BOSS_MODEL_SCALE = 1.32;
+const BOSS_MODEL_SCALE = 1.62;
 const REGULAR_TELEGRAPH_SCALE = 1.26;
 const ELITE_TELEGRAPH_SCALE = 1.5;
-const BOSS_TELEGRAPH_SCALE = 1.4;
+const BOSS_TELEGRAPH_SCALE = 1.62;
 const HOSTILE_PROJECTILE_SCALE = 1.05;
 const ECOLOGY_ANCHORS = Object.freeze({
   sugarBloom: [-15.2, 1.8, -24],
@@ -138,6 +138,7 @@ class SpaceRenderer3D {
     this.canvas.dataset.modelFamilies = "3-player-16-alien";
     this.canvas.dataset.moduleAnatomy = "integrated-large-form";
     this.canvas.dataset.bossFamilies = "3-organic-phase-forms";
+    this.canvas.dataset.bossBattlefield = "continuous-biome-fixed-camera";
     this.canvas.dataset.bossChoreography = "telegraph-state-arena";
     this.canvas.dataset.expeditionSectors = "9-progressive-voxel-gates";
     this.canvas.dataset.adaptiveThreat = "5-tier-telegraphed";
@@ -291,6 +292,8 @@ class SpaceRenderer3D {
     this.canvas.dataset.effectBeams = String(this.pixelEffects.beamCount);
     this.canvas.dataset.effectFlecks = String(this.pixelEffects.fleckCount);
     this.canvas.dataset.combatMaterialStyle = "faceted-chips-local-hotspots";
+    this.canvas.dataset.effectParticleShape = "rectangular-chips-square-hotspots";
+    this.canvas.dataset.shieldFieldMotion = "perimeter-signed-wave-superposition";
     this.canvas.dataset.effectParticles = String(this.pixelEffects.count);
     this.canvas.dataset.effectDropped = String(this.pixelEffects.dropped);
     this.canvas.dataset.projectileArt = "extruded-pixel-stamps";
@@ -606,89 +609,114 @@ class SpaceRenderer3D {
     tangent.normalize();
     const reflection = direction.clone().addScaledVector(normal, 2 * incidence).normalize();
     const angle = Math.atan2(point.z / radii.z, point.x / radii.x);
+    const unit = point.clone().divide(radii).normalize();
     point.y += .18;
-    return { point, normal, tangent, reflection, incidence, angle };
+    return { point, normal, tangent, reflection, incidence, angle, unit };
+  }
+
+  shieldRingImpulse(angle, pulse) {
+    const { contact, age } = pulse;
+    const damage = clamp(pulse.damage, 1, 5);
+    const power = (damage - 1) / 4;
+    const amplitude = .10 + .065 * (damage - 1) ** 1.65;
+    const delta = Math.atan2(Math.sin(angle - contact.angle), Math.cos(angle - contact.angle));
+    const width = .13 + power * .30;
+    const local = Math.exp(-((delta / width) ** 2));
+    const attack = 1 - Math.exp(-age * 100);
+    const fade = (1 - clamp(age / .8, 0, 1)) ** .5;
+    const decay = Math.exp(-age * 5.5) * fade;
+    const glance = Math.sqrt(Math.max(0, 1 - contact.incidence ** 2));
+    const tangentSign = Math.sign(-Math.sin(contact.angle) * contact.tangent.x + Math.cos(contact.angle) * contact.tangent.z) || 1;
+    const dent = -Math.sin(age * 26) * amplitude * local * (.45 + contact.incidence * .55);
+    let traveling = 0;
+    // Two signed packets travel on ONE periodic perimeter at the same material wave speed.
+    // Periodic images let them meet, interfere and pass through without creating new rings.
+    for (const side of [-1, 1]) for (let winding = -1; winding <= 1; winding += 1) {
+      const phase = (delta + winding * TAU - side * age * 9.5) / width;
+      if (Math.abs(phase) > 4) continue;
+      const weight = side === tangentSign ? 1 + glance * .45 : 1 - glance * .65;
+      traveling += (1 - phase * phase) * Math.exp(-phase * phase * .5) * weight;
+    }
+    const displacement = dent * attack * decay + traveling * amplitude * .55 * attack * Math.exp(-age * 3.6) * fade;
+    const shear = tangentSign * glance * local * amplitude * Math.sin(age * 15) * attack * decay;
+    return { displacement, shear, energy: Math.abs(displacement) + Math.abs(shear) * .5 };
+  }
+
+  shieldRingResponse(angle, pulses) {
+    let displacement = 0, shear = 0, energy = 0, red = 0, green = 0, blue = 0;
+    for (const pulse of pulses) {
+      const response = this.shieldRingImpulse(angle, pulse);
+      displacement += response.displacement;
+      shear += response.shear;
+      energy += response.energy;
+      red += pulse.color.r * response.energy;
+      green += pulse.color.g * response.energy;
+      blue += pulse.color.b * response.energy;
+    }
+    // Add signed deformation BEFORE limiting it, so ordering cannot replace or bias a hit.
+    const color = new THREE.Color("#6edfff");
+    if (energy > .00001) color.lerp(new THREE.Color(red / energy, green / energy, blue / energy), Math.min(.9, energy * 14));
+    return { radial: 1 + .43 * Math.tanh(displacement / .43), shear: .22 * Math.tanh(shear / .22),
+      stress: clamp(energy * 9, 0, 1), displacement, color };
   }
 
   drawPlayerShield(base, profile, player) {
-    const hit = clamp((player.shieldHitTimer || 0) / .48, 0, 1);
-    const breaking = player.shield <= 0;
-    const progress = breaking ? 1 - clamp((player.shieldBreakTimer || 0) / .8, 0, 1) : 1 - hit;
     const radiusX = profile.span + .2, radiusZ = profile.bodyLength * .78 + .2;
-    const directed = Math.hypot(player.shieldImpactX || 0, player.shieldImpactY || 0) > .01;
-    const contact = this.shieldContact(base, profile, player);
-    const impactAngle = contact.angle;
-    const power = clamp((player.shieldImpactDamage || 1) - 1, 0, 4) / 4;
-    const impactScale = 1 + power * .8;
-    const glance = Math.sqrt(Math.max(0, 1 - contact.incidence ** 2));
-    const tangentSign = Math.sign(-Math.sin(impactAngle) * contact.tangent.x + Math.cos(impactAngle) * contact.tangent.z) || 1;
+    const breaking = player.shield <= 0;
+    const breakAge = .8 - clamp(player.shieldBreakTimer || 0, 0, .8);
     const reform = clamp((player.shieldReformTimer || 0) / .72, 0, 1);
-    const reformProgress = 1 - reform;
-    if (reform > 0) {
-      // Three counter-winding streams gather into the real shield boundary, then lock in.
-      for (let index = 0; index < (this.quality === "low" ? 12 : 22); index += 1) {
-        const seed = (index * .618034) % 1;
-        const age = clamp(reformProgress * 1.35 - seed * .25, 0, 1);
-        const angle = index * 2.39996 + (1 - age) * 1.7;
-        const radius = 1 + (1 - age) ** 2 * (.45 + seed * .8);
-        this.pixelEffects.fleck(base, [Math.cos(angle) * radiusX * radius, .18 + Math.sin(index * 1.8) * (1 - age) * .7, Math.sin(angle) * radiusZ * radius],
-          (index % 6 ? .14 : .4) * (.5 + age * .5), age > .8 ? "#affff1" : "#3caacb",
-          Math.sin(reformProgress * Math.PI) * (.4 + age * .4), index % 6 ? .8 : 1.8, 1, angle);
-      }
-    }
-    const count = this.quality === "low" ? 18 : 28;
-    // Unequal lifetimes and counter-moving latitudes keep the field from reading as a dotted hoop.
+    const random = index => { const n = Math.sin((index + 1) * 127.1 + player.index * 311.7) * 43758.5453; return n - Math.floor(n); };
+    let events = player.shieldImpacts || [];
+    // Retain support for old inspection snapshots that only carry the last-hit fields.
+    if (!events.length && player.shieldHitTimer > 0) events = [{ ...player, age: .48 - player.shieldHitTimer, duration: .8 }];
+    const pulses = events.filter(event => event.age < event.duration).map(event => ({
+      contact: this.shieldContact(base, profile, event), age: event.age,
+      damage: event.shieldImpactDamage || 1, color: new THREE.Color(event.shieldImpactColor || "#8deaff"),
+    }));
+    const response = angle => this.shieldRingResponse(angle, pulses);
+    const point = (angle, field, radius = 1, height = 0) => [
+      Math.cos(angle + field.shear) * radiusX * field.radial * radius,
+      .18 + height,
+      Math.sin(angle + field.shear) * radiusZ * field.radial * radius,
+    ];
+    const count = this.quality === "low" ? 30 : 48;
+    // The existing perimeter motes carry the deformation and travelling light themselves.
+    // No circles around a contact, no extra wave geometry or orbiting layer.
     for (let index = 0; index < count; index += 1) {
-      const seed = (index * .618034) % 1;
+      const seed = random(index), drift = random(index + 71);
       const life = (this.time * (.35 + seed * .45) + seed) % 1;
       const pulse = Math.sin(life * Math.PI);
-      const angle = index * 2.39996 + this.time * (index % 2 ? .24 : -.18);
-      const latitude = Math.sin(index * 1.71 + this.time * .7) * .72;
-      const alignment = directed ? Math.max(0, Math.cos(angle - impactAngle)) ** 8 : .3;
-      const spread = breaking ? progress * (.6 + seed * 1.4) : 0;
-      const radius = Math.sqrt(1 - latitude * latitude) + spread;
-      const large = index % 9 === 0;
-      this.pixelEffects.fleck(base, [Math.cos(angle) * radiusX * radius, .16 + latitude * .8 + spread * .2, Math.sin(angle) * radiusZ * radius],
-        (large ? .18 : .065 + seed * .1) * (.65 + pulse * .35 + hit * alignment * .8), hit > .2 && alignment > .5 ? "#b0f7ff" : large ? "#8deaff" : "#46b3df",
-        (breaking ? (1 - progress) * .9 : (.1 + pulse * .18 + alignment * hit * .6) * (reform ? .35 + reformProgress * .65 : 1)), large ? 1.5 : .65);
+      const docking = reform ? clamp(((1 - reform) * .72 - seed * .19) / (.27 + drift * .24), 0, 1) : 1;
+      const loose = (1 - docking) ** 3;
+      const angle = (index + (seed - .5) * .68) / count * TAU + Math.sin(this.time * .3 + seed * TAU) * .025 + loose * (drift - .5) * 2.8;
+      const field = response(angle);
+      const nearest = pulses.length ? Math.min(...pulses.map(p => Math.abs(Math.atan2(Math.sin(angle - p.contact.angle), Math.cos(angle - p.contact.angle))))) : Math.PI;
+      const release = breaking ? Math.max(0, breakAge - nearest * .045 - seed * .04) : 0;
+      const radius = 1 + loose * (seed < .22 ? -.55 : .45 + drift * .95) + release * (.8 + seed * 1.8);
+      const height = (drift - .5) * .16 + loose * (seed - .5) * 1.3 + release * (seed - .5) * .6;
+      const large = seed > .87;
+      this.pixelEffects.spark(base, point(angle, field, radius, height),
+        (large ? .30 : .085 + seed * .12) * (.65 + pulse * .35 + field.stress * .7), field.stress > .01 ? field.color : large ? "#8deaff" : "#46b3df",
+        (breaking ? 1 - breakAge / .8 : .18 + pulse * .3 + field.stress * .55) * (reform ? Math.min(1, docking * 5) : 1),
+        large ? 1.5 : .65, index % 3 ? 1.35 : 1, loose * (seed - .5));
     }
-    if (hit > 0 || breaking) {
-      // Contact-side facets catch the impulse; no full-perimeter flash.
-      for (let index = 0; index < 7; index += 1) {
-        const offset = (index - 3) / 3;
-        const angle = impactAngle + offset * (.35 + progress * .7);
-        const radius = 1 + (breaking ? progress * .8 : 0);
-        this.pixelEffects.fleck(base, [Math.cos(angle) * radiusX * radius, .18, Math.sin(angle) * radiusZ * radius],
-          .16 + (1 - Math.abs(offset)) * .12, "#74cddd", (1 - progress) ** 2 * .7 * impactScale, 0, 1.5, angle);
-      }
-      // Two wave fronts travel away from the incoming direction over the shield surface.
-      for (const side of [-1, 1]) for (let index = 0; index < 6; index += 1) {
-        const trail = index / 5;
-        const angle = impactAngle + tangentSign * glance * progress * 1.7 + side * (progress * (breaking ? 2.9 : 2.2) - trail * .48) * (1 - glance * .65);
-        const radius = 1 + (breaking ? progress * .55 : Math.sin(progress * Math.PI) * .06);
-        this.pixelEffects.fleck(base, [Math.cos(angle) * radiusX * radius, .18 + Math.sin(trail * Math.PI) * .12, Math.sin(angle) * radiusZ * radius],
-          (.12 + (1 - trail) ** 3 * .29) * (1 - progress * .45), index < 2 ? "#79e7ff" : "#38ace6",
-          (1 - progress) * (1 - trail * .8) * .72 * impactScale, index < 2 ? 1.65 + power * .5 : .65);
-      }
-      // A brief contact flare, then large chips and fine dust separate, curl and cool.
-      const flash = Math.max(0, 1 - progress * 2.8);
-      this.pixelEffects.spark(base, contact.point.toArray(),
-        (.24 + flash * .12) * impactScale, "#8bdce8", flash * (.45 + contact.incidence * .2), .2);
-      const fragments = (this.quality === "low" ? 12 : 22) + Math.round(power * 18);
+    for (const pulse of pulses) {
+      const { contact, age, damage, color } = pulse;
+      const power = clamp((damage - 1) / 4, 0, 1);
+      const glance = Math.sqrt(Math.max(0, 1 - contact.incidence ** 2));
+      const origin = new THREE.Vector3().fromArray(point(contact.angle, response(contact.angle)));
+      const flash = Math.max(0, 1 - age / .16);
+      this.pixelEffects.spark(base, origin.toArray(), (.35 + power * .45) * (.6 + flash * .4), color,
+        flash * .7, 1.2 + power * .5, 1 + glance, contact.angle);
+      const fragments = (this.quality === "low" ? 5 : 8) + Math.round(power * 12);
       for (let index = 0; index < fragments; index += 1) {
-        const seed = (index * .618034) % 1;
-        const age = clamp(progress / (.5 + seed * .5), 0, 1);
-        const coarse = index % 7 === 0;
-        const angle = impactAngle + (seed - .5) * (directed && !breaking ? .85 : TAU) + Math.sin(index * 2.4) * age * .5;
-        const spread = age * (.16 + seed * .65) + age * age * (breaking ? 1.6 : .15);
-        const position = breaking ? [Math.cos(angle) * (radiusX + spread), .2 + Math.sin(index * 2.4) * age * .6 - age * age * .2, Math.sin(angle) * (radiusZ + spread)]
-          : contact.point.clone().addScaledVector(contact.reflection, age * (.35 + seed * .9) * impactScale)
-            .addScaledVector(contact.tangent, age * Math.sin(index * 2.4) * .35 + age * glance * .45)
-            .add(new THREE.Vector3(0, Math.sin(index * 1.7) * age * .3 - age * age * .1, 0)).toArray();
-        this.pixelEffects.fleck(base, position,
-          (coarse ? (breaking ? .42 : .25) : .07 + seed * .12) * (1 - age * .65) * impactScale, age < .25 ? "#c5f8ff" : coarse ? "#59d9ff" : "#318dcc",
-          (1 - age) ** 1.1 * Math.min(1, progress * 12) * (breaking ? 1 : .85), coarse ? 1.7 + power * .5 : .65, coarse ? 1.6 + glance : 1, index + age * 3);
-
+        const seed = random(index + 213);
+        const t = clamp(age / (.22 + seed * .3), 0, 1);
+        const position = origin.clone().addScaledVector(contact.reflection, t * (.22 + seed * .6) * (1 + power))
+          .addScaledVector(contact.tangent, t * (Math.sin(index * 2.4) * .2 + glance * .45));
+        position.y += Math.sin(index * 1.7) * t * .22 - t * t * .1;
+        this.pixelEffects.spark(base, position.toArray(), (index % 5 ? .07 + seed * .1 : .22 + power * .2) * (1 - t * .6),
+          index % 3 ? "#65d5ff" : color, (1 - t) ** 1.5 * Math.min(1, age * 35) * .8, .75, 1 + glance, index + t * 2);
       }
     }
   }
@@ -1281,7 +1309,10 @@ class SpaceRenderer3D {
     if (!SpaceEnemyAI.committed(enemy)) return;
     for (const node of enemy.remoteEmitters || []) {
       const base = compose(this.toWorld(node.x, node.y, .35));
-      this.voxel(base, [0, 0, 0], [.3, .12, .3], "#732941", .15);
+      const laser = node.kind === "laser";
+      const color = laser && enemy.laserPlan?.mode === "corridor" ? "#e88dff" : "#ffb469";
+      this.voxel(base, [0, 0, 0], laser ? [.48, .2, .48] : [.3, .12, .3], "#732941", .15);
+      if (laser) this.voxel(base, [0, .12, 0], [.2, .12, .2], color, .65);
       for (const side of [-1, 1]) this.voxel(base, [side * .2, .04, 0], [.07, .08, .36], "#ff6b8c", .6);
     }
     if (enemy.boss) for (const ray of window.SpaceEnemyAI.beamRays(enemy, this.width, this.height)) {
@@ -1347,104 +1378,231 @@ class SpaceRenderer3D {
     }
   }
 
-  drawBossBloom(enemy, base, palette) {
-    const phase = enemy.phaseLevel || 1;
-    const pulse = 1 + Math.sin(this.time * 6) * .08;
-    this.voxel(base, [0, .12, .05], [.82, .38, 1.72], palette[0], .18);
-    this.voxel(base, [0, .3, -.38], [.54, .2, .9], palette[1], .26);
-    const petalAngles = [-1.28, -.8, -.32, .32, .8, 1.28];
-    petalAngles.forEach((angle, index) => {
-      const x = Math.sin(angle) * 1.35;
-      const z = Math.cos(angle) * 1.08 + .18;
-      this.voxel(base, [x, .08 + (index % 2) * .04, z], [.72, .16, 1.2], index % 2 ? palette[0] : palette[1], .2, [0, angle, 0]);
-      this.voxel(base, [Math.sin(angle) * 2.08, .1, Math.cos(angle) * 1.72 + .3], [.48, .14, .58], palette[2], .46, [0, angle, 0]);
-      if (phase >= 2) this.voxel(base, [Math.sin(angle) * 1.62, .3, Math.cos(angle) * 1.28 + .12], [.38, .28, .52], index % 2 ? "#bd4f76" : palette[2], .5, [0, angle, angle * .08]);
-    });
-    if (phase >= 3) {
-      for (const side of [-1, 0, 1]) this.voxel(base, [side * .72, .42, .72 + Math.abs(side) * .18], [.28, .58, .5], "#ff6fba", .6, [side * -.18, side * .22, 0]);
+  bossOpeningAmount(enemy) {
+    if (!(enemy.opening > 0)) return 0;
+    const elapsed = Math.max(0, (enemy.weaponDuration || 0) - (enemy.weaponTimer || 0));
+    const t = clamp(Math.min(elapsed / .2, enemy.opening / .3), 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+
+  bossPhaseGrowth(enemy, level) {
+    if ((enemy.phaseLevel || 1) < level) return 0;
+    if (enemy.phaseLevel > level) return 1;
+    const t = clamp(1 - (enemy.phaseMorph || 0) / 1.4, 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+
+  bossActuation(enemy) {
+    const charge = enemy.weaponState === "windup" ? clamp(enemy.weaponCharge || 0, 0, 1) : 0;
+    const recoil = enemy.weaponState === "fire" ? Math.max(0, 1 - (enemy.salvoAge || 0) / .32) : 0;
+    return { charge, recoil, open: this.bossOpeningAmount(enemy) };
+  }
+
+  // Armor is built in connected, stepped layers; light sits inside sockets rather than covering the hull.
+  bossArmor(base, position, size, shell, trim, rotation = [0, 0, 0]) {
+    const plate = multiply(base, compose(position, rotation));
+    const [w, h, d] = size;
+    // Interlocking strips leave stepped corners and real seams, even in low quality.
+    this.surfaces.solid(plate, [0, 0, 0], [w * .76, h, d], shell, "metal");
+    this.surfaces.solid(plate, [0, 0, 0], [w, h * .86, d * .72], shell, "metal");
+    this.surfaces.solid(plate, [0, h * .45, 0], [w * .8, .12, d * .82], "#252333", "metal");
+    for (const side of [-1, 1]) {
+      this.surfaces.solid(plate, [side * w * .205, h * .55, -d * .035], [w * .36, .12, d * .69], trim, "ceramic");
+      this.surfaces.solid(plate, [side * w * .43, h * .05, 0], [.08, h * .6, d * .58], trim, "metal");
+      for (const end of [-1, 1]) this.surfaces.solid(plate, [side * w * .25, h * .65, end * d * .22], [.08, .06, .08], "#e2cba6", "metal");
     }
-    this.voxel(base, [0, .44, -.34], [.62 * pulse, .24, .62], palette[2], .7);
-    this.alienEye(base, 0, -.72, "#fff08a", 1.28);
+    for (let vent = -1; vent <= 1; vent++) this.surfaces.solid(plate, [vent * w * .19, h * .61, d * .21], [w * .11, .06, d * .18], shell, "metal");
+    this.surfaces.solid(plate, [0, h * .61, -d * .12], [.06, .06, d * .22], "#e0bc8b", "metal");
+  }
+
+  bossJoint(base, position, radius, accent, rotation = [0, 0, 0]) {
+    const joint = multiply(base, compose(position, rotation));
+    this.surfaces.solid(joint, [0, 0, 0], [radius, radius, .24], "#232638", "metal", "ring");
+    this.surfaces.solid(joint, [0, 0, -.05], [radius * .58, radius * .58, .18], accent, "metal", "orb");
+    this.surfaces.solid(joint, [0, 0, -.16], [.12, radius * .24, .04], accent, "energy");
+  }
+
+  bossSpire(base, position, height, color, rotation = [0, 0, 0]) {
+    const spire = multiply(base, compose(position, rotation));
+    for (let tier = 0; tier < 4; tier++) this.surfaces.solid(spire, [0, height * tier * .2, 0],
+      [.34 - tier * .07, height * .3, .48 - tier * .1], color, tier % 2 ? "metal" : "ceramic");
+  }
+
+  drawBossBloom(enemy, base, palette) {
+    const { charge, recoil, open } = this.bossActuation(enemy);
+    const growth = this.bossPhaseGrowth(enemy, 2), crown = this.bossPhaseGrowth(enemy, 3);
+    const time = enemy.age || 0;
+    // Deep seed pod and six articulated, three-segment armored petals.
+    this.voxel(base, [0, -.18, 0], [1.8, .66, 2.05], "#291d39", .06);
+    this.voxel(base, [0, .18, .14], [1.48, .62, 1.64], "#63364d", .12);
+    for (let i = 0; i < 6; i++) {
+      const angle = i * TAU / 6 + Math.PI / 6;
+      const lift = .12 * Math.sin(time * 1.3 + i) + charge * .16 - recoil * .1;
+      const arm = multiply(base, compose([Math.sin(angle) * open * .35, lift, Math.cos(angle) * open * .35], [0, angle, charge * .035]));
+      this.voxelSegment(arm, [0, .05, .55], [0, .14, 2.58], .34, "#463046", .1);
+      this.bossArmor(arm, [0, .12, 1.22], [1.02, .46, 1.24], "#823c62", "#d4708b", [0, 0, .08]);
+      this.bossArmor(arm, [0, .24, 2.12], [.82, .34, .95], "#63314f", "#e39b91", [.12, 0, 0]);
+      this.bossArmor(arm, [0, .28, 2.72], [.48, .24, .62], "#ae674e", "#e6bb71", [.28, 0, 0]);
+      this.voxel(arm, [0, .49, 1.83], [.12, .12, .64], "#ffbc72", .86);
+      this.bossJoint(arm, [0, .24, .77], .46, "#dcaa79", [Math.PI / 2, 0, 0]);
+      for (const edge of [-1, 1]) {
+        this.surfaces.segment(arm, [edge * .28, .18, .65], [edge * .34, .26, 1.39], .1, "#a77783", "metal");
+        for (let rib = 0; rib < 3; rib++) this.surfaces.solid(arm, [edge * .3, .46, 1.05 + rib * .24], [.16, .07, .09], "#edc3a0", "ceramic", "plate", [0, edge * .35, 0]);
+      }
+      for (const side of [-1, 1]) this.voxel(arm, [side * .42, .08, 1.43], [.18, .25, .7], "#352740", .08, [0, side * .35, 0]);
+      if (growth > .02) this.bossSpire(arm, [0, .64, 1.1], .82 * growth, "#cf9566", [.4, 0, 0]);
+      if (crown > .02) this.bossSpire(arm, [0, .42, 2.39], .52 * crown, "#eac391", [.6, 0, 0]);
+    }
+    // An octagonal iris with a recessed faceted reactor and rising pistils.
+    for (let i = 0; i < 8; i++) {
+      const a = i * TAU / 8, r = .68 + open * .28 + charge * .07;
+      this.voxel(base, [Math.sin(a) * r, .65, Math.cos(a) * r], [.38, .4, .38], i % 2 ? "#b36b69" : "#e8bb87", .18, [0, a, 0]);
+      this.voxel(base, [Math.sin(a) * .52, .85, Math.cos(a) * .52], [.14, .3 + charge * .32, .14], "#e7b259", .4 + charge * .35);
+    }
+    this.surfaces.solid(base, [0, .65, 0], [.85, .8, .85], "#8c3a53", "glass", "orb", [0, time * .12, 0]);
+    this.surfaces.solid(base, [0, .91, 0], [.48, .52, .48], open ? "#bbf2d2" : "#ffe39e", "energy", "orb", [.2, -time * .18, .2]);
+    for (const side of [-1, 1]) {
+      this.bossArmor(base, [side * .46, .27, -1.03], [.52, .4, .72], "#69344e", "#da8990", [0, side * .22, 0]);
+      this.voxel(base, [side * .38, .53, -1.33], [.27, .13, .19], "#ffe7ab", .65);
+    }
   }
 
   drawBossForge(enemy, base, palette) {
-    const phase = enemy.phaseLevel || 1;
-    const pulse = 1 + Math.sin(this.time * 7.5) * .07;
-    this.voxel(base, [0, .1, -.08], [.72, .36, 3.12], palette[0], .18);
-    this.voxel(base, [0, .24, -1.24], [.34, .2, 1.18], palette[2], .48);
+    const { charge, recoil, open } = this.bossActuation(enemy);
+    const growth = this.bossPhaseGrowth(enemy, 2), crown = this.bossPhaseGrowth(enemy, 3);
+    this.bossArmor(base, [0, .05, .24], [1.58, .76, 3.05], "#243341", "#687c87");
+    this.bossArmor(base, [0, .43, -.96], [1.1, .6, 1.32], "#354b58", "#91a6a2", [.13, 0, 0]);
+    // Broad bridge, riveted pauldrons, independent sliding rail carriages.
+    this.voxel(base, [0, .08, .62], [4.5, .44, 1.1], "#202c3c", .07);
     for (const side of [-1, 1]) {
-      this.voxel(base, [side * .72, .12, .08], [.58, .3, 1.92], palette[1], .2, [0, side * .1, 0]);
-      this.voxel(base, [side * 1.28, .16, .32], [.68, .26, .9], palette[0], .18, [0, side * .36, 0]);
-      this.voxel(base, [side * 1.72, .22, -.28], [.66, .24, .54], palette[2], .52, [0, side * .62, 0]);
-      this.voxel(base, [side * .84, .54, .18], [.34, .82, .72], phase >= 2 ? "#b7a24e" : palette[1], phase >= 2 ? .5 : .24, [side * -.16, side * .12, 0]);
-      if (phase >= 3) this.voxel(base, [side * 1.62, .38, .62], [.46, .54, .68], "#c54f55", .56, [side * -.14, side * .42, 0]);
-      this.voxel(base, [side * .54, .08, 1.56], [.24, .2, .46 + pulse * .05], palette[2], .84);
+      const shoulder = multiply(base, compose([side * (1.95 + open * .32), .12, .1 + recoil * .24]));
+      this.bossArmor(shoulder, [0, .25, .28], [1.44, .86, 2.02], "#294951", "#6a9991", [0, side * -.07, 0]);
+      this.bossArmor(shoulder, [side * .53, .06, .58], [.55, .6, 1.55], "#9a7442", "#dbc18a");
+      this.voxel(shoulder, [0, .37, -1.12], [.86, .6, 1.85], "#172633", .06);
+      for (const rail of [-1, 1]) {
+        this.voxel(shoulder, [rail * .31, .52, -1.4], [.22, .3, 2.15], "#729895", .2);
+        this.voxel(shoulder, [rail * .31, .72, -1.4], [.12, .12, 1.84], "#88e4d8", .35 + charge * .35);
+      }
+      this.bossJoint(shoulder, [0, .43, -2.14], .65, "#85c9c3");
+      this.voxel(shoulder, [0, .43, -2.26 + recoil * .2], [.18, .14, .16], "#b9f6e5", .88);
+      for (let band = 0; band < 5; band++) {
+        this.surfaces.solid(shoulder, [0, .38, -1.8 + band * .28], [.76, .12, .1], "#415963", "metal");
+        this.surfaces.solid(shoulder, [side * .54, .62, -.5 + band * .27], [.18, .08, .08], band % 2 ? "#d0ac67" : "#202e3c", "ceramic");
+      }
+      this.surfaces.segment(shoulder, [side * .47, .43, -.76], [side * .47, .43, .86], .12, "#859d97", "metal");
+      this.bossJoint(base, [side * 1.06, .35, -.5], .52, "#c0b18a", [0, side * Math.PI / 2, 0]);
+      for (let cell = 0; cell < 3; cell++) {
+        const lit = charge >= cell / 3;
+        this.voxel(shoulder, [0, .79, -.12 + cell * .47], [.66, .13, .26], lit ? "#a6e3c6" : "#b29154", lit ? .5 : .2);
+        this.voxel(shoulder, [side * .66, .3, -.2 + cell * .48], [.14, .27, .17], "#172734", .05);
+      }
+      for (let fin = 0; fin < 3; fin++) this.voxel(base, [side * (1.35 + fin * .52), .3, 1.67 + fin * .18], [.3, .44, .76], "#657a81", .12, [.22, 0, 0]);
+      this.bossJoint(base, [side * 1.75, .1, 1.83], .7, "#c4a471");
+      this.surfaces.solid(base, [side * 1.75, .1, 1.94], [.42, .36, .65 + charge * .2], "#74c6d5", "flame", "flame");
+      if (growth > .02) this.bossArmor(base, [side * .65, .8, .45], [.4, .85 * growth, .8], "#29464e", "#c4ac74", [0, 0, side * -.12]);
+      if (crown > .02) this.bossSpire(base, [side * 2.7, .8, .67], 1.05 * crown, "#d6b57c", [0, 0, side * -.18]);
     }
-    this.voxel(base, [0, .48, -.42], [.58 * pulse, .24, .72], "#d6bd54", .72);
-    this.alienEye(base, 0, -.98, "#fff7c2", 1.42);
+    for (let i = 0; i < 4; i++) this.voxel(base, [0, .62, -.2 + i * .44], [.58, .24, .22], "#c3a466", .3);
+    this.voxel(base, [0, .76, -.94], [.58, .13, .25], open ? "#b9efcd" : "#ffe3a2", .86);
+    this.bossJoint(base, [0, .9, .6], .62, "#a9d9bd", [Math.PI / 2, 0, 0]);
+    for (const side of [-1, 1]) for (let i = 0; i < 4; i++) this.surfaces.solid(base, [side * .63, .56, -.24 + i * .36], [.12, .12, .2], "#192c36", "metal");
+    this.voxel(base, [0, .34, -1.79], [.63, .32, .32], "#182733", .1);
   }
 
   drawBossVoid(enemy, base, palette) {
-    const phase = enemy.phaseLevel || 1;
-    const pulse = 1 + Math.sin(this.time * 8.5) * .09;
+    const { charge, recoil, open } = this.bossActuation(enemy);
+    const growth = this.bossPhaseGrowth(enemy, 2), crown = this.bossPhaseGrowth(enemy, 3);
+    const time = enemy.age || 0;
+    // Two ribbed crescent hulls frame an actual gap; a suspended heart bridges their backs.
     for (const side of [-1, 1]) {
-      this.voxel(base, [side * .62, .12, -.26], [.52, .34, 2.42], palette[0], .2, [0, side * .08, 0]);
-      this.voxel(base, [side * .52, .25, -1.28], [.28, .22, .92], palette[1], .28, [0, side * .08, 0]);
-      const sickle = [[side * .72, .1, -.12], [side * 1.46, .14, -.56], [side * 2.08, .18, -.08], [side * 2.46, .22, .66]];
-      for (let segment = 1; segment < sickle.length; segment += 1) this.voxelSegment(base, sickle[segment - 1], sickle[segment], .42 - segment * .07, segment % 2 ? palette[1] : palette[0], .24 + segment * .08);
-      this.voxel(base, sickle.at(-1), [.38, .2, .46], palette[2], .58, [0, side * .72, 0]);
-      if (phase >= 2) this.voxel(base, [side * 1.06, .46, -.42], [.42, .58, .68], "#9e68c6", .52, [side * -.18, side * .18, 0]);
-      if (phase >= 3) this.voxel(base, [side * 1.72, .36, -.46], [.62, .24, .56], "#cd4969", .62, [0, side * .58, side * -.08]);
-      this.voxel(base, [side * .48, .08, 1.46], [.24, .2, .52 + pulse * .05], palette[2], .84);
+      const half = multiply(base, compose([side * (open * .32 + recoil * .12), .06 * Math.sin(time * 1.4 + side), 0], [0, side * charge * .045, 0]));
+      this.bossArmor(half, [side * .86, .16, .3], [.9, .62, 2.76], "#322f50", "#8e88aa", [0, side * .12, 0]);
+      const points = [[side * .9, .24, .92], [side * 1.95, .31, .8], [side * 2.72, .27, .13], [side * 3.15, .22, -.85], [side * 2.92, .16, -1.77], [side * 2.46, .12, -2.33]];
+      for (let i = 1; i < points.length; i++) {
+        this.voxelSegment(half, points[i - 1], points[i], .65 - i * .07, "#544969", .12);
+        this.bossArmor(half, points[i], [.6 - i * .045, .32, .78], "#5e5779", i % 2 ? "#b1a2b8" : "#8a81a4", [0, side * (i * .43 - .5), 0]);
+        this.voxel(half, [points[i][0] - side * .15, points[i][1] + .24, points[i][2]], [.14, .12, .35], "#dc91b8", .32 + charge * .38, [0, side * i * .25, 0]);
+      }
+      for (let rib = 0; rib < 4; rib++) {
+        this.voxel(half, [side * (1.12 + rib * .22), .39, .82 - rib * .46], [.62, .2, .24], "#b0a2b6", .12, [0, side * -.45, .1]);
+      }
+      this.voxel(half, [side * .71, .35, -1.03], [.12, .18, .62], "#dd689d", .86);
+      for (let facet = 0; facet < 5; facet++) {
+        this.surfaces.solid(half, [side * .88, .57, -.7 + facet * .38], [.66, .12, .17], facet % 2 ? "#796b99" : "#c0a9c3", "ceramic", "plate", [.12, side * .14, 0]);
+        this.surfaces.solid(half, [side * 1.27, .25, -.64 + facet * .37], [.1, .24, .12], "#c09ed2", "metal");
+      }
+      this.bossJoint(half, [side * 1.62, .41, .53], .46, "#dca2c1", [Math.PI / 2, 0, 0]);
+      this.voxel(half, [side * .82, .08, 1.83], [.4, .28, .64], "#a896e3", .65);
+      if (growth > .02) this.bossSpire(half, [side * 1.55, .76, .65], 1.08 * growth, "#a399c2", [.3, 0, side * -.3]);
+      if (crown > .02) this.bossSpire(half, [side * 2.2, .68, .5], .83 * crown, "#eab4ce", [.2, 0, side * -.45]);
+      this.voxelSegment(base, [side * .76, .47, .8], [side * .35, 1.03, .35], .2, "#807194", .2);
     }
-    this.voxel(base, [0, .34, -.16], [.26, .5, 1.5], "#6f4f8f", .52);
-    this.voxel(base, [0, .56, -.58], [.56 * pulse, .22, .62], palette[2], .78);
-    this.alienEye(base, 0, -.98, "#ffd3f2", 1.48);
+    this.voxel(base, [0, .8, .53], [.68, .64, .8], "#272438", .08, [0, Math.PI / 4, 0]);
+    this.surfaces.solid(base, [0, 1.19, .53], [.5, .54, .5], open ? "#84b8a3" : "#936ca7", "glass", "orb", [0, -time * .16, .12]);
+    this.voxel(base, [0, 1.3, .32], [.16, .18, .16], open ? "#9cd8b7" : "#d6a5d9", .84);
+    this.surfaces.solid(base, [0, 1.17, .53], [.91, .91, .46], "#a597c0", "metal", "ring", [.24, time * .12, .3]);
+    for (let i = 0; i < 3; i++) this.voxel(base, [(i - 1) * .32, 1.03 + (i === 1 ? .36 : .12), 1.05], [.17, .62, .3], "#afa1c4", .2, [.15, 0, (i - 1) * -.22]);
   }
 
   drawBossTelegraph(enemy, base, palette, stage) {
     if (enemy.weaponState !== "windup") return;
     const charge = clamp(enemy.weaponCharge || 0, 0, 1);
-    const phase = enemy.phaseLevel || 1;
-    const color = ["#ffca58", "#ffd45f", "#c98aff"][stage];
-    const pulse = .82 + charge * .48 + Math.sin(this.time * (10 + phase * 2)) * .08;
-    this.voxelHalo(base, 1.7 + charge * .56, .34, color, 6 + phase * 2, 1.25 + stage * .24, stage * .7, .1 + charge * .06);
-    this.voxel(base, [0, .7, -.42], [.42 * pulse, .14 * pulse, .5 * pulse], color, .88);
-    const aimed = ["sunLance", "railWall", "thunderFan", "doubleRail", "voidPincer"].includes(enemy.attackId);
-    const radial = ["petalBurst", "seedSpiral", "twinBloom", "forgeCross", "spiralCrown", "eclipseTwin", "tripleEclipse"].includes(enemy.attackId);
-    if (aimed) {
-      for (const side of [-1, 0, 1]) this.voxel(base, [side * (.42 + stage * .08), .4, -1.72], [.12 + charge * .08, .1 + charge * .06, 1.78], side ? palette[2] : color, .72 + charge * .24, [0, side * .1, 0]);
-    }
-    if (radial) {
-      for (const side of [-1, 1]) this.voxel(base, [side * (1.2 + charge * .45), .34, -.28], [.78, .12 + charge * .06, .32], side > 0 ? color : palette[1], .7 + charge * .25, [0, side * (.48 + charge * .2), 0]);
+    const pulse = .85 + charge * .35;
+    if (stage === 0) {
+      // Charge travels through the six petal tips, leaving the body readable.
+      for (let i = 0; i < 6; i++) {
+        const angle = -.95 + i * .38;
+        const lit = charge >= i / 7;
+        this.voxel(base, [Math.sin(angle) * 1.8, .38, Math.cos(angle) * 1.45],
+          [.16, .08, .3 * pulse], lit ? "#edb976" : palette[1], lit ? .55 : .2, [0, angle, 0]);
+      }
+    } else if (stage === 1) {
+      // Two shoulder capacitors fill lengthwise; no shared radial halo.
+      for (const side of [-1, 1]) for (let i = 0; i < 4; i++) {
+        const lit = charge >= i / 4;
+        this.voxel(base, [side * .9, .58, -.85 + i * .38], [.32, .09, .13],
+          lit ? "#b7e8df" : palette[1], lit ? .55 : .2);
+      }
+    } else {
+      // The crown answers left then right across the split silhouette.
+      for (const side of [-1, 1]) {
+        const fill = clamp(charge * 1.6 - (side > 0 ? .3 : 0), 0, 1);
+        this.voxel(base, [side * (1.8 + fill * .18), .4, .48], [.16, .12, .46 * pulse],
+          side < 0 ? "#bc92d9" : "#dc8395", .28 + fill * .3, [0, side * .72, 0]);
+      }
     }
   }
 
-  drawBossArena(boss) {
-    const stage = this.stageIndex;
-    const colors = [["#ff72ac", "#ffca58"], ["#70eaff", "#ffe45c"], ["#c183ff", "#ff6680"]][stage];
+  drawBossAttackTelegraphs(boss) {
     const charge = boss.weaponState === "windup" ? clamp(boss.weaponCharge || 0, 0, 1) : 0;
-    for (let row = 0; row < 6; row += 1) {
-      const z = this.streamZ(row, 5.8, boss.weaponState === "windup" ? 4.2 : 2.2, -30, 6);
-      for (const side of [-1, 1]) {
-        const base = compose([side * 7.65, -.45, z]);
-        this.voxel(base, [0, .42, 0], [.2 + charge * .08, .84 + charge * .34, .58], colors[(row + stage) % 2], .34 + charge * .42);
-        this.voxel(base, [side * -.34, .92, 0], [.58, .13 + charge * .05, .46], colors[(row + stage + 1) % 2], .62 + charge * .3);
-      }
-    }
-    if (boss.weaponState === "windup" && ["sunLance", "railWall", "doubleRail"].includes(boss.attackId)) this.drawLaserTelegraph(boss, charge);
+    if ((boss.weaponState === "windup" || (boss.weaponState === "fire" && boss.salvoIndex + 1 < boss.salvoCount)) && ["sunLance", "railWall", "doubleRail"].includes(boss.attackId)) this.drawLaserTelegraph(boss, boss.weaponState === "fire" ? 1 : charge);
   }
 
   drawBoss(enemy, base, stageOverride = this.stageIndex, telegraphBase = base) {
     const stage = clamp(stageOverride, 0, 2);
     const palettes = enemy.hitFlash > 0 ? ["#4f7991", "#b74373", "#ffe15d"] : [["#2b1745", "#87325e", "#c99f42"], ["#202b48", "#2e7777", "#b99e3f"], ["#26163d", "#783052", "#b84658"]][stage];
-    const scale = [1.08, 1.15, 1.22][stage];
+    const scale = [1.08, 1.12, 1.16][stage];
     const bossBase = multiply(base, compose([0, 0, 0], [0, 0, 0], [scale, scale, scale]));
     const bossTelegraphBase = multiply(telegraphBase, compose([0, 0, 0], [0, 0, 0], [scale, scale, scale]));
     if (stage === 0) this.drawBossBloom(enemy, bossBase, palettes);
     else if (stage === 1) this.drawBossForge(enemy, bossBase, palettes);
     else this.drawBossVoid(enemy, bossBase, palettes);
     this.drawBossTelegraph(enemy, bossTelegraphBase, palettes, stage);
+    if (enemy.weaponState === "fire" && (enemy.salvoAge || 0) < .38) {
+      const age = enemy.salvoAge || 0, fade = 1 - age / .38;
+      for (let i = 0; i < 12; i++) {
+        const a = i * TAU / 12, radius = .8 + age * 4;
+        this.voxel(bossBase, [Math.cos(a) * radius, .6 + age * .4, Math.sin(a) * radius],
+          [.13, .12, .34 * fade], palettes[2], .38 * fade, [0, -a, 0]);
+      }
+    }
+    if (enemy.phaseMorph > 0) {
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4, travel = (1.4 - enemy.phaseMorph) * .8;
+        this.voxel(bossBase, [Math.cos(a) * (1.5 + travel), .3 + travel * .3, Math.sin(a) * (1.5 + travel)],
+          [.18, .1, .24], palettes[1], .3, [a, travel, 0]);
+      }
+    }
     if (enemy.phaseShield > 0) this.voxelCage(bossBase, 2.45 + Math.sin(this.time * 12) * .04, palettes[2], 1.15);
   }
 
@@ -2177,8 +2335,8 @@ class SpaceRenderer3D {
     const count = this.quality === "low" ? 2 : segments;
     for (let i = 0; i < count; i += 1) {
       const t = (i + 1) / count;
-      this.pixelEffects.spark(base, [offsetX, .01, -length * (.6 + t * 1.4)],
-        width * (1.9 - t), color, (1 - t * .75) * .38, .45);
+      this.pixelEffects.fleck(base, [offsetX, .01, -length * (.6 + t * 1.4)],
+        width * (2.2 - t), color, (1 - t * .75) * .52, 0, 1.4, Math.PI / 2);
     }
   }
 
@@ -2308,7 +2466,7 @@ class SpaceRenderer3D {
       const reach = (.15 + (1 - Math.exp(-age * 5)) * .7) * (.7 + random * .3);
       const fade = Math.max(0, 1 - age / .75) ** 2;
       const point = [Math.cos(angle) * rx * reach, random * .09, Math.sin(angle) * rz * reach];
-      this.pixelEffects.spark(base, point, .07 + random * .065, effect.color, fade * .32);
+      this.pixelEffects.fleck(base, point, .10 + random * .09, effect.color, fade * .48, 0, 1.6, angle);
       if (i % 3 === 0 && age < .3) {
         this.pixelEffects.spark(base, [point[0] * .92, point[1], point[2] * .92], .045, effect.color, fade * .2);
       }
@@ -2593,15 +2751,10 @@ class SpaceRenderer3D {
     const shake = world.shake > 0 ? (Math.random() - .5) * world.shake * .14 * shakeStrength : 0;
     const cinematic = world.cinematic;
     const progress = cinematic ? clamp(1 - cinematic.timer / cinematic.total, 0, 1) : 0;
-    const cinematicAmount = cinematic ? Math.sin(progress * Math.PI) : 0;
+    const cinematicAmount = cinematic && !["boss", "phase"].includes(cinematic.type) ? Math.sin(progress * Math.PI) : 0;
     const eye = [follow + shake, 9.2 + shake - cinematicAmount * .65, 12.8 - cinematicAmount * 1.35];
     const target = [follow * .25, -.1, -3.8];
-    if (cinematic && (cinematic.type === "boss" || cinematic.type === "phase") && world.boss) {
-      const bossPosition = this.toWorld(world.boss.x, world.boss.y, .35);
-      target[0] = lerp(target[0], bossPosition[0], cinematicAmount * .7);
-      target[1] = lerp(target[1], .35, cinematicAmount * .45);
-      target[2] = lerp(target[2], bossPosition[2], cinematicAmount * .5);
-    } else if (cinematic?.type === "encounter" && world.activeEncounter) {
+    if (cinematic?.type === "encounter" && world.activeEncounter) {
       const encounterPosition = this.toWorld(world.activeEncounter.x, world.activeEncounter.y, .3);
       target[0] = lerp(target[0], encounterPosition[0], cinematicAmount * .42);
       target[2] = lerp(target[2], encounterPosition[2], cinematicAmount * .3);
@@ -2625,7 +2778,7 @@ class SpaceRenderer3D {
     this.drawSectorArchitecture(world, stage);
     this.drawAnomalyField(world);
     this.drawThreatMatrix(world);
-    if (world.boss) this.drawBossArena(world.boss);
+    if (world.boss) this.drawBossAttackTelegraphs(world.boss);
     if (world.mode === "menu") {
       this.drawShip({ index: 0, frameId: world.loadoutFrame, moduleId: world.loadoutModule, x: 4.8 + Math.sin(this.time * .6) * .4, z: -.5 + Math.cos(this.time) * .25 }, playerConfigs[0], true);
       this.drawShip({ index: 1, frameId: world.loadoutFrame, moduleId: world.loadoutModule, x: 7.2 + Math.sin(this.time * .7) * .5, z: 1.1 + Math.cos(this.time * .8) * .25 }, playerConfigs[1], true);

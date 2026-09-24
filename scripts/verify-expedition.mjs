@@ -271,7 +271,7 @@ assert.match(gameSource, /ENEMY_AI\.chooseTarget\(enemy, world\.players, dt\)/);
 assert.match(gameSource, /function applyEnemyDebuff\(player, bullet\)/);
 assert.match(gameSource, /stage === 0 && progress < \.25 \? null : activeStage\(stage\)\.biome\?\.speciesId/, "chapter-one scripted natives must wait until the first strategy draft");
 assert.match(gameSource, /world\.stageIndex === 0 && progress < \.42 \? "" : build\.deathrattle/, "chapter one must teach signature attacks before deathrattles");
-assert.match(gameSource, /elite \? \(QA_FORCE_ELITE \? 20 : 4\.8\) : 1/, "ambient elites must retain the designed 4.8x durability outside the QA pursuit harness");
+assert.match(gameSource, /elite \? \(QA_FORCE_ELITE \? 20 : \[3\.8, 4\.4, 4\.8\]\[world\.stageIndex\]\) : 1/, "elite durability must rise by chapter outside the QA pursuit harness");
 assert.match(rendererSource, /drawBiomeFeatures\(biome\)/);
 assert.match(rendererSource, /drawRouteGates\(choice\)/);
 assert.match(rendererSource, /drawEncounter\(encounter\)/);

@@ -36,25 +36,17 @@ export class PixelEffects {
         varying float opacity;
         varying vec3 style;
         void main() {
-          if (style.x > 0.0) {
-            // A hard, stepped pixel core lives inside its own larger luminous envelope.
-            // Local halos work even at low quality, without raising global bloom.
-            vec2 q = (gl_PointCoord - 0.5) * (1.0 + style.x * 1.8);
-            float c = cos(style.z), s = sin(style.z);
-            q = mat2(c, -s, s, c) * q;
-            q.y *= style.y;
-            vec2 pixel = floor(q * 12.0 + 0.5) / 12.0;
-            float edge = max(abs(pixel.x), abs(pixel.y));
-            float core = edge < 0.17 ? 1.0 : edge < 0.26 ? 0.34 : 0.0;
-            float halo = exp(-length(q) * 3.8) * style.x * 0.24;
-            float fade = 1.0 - smoothstep(0.38, 0.5, max(abs(gl_PointCoord.x - 0.5), abs(gl_PointCoord.y - 0.5)));
-            gl_FragColor = vec4(tint * (1.0 + core * 0.85), opacity * (core + halo) * fade);
-            return;
-          }
-          vec2 d = abs(gl_PointCoord - 0.5);
-          float square = max(d.x, d.y);
-          float band = square < 0.2 ? 1.0 : square < 0.34 ? 0.32 : 0.075;
-          gl_FragColor = vec4(tint * (square < 0.2 ? 1.75 : 1.0), opacity * band);
+          // Fine rectangular cores with the old soft energy envelope, not opaque tiles.
+          vec2 q = (gl_PointCoord - 0.5) * (1.0 + style.x * 1.8);
+          float c = cos(style.z), s = sin(style.z);
+          q = mat2(c, -s, s, c) * q;
+          q.y *= max(1.0, style.y);
+          float edge = max(abs(q.x), abs(q.y));
+          float core = edge < 0.17 ? 1.0 : edge < 0.26 ? 0.34 : 0.0;
+          float halo = exp(-edge * 4.8) * style.x * 0.24;
+          float fade = 1.0 - smoothstep(0.38, 0.5, max(abs(gl_PointCoord.x - 0.5), abs(gl_PointCoord.y - 0.5)));
+          if (core + halo < 0.005) discard;
+          gl_FragColor = vec4(tint * (1.0 + core * 0.85), opacity * (core + halo) * fade);
         }`,
     });
     this.points = new THREE.Points(this.geometry, this.material);
@@ -78,9 +70,10 @@ export class PixelEffects {
           float c = cos(style.z), s = sin(style.z);
           q = mat2(c, -s, s, c) * q;
           q.y *= max(1.0, style.y);
-          q = floor(q * 12.0 + 0.5) / 12.0;
-          if (max(abs(q.x), abs(q.y)) > 0.34 || abs(q.x) + abs(q.y) > 0.53) discard;
-          float face = q.x + q.y > 0.0 ? 0.95 : 0.48;
+          // Keep all four corners. A narrow bright edge and dark end give each chip depth.
+          // Cutting the corners of these small sprites makes them read as round confetti.
+          if (max(abs(q.x), abs(q.y)) > 0.34) discard;
+          float face = q.y < -0.20 ? 1.0 : q.x > 0.19 || q.y > 0.20 ? 0.46 : 0.76;
           gl_FragColor = vec4(tint * face, opacity);
         }`,
     });

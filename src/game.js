@@ -2,6 +2,9 @@ const canvas = document.querySelector("#game");
 const sceneCanvas = document.querySelector("#scene");
 const ctx = canvas.getContext("2d", { alpha: true });
 const renderer3D = new SpaceRenderer3D(sceneCanvas);
+const bootSplash = document.querySelector("#bootSplash");
+const bootStartedAt = performance.now();
+let bootComplete = false;
 const menu = document.querySelector("#menu");
 const result = document.querySelector("#result");
 const startButton = document.querySelector("#startButton");
@@ -193,7 +196,7 @@ const SHIP_FRAMES = [
     statsKey: "frame.comet.stats",
     cost: 0,
     hp: 7,
-    speed: 91,
+    speed: 96,
     damage: 1,
     fireRate: 1,
     energyGain: 1,
@@ -208,8 +211,8 @@ const SHIP_FRAMES = [
     statsKey: "frame.bulwark.stats",
     cost: 420,
     hp: 9,
-    speed: 79,
-    damage: 1.08,
+    speed: 84,
+    damage: 1.16,
     fireRate: 0.9,
     energyGain: 0.9,
     novaDamage: 1,
@@ -555,9 +558,9 @@ const BOSS_ATTACK_SEQUENCES = [
 ];
 
 const BOSS_ATTACK_TELEGRAPH = Object.freeze({
-  petalBurst: .82, sunLance: 1.2, seedSpiral: .9, twinBloom: .88,
-  railWall: 1.24, thunderFan: .82, forgeCross: .88, doubleRail: 1.16,
-  spiralCrown: .84, voidPincer: .72, eclipseTwin: .9, tripleEclipse: .96,
+  petalBurst: 1.05, sunLance: 1.45, seedSpiral: 1.15, twinBloom: 1.35,
+  railWall: 1.55, thunderFan: 1.05, forgeCross: 1.2, doubleRail: 1.65,
+  spiralCrown: 1.1, voidPincer: 1.25, eclipseTwin: 1.25, tripleEclipse: 1.5,
 });
 
 const PLAYER_CONFIG = [
@@ -659,6 +662,7 @@ class AudioEngine {
     this.step = 0;
     this.stage = 0;
     this.boss = false;
+    this.transportStarted = false;
     try {
       this.enabled = localStorage.getItem("spacecraft-muted") !== "1";
     } catch {
@@ -703,8 +707,13 @@ class AudioEngine {
       this.noiseBuffer = this.createNoiseBuffer();
     }
     if (this.context.state === "suspended") await this.context.resume();
-    this.nextStep = this.context.currentTime + 0.06;
-    this.step = 0;
+    if (this.context.state !== "running") return false;
+    if (!this.transportStarted) {
+      this.nextStep = this.context.currentTime + 0.06;
+      this.step = 0;
+      this.transportStarted = true;
+    }
+    return true;
   }
 
   applySettings() {
@@ -746,7 +755,6 @@ class AudioEngine {
   setStage(stage, boss = false) {
     this.stage = stage;
     this.boss = boss;
-    this.step = 0;
   }
 
   midi(note) {
@@ -871,9 +879,16 @@ class AudioEngine {
     if (s === 0 || s === 8 || (this.boss && (s === 4 || s === 12))) this.kick(when);
     if (s === 4 || s === 12) this.snare(when, this.boss ? 1.25 : 1);
     if (s % 2 === 1) this.noise(0.014, this.boss ? 0.018 : 0.011, when, 4200, this.musicBus);
-    if (this.boss && s % 4 === 2) {
-      this.tone(root + 31, 0.055, "square", 0.025, when);
-      this.noise(0.045, 0.025, when, 2400, this.musicBus);
+    if (this.boss) {
+      const opening = (world.boss?.opening || 0) > 0;
+      const motif = [[0, 7, 12, 19, 16, 12, 7, 3], [0, 0, 7, 1, 0, 12, 7, 1], [0, 13, 7, 10, 1, 7, 13, 12]][this.stage];
+      const rhythm = [[0, 3, 6, 8, 11, 14], [0, 4, 7, 8, 12, 15], [0, 3, 6, 10, 13]][this.stage];
+      if (rhythm.includes(s)) {
+        this.tone(root + (opening ? 24 : 12) + motif[Math.floor(s / 2)], opening ? .2 : .12,
+          this.stage === 0 || opening ? "triangle" : "square", opening ? .026 : .032, when, this.musicBus);
+        if (this.stage === 1 && !opening) this.noise(.035, .025, when, 700, this.musicBus);
+        if (this.stage === 2) this.tone(root + 19, .09, "triangle", .012, when + .075, this.musicBus);
+      }
     }
     if (this.boss && bossPhase >= 2 && s % 2 === 0) {
       this.tone(root + 24 + arpeggios[this.stage][(s + bar * 2) % 8], .07, s % 4 ? "square" : "triangle", .017 + bossPhase * .004, when, this.musicBus, s === 14 ? 7 : 0);
@@ -993,14 +1008,15 @@ class AudioEngine {
       [40, 39, 38].forEach((note, i) => this.tone(note, 0.35, "sawtooth", 0.08, now + i * 0.12, this.sfxBus, -8));
       this.noise(.5, .07, now, 180);
     } else if (name === "bossPhase") {
-      [38, 45, 50, 57].forEach((note, i) => this.tone(note, .28, i % 2 ? "square" : "sawtooth", .075, now + i * .055, this.sfxBus, 7));
-      this.noise(.34, .085, now, 420);
+      const notes = [[55, 62, 67, 74], [36, 43, 36, 48], [48, 61, 55, 60]][this.stage];
+      notes.forEach((note, i) => this.tone(note, .24, this.stage === 0 ? "triangle" : i % 2 ? "square" : "triangle", .045, now + i * [.075, .11, .09][this.stage], this.sfxBus, this.stage === 2 ? -5 : 5));
+      this.noise(.2, .04, now, [1600, 420, 900][this.stage]);
     } else if (name === "bossCharge") {
-      [43, 50, 57, 64, 71].forEach((note, index) => this.tone(note + this.stage, .22, index % 2 ? "square" : "sawtooth", .04 + index * .004, now + index * .055, this.sfxBus, 7));
+      [[55, 62, 67, 74, 79], [36, 36, 43, 43, 48], [43, 56, 50, 63, 55]][this.stage].forEach((note, index) => this.tone(note + this.stage, .22, index % 2 ? "square" : "sawtooth", .04 + index * .004, now + index * .055, this.sfxBus, 7));
       this.tone(31 + this.stage * 2, .54, "triangle", .065, now, this.sfxBus, 19);
       this.noise(.28, .045, now + .06, 1800);
     } else if (name === "bossAttack") {
-      [67, 55, 43].forEach((note, index) => this.tone(note + this.stage * 2, .18, index === 1 ? "square" : "sawtooth", .07 - index * .012, now + index * .025, this.sfxBus, -12));
+      [[79, 72, 67], [43, 31, 36], [67, 54, 61]][this.stage].forEach((note, index) => this.tone(note + this.stage * 2, .18, index === 1 ? "square" : "sawtooth", .07 - index * .012, now + index * .025, this.sfxBus, -12));
       this.tone(31, .32, "square", .08, now, this.sfxBus, -19);
       this.noise(.26, .11, now, 320);
     } else if (name === "sectorShift") {
@@ -1416,278 +1432,323 @@ function aiForecastBullet(bullet, seconds) {
       y: bullet.y + (vx * (1 - cosine) + vy * sine) / bullet.curve,
     };
   }
-  if (bullet.behavior === "brake" && (bullet.age || 0) < .42) {
-    const braking = Math.min(seconds, Math.max(0, .42 - (bullet.age || 0)));
-    const coast = Math.max(0, seconds - braking);
-    const dragDistance = (1 - Math.exp(-3.6 * braking)) / 3.6;
-    const dragSpeed = Math.exp(-3.6 * braking);
-    return { x: bullet.x + vx * (dragDistance + coast * dragSpeed), y: bullet.y + vy * (dragDistance + coast * dragSpeed) };
+  if (["brake", "mine", "homing"].includes(bullet.behavior)) {
+    let x = bullet.x, y = bullet.y, dx = vx, dy = vy;
+    const target = world.players.find(pilot => pilot.index === bullet.targetIndex && !pilot.downed);
+    for (let elapsed = 0; elapsed < seconds - 1e-8;) {
+      const dt = Math.min(1 / 30, seconds - elapsed);
+      elapsed += dt;
+      const age = (bullet.age || 0) + elapsed;
+      if (bullet.behavior === "mine" || bullet.behavior === "brake" && age < .42) {
+        const drag = Math.exp(-dt * (bullet.behavior === "mine" ? 2.2 : 3.6));
+        dx *= drag; dy *= drag;
+      } else if (bullet.behavior === "brake") {
+        const speed = Math.max(1, Math.hypot(dx, dy));
+        const base = Math.max(speed, bullet.baseSpeed || speed);
+        const next = Math.min(base, speed + base * dt * 1.8);
+        dx *= next / speed; dy *= next / speed;
+      } else if (target && age <= bullet.homingDuration) {
+        const speed = Math.hypot(dx, dy), angle = Math.atan2(dy, dx);
+        const aim = Math.atan2(target.y + target.vy * elapsed - y, target.x + target.vx * elapsed - x);
+        const delta = Math.atan2(Math.sin(aim - angle), Math.cos(aim - angle));
+        const progress = clamp(age / Math.max(.01, bullet.homingDuration), 0, 1);
+        const turn = (bullet.homing || .35) * lerp(1, .32, progress * progress) * dt;
+        const next = angle + clamp(delta, -turn, turn);
+        dx = Math.cos(next) * speed; dy = Math.sin(next) * speed;
+      }
+      x += dx * dt; y += dy * dt;
+    }
+    return { x, y };
   }
   return { x: bullet.x + vx * seconds, y: bullet.y + vy * seconds };
 }
 
-function aiThreatAtPoint(player, x, y) {
+function aiThreatAtPoint(player, x, y, forecast = aiHazardForecast(player)) {
+  const arrival = Math.min(.82, Math.hypot(x - player.x, y - player.y) / player.speed);
+  const index = forecast.times.findIndex(seconds => seconds >= arrival);
   let risk = 0;
-  const sampleTimes = [0, .16, .3, .48, .72, .96];
-  for (const bullet of world.enemyBullets) {
-    if (bullet.dead) continue;
-    const blast = bullet.behavior === "blast" || bullet.behavior === "mine";
-    const targetLocked = bullet.behavior === "homing" && bullet.targetIndex === player.index;
-    const safety = blast
-      ? Math.max(76, (bullet.blastRadius || (bullet.behavior === "mine" ? 26 : 34)) + player.hurtRadius + 38)
-      : bullet.behavior === "homing"
-        ? targetLocked ? 102 : 82
-        : bullet.behavior === "brake"
-          ? 84
-          : bullet.behavior === "curve" || (bullet.pattern || "").startsWith("boss:")
-            ? 72
-            : bullet.pattern === "laneWall" || bullet.pattern === "commandCross"
-              ? 74
-              : 64;
-    const fuseLeft = Math.max(0, (bullet.triggerAge || 0) - (bullet.age || 0));
-    let closest = Infinity;
-    const times = [...sampleTimes];
-    if (blast && bullet.triggerAge > 0) times.push(clamp(fuseLeft, 0, 1.05));
-    for (const seconds of times) {
-      const future = aiForecastBullet(bullet, seconds);
-      closest = Math.min(closest, Math.hypot(x - future.x, y - future.y));
-    }
-    if (closest < safety) risk = Math.max(risk, (safety - closest) / safety);
+  for (const hazard of forecast.hazards[index < 0 ? forecast.times.length - 1 : index]) {
+    const range = hazard.line ? pointToSegmentDistance(x, y, hazard.line.x1, hazard.line.y1, hazard.line.x2, hazard.line.y2)
+      : Math.hypot(x - hazard.x, y - hazard.y);
+    risk = Math.max(risk, clamp((hazard.radius + hazard.margin - range) / Math.max(1, hazard.margin), 0, 1));
   }
-  const lineRisk = (line, safety) => {
-    const lineX = line.x2 - line.x1;
-    const lineY = line.y2 - line.y1;
-    const lineLengthSquared = Math.max(1, lineX * lineX + lineY * lineY);
-    const projection = clamp(((x - line.x1) * lineX + (y - line.y1) * lineY) / lineLengthSquared, 0, 1);
-    const nearestX = line.x1 + lineX * projection;
-    const nearestY = line.y1 + lineY * projection;
-    const range = Math.hypot(x - nearestX, y - nearestY);
-    if (range < safety) risk = Math.max(risk, (safety - range) / safety);
-  };
-  for (const enemy of world.enemies) {
-    for (const line of telegraphedBeamSegments(enemy)) lineRisk(line, 62);
-    if (enemy.weaponState === "windup" && enemy.attackPattern === "ramCharge") {
-      const path = enemy.attackCommit?.ram;
-      if (path) lineRisk({ x1: path.x, y1: path.y, x2: path.endX, y2: path.endY }, (enemy.bodyRadius || enemy.r) + player.bodyRadius + 18);
-    }
-  }
-  for (const beam of world.enemyBeams) if (!beam.dead) lineRisk(beam, 48 + (beam.width || 5));
   return risk;
 }
 
-function evaluateAiThreats(player) {
-  const threat = { x: 0, y: 0, severity: 0, count: 0, reason: "clear" };
-  const addPoint = (dx, dy, safety, weight, reason, fuseUrgency = 0) => {
-    const range = Math.max(1, Math.hypot(dx, dy));
-    if (range >= safety) return;
-    const urgency = clamp((safety - range) / safety + fuseUrgency, 0, 1.45);
-    if (urgency < .025) return;
-    threat.x += dx / range * urgency * weight;
-    threat.y += dy / range * urgency * weight;
-    threat.severity = Math.max(threat.severity, Math.min(1, urgency));
-    threat.count += 1;
-    if (threat.reason === "clear" || urgency >= threat.severity) threat.reason = reason;
+// Goals compete on marginal team benefit, travel cost and visible risk. A small
+// preference for the same object prevents jitter without locking out emergencies.
+function chooseAiStrategicGoal(player, partner, forecast = aiHazardForecast(player)) {
+  const goals = [];
+  const livePartner = partner && !partner.downed;
+  const linkRange = Math.max(player.linkRange, partner?.linkRange || 0) * (world.activeBranch?.reward.link || 1);
+  const health = player.hp / Math.max(1, player.maxHp);
+  const partnerHealth = livePartner ? partner.hp / Math.max(1, partner.maxHp) : 1;
+  const separation = livePartner ? distance(player, partner) : 0;
+  const setGoal = (x, y, intent, value, options = {}) => {
+    x = clamp(x, 13, W - 13); y = clamp(y, 32, H - 14);
+    const range = Math.max(0, Math.hypot(x - player.x, y - player.y) - (options.radius || 0));
+    const risk = aiThreatAtPoint(player, x, y, forecast);
+    const same = player.aiGoal?.intent === intent && player.aiGoal?.target === options.target;
+    const continuity = same ? 6 : 0;
+    // Estimate a short route too: a safe reward behind a lethal wall is not free.
+    const routeRisk = Math.max(risk, aiThreatAtPoint(player, lerp(player.x, x, .5), lerp(player.y, y, .5), forecast));
+    const brokenLink = livePartner ? Math.max(0, Math.hypot(x - partner.x, y - partner.y) - linkRange * .88) : 0;
+    const score = value - range * .16 - routeRisk * (health < .4 ? 38 : 24)
+      - brokenLink * (options.urgent ? .025 : .10) + continuity;
+    goals.push({ x, y, intent, priority: score, ...options });
   };
-  const addLine = (line, safety, weight, reason) => {
-    const lineX = line.x2 - line.x1;
-    const lineY = line.y2 - line.y1;
-    const lineLengthSquared = Math.max(1, lineX * lineX + lineY * lineY);
-    const projection = clamp(((player.x - line.x1) * lineX + (player.y - line.y1) * lineY) / lineLengthSquared, 0, 1);
-    const nearestX = line.x1 + lineX * projection;
-    const nearestY = line.y1 + lineY * projection;
-    let awayX = player.x - nearestX;
-    let awayY = player.y - nearestY;
-    let range = Math.hypot(awayX, awayY);
-    if (range < 1) {
-      const lineLength = Math.sqrt(lineLengthSquared);
-      const perpendicularX = -lineY / lineLength;
-      const perpendicularY = lineX / lineLength;
-      const centerBias = (W / 2 - player.x) * perpendicularX + (H - 48 - player.y) * perpendicularY;
-      const side = centerBias >= 0 ? 1 : -1;
-      awayX = perpendicularX * side;
-      awayY = perpendicularY * side;
-      range = 1;
+  if (partner?.downed) {
+    // Rescue is a region: keep progress while choosing safe positions inside it.
+    setGoal(partner.x, Math.min(H - 17, partner.y + 4), "rescue", 180 + (partner.revive || 0) * 20,
+      { target: partner, radius: 25, urgent: true });
+  } else {
+    const px = livePartner ? clamp(partner.x + partner.vx * .3, 24, W - 24) : W * .5;
+    const py = livePartner ? clamp(partner.y + partner.vy * .3, 60, H - 25) : H - 43;
+    const side = player.x === px ? (player.index ? 1 : -1) : Math.sign(player.x - px);
+    const linkNeed = clamp((separation / linkRange - .65) / .65, 0, 1);
+    const chargeReady = world.rushCharge >= RUSH_CONFIG.threshold * .8 || rushActive();
+    setGoal(px + side * linkRange * .48, py, "formation",
+      16 + linkNeed * 92 + (chargeReady ? 15 : 0) + (partnerHealth < .4 ? 16 : 0), { target: partner, radius: 8 });
+  }
+
+  for (const pickup of world.pickups) {
+    if (pickup.dead) continue;
+    const travel = Math.min(1.6, distance(player, pickup) / Math.max(1, player.speed));
+    const y = pickup.y + (pickup.vy || 0) * travel;
+    if (y > H + 4) continue;
+    const ownHull = Math.min(2, player.maxHp - player.hp);
+    const peerHull = livePartner ? Math.min(1, partner.maxHp - partner.hp) : 0;
+    const ownShield = Math.min(2, player.maxShield - player.shield);
+    const peerShield = livePartner ? Math.min(1, partner.maxShield - partner.shield) : 0;
+    const buff = SpaceStatus.buffForPickup(pickup.type);
+    const freshBuff = 1 - clamp((player.buffs?.[buff.id] || 0) / buff.duration, 0, 1);
+    let value = 22 + freshBuff * 16;
+    let urgent = false;
+    if (pickup.type === "repair") {
+      value += ownHull * 15 + peerHull * 10;
+      urgent = ownHull > 0 && health <= .55 || peerHull > 0 && partnerHealth <= .4;
+      if (urgent) value += 48;
+    } else if (pickup.type === "shield") {
+      value += ownShield * 12 + peerShield * 8;
+      urgent = ownShield > 0 && health <= .4;
+      if (urgent) value += 36;
+    } else if (pickup.type === "weapon") {
+      value += world.players.some(pilot => pilot.weapon < 3) ? 42 : 5;
+    } else {
+      value += 12 + (world.novaCharge >= NOVA_CONFIG.threshold * .65 ? 16 : 0);
     }
-    addPoint(awayX, awayY, safety, weight, reason);
+    // Do not race a closer, needier teammate for their full repair/shield share.
+    if (livePartner && ["repair", "shield"].includes(pickup.type) && partnerHealth < health
+      && distance(partner, pickup) + 18 < distance(player, pickup)) value -= 32;
+    const claimed = livePartner && partner.aiGoal?.target === pickup && distance(partner, pickup) + 12 < distance(player, pickup);
+    if (claimed) value -= 28;
+    setGoal(pickup.x, y, "resupply", value, { target: pickup, urgent, radius: 4 });
+  }
+
+  const encounter = world.activeEncounter;
+  if (encounter) {
+    const remaining = Math.max(0, encounter.goal - encounter.progress);
+    const seconds = Math.max(1, encounter.timer);
+    if (encounter.kind === "hold" || encounter.kind === "escort") {
+      const peerInside = livePartner && distance(partner, encounter) < encounter.radius - 6;
+      const soloRate = encounter.kind === "hold" ? .82 : .78;
+      const needsBoth = remaining > seconds * soloRate * .85;
+      const urgency = clamp(remaining / seconds / soloRate, 0, 2) * 18;
+      const radius = Math.max(8, encounter.radius - 12);
+      // Occupy a useful firing lane within the objective, not its exact center.
+      const nearby = world.enemies.filter(e => !e.dead && e.y < encounter.y - 28 && Math.abs(e.x - encounter.x) < radius);
+      const lane = nearby.sort((a, b) => Math.abs(a.x - player.x) - Math.abs(b.x - player.x))[0];
+      const x = lane?.x ?? clamp(player.x, encounter.x - radius * .6, encounter.x + radius * .6);
+      setGoal(x, encounter.y, "objective", (peerInside && !needsBoth ? 32 : 62) + urgency,
+        { target: encounter, urgent: needsBoth, area: { x: encounter.x, y: encounter.y, radius } });
+    } else if (encounter.kind === "collect") {
+      for (const shard of world.encounterObjects) {
+        if (shard.type !== "salvage" || shard.dead) continue;
+        const travel = Math.min(1.5, distance(player, shard) / player.speed);
+        const claimed = livePartner && partner.aiGoal?.target === shard && distance(partner, shard) + 12 < distance(player, shard);
+        setGoal(shard.x, shard.y + (shard.vy || 0) * travel, "salvage", 66 + clamp(remaining / seconds, 0, 1) * 25 - (claimed ? 30 : 0),
+          { target: shard, radius: 4 });
+      }
+    } else if (encounter.kind === "siege") {
+      setGoal(encounter.x, clamp(player.y, encounter.y + 75, H - 34), "siege", 58 + clamp(12 / seconds, 0, 1) * 24,
+        { target: encounter, radius: 5 });
+    }
+  }
+
+  for (const enemy of world.enemies) {
+    if (enemy.dead || enemy.y < 8 || enemy.y > H - 35) continue;
+    const finish = 1 - clamp(enemy.hp / Math.max(1, enemy.maxHp), 0, 1);
+    const threatensPeer = livePartner && enemy.attackTargetIndex === partner.index && ["windup", "fire"].includes(enemy.weaponState);
+    const threatensSelf = enemy.attackTargetIndex === player.index && enemy.weaponState === "windup";
+    const sharedLane = livePartner ? Math.max(0, 1 - Math.abs(enemy.x - partner.x) / 32) * 12 : 0;
+    const flightTime = clamp((player.y - enemy.y) / Math.max(1, player.projectileSpeed), 0, .5);
+    const x = enemy.x + (enemy.vx || 0) * flightTime;
+    const clearance = (enemy.bodyRadius || enemy.r) + player.bodyRadius + 34;
+    const y = clamp(player.y, Math.max(90, enemy.y + clearance), H - 30);
+    const canLineUp = y > enemy.y + clearance - 1;
+    if (!canLineUp) continue;
+    const intent = threatensPeer ? "protect" : enemy.hullRole === "command" ? "focus-command" : "focus-fire";
+    setGoal(x, y, intent, 40 + finish * 25 + sharedLane + (enemy.hullRole === "command" ? 14 : 0)
+      + (threatensPeer ? 22 + (1 - partnerHealth) * 28 : 0) + (threatensSelf ? 12 : 0)
+      + (enemy.boss && enemy.opening > 0 ? 12 : 0), { target: enemy, radius: 4 });
+  }
+  goals.sort((a, b) => b.priority - a.priority);
+  const goal = goals[0];
+  player.aiFocusId = world.enemies.includes(goal.target) ? goal.target.id : 0;
+  player.aiDecisionScores = goals.slice(0, 3).map(g => `${g.intent}:${g.priority.toFixed(1)}`).join(";");
+  player.aiGoal = goal;
+  return goal;
+}
+
+// Sample reachable trajectories, not a force sum: opposite threats must not cancel.
+// This reads visible objects and current velocities only, never future spawns/input.
+function aiHazardForecast(player) {
+  const times = [.12, .24, .4, .6, .82];
+  const hazards = times.map(() => []);
+  const beamSources = new Map(world.enemies.filter(enemy => !enemy.dead).map(enemy => [enemy.id, enemy]));
+  const futureBeam = (ray, enemy, seconds) => {
+    const motion = enemy?.attackCommit?.motion;
+    if (!motion) return ray;
+    // Match committed flight, including a stop at arena edges instead of a bounce.
+    const margin = Math.max(16, (enemy.bodyRadius || enemy.r) + 7);
+    const dx = clamp(enemy.x + motion.vx * seconds, margin, W - margin) - enemy.x;
+    const dy = clamp(enemy.y + motion.vy * seconds, enemy.boss ? 36 : 20, enemy.boss ? 108 : H - margin) - enemy.y;
+    return { x1: ray.x1 + dx, y1: ray.y1 + dy, x2: ray.x2 + dx, y2: ray.y2 + dy };
   };
   for (const bullet of world.enemyBullets) {
-    if (bullet.dead) continue;
-    const velocitySquared = Math.max(1, bullet.vx * bullet.vx + bullet.vy * bullet.vy);
-    const targetedHoming = bullet.behavior === "homing" && bullet.targetIndex === player.index;
-    const fuseLeft = Math.max(0, (bullet.triggerAge || 0) - (bullet.age || 0));
-    const blastRadius = bullet.blastRadius || (bullet.behavior === "mine" ? 26 : bullet.behavior === "blast" ? 34 : 0);
+    if (bullet.dead || distance(player, bullet) > 230) continue;
     const explosive = bullet.behavior === "blast" || bullet.behavior === "mine";
-    const horizon = targetedHoming ? 1.1 : explosive ? 1.05 : .86;
-    const toPlayerX = player.x - bullet.x;
-    const toPlayerY = player.y - bullet.y;
-    const interceptTime = clamp((toPlayerX * bullet.vx + toPlayerY * bullet.vy) / velocitySquared, .08, targetedHoming ? 1.05 : .82);
-    const samples = [0, .14, .26, .42, .62, horizon, interceptTime];
-    if (explosive && bullet.triggerAge > 0) samples.push(clamp(fuseLeft, 0, horizon));
-    let closest = { x: bullet.x, y: bullet.y, range: Infinity, seconds: 0 };
-    for (const seconds of samples) {
-      const future = aiForecastBullet(bullet, seconds);
-      const range = Math.hypot(player.x - future.x, player.y - future.y);
-      if (range < closest.range) closest = { ...future, range, seconds };
-    }
-    const safety = bullet.behavior === "mine"
-      ? Math.max(84, blastRadius + player.hurtRadius + 44)
-      : bullet.behavior === "blast"
-        ? Math.max(86, blastRadius + player.hurtRadius + 46)
-        : bullet.behavior === "homing"
-          ? targetedHoming ? 104 : 82
-          : bullet.behavior === "brake"
-            ? 86
-            : bullet.behavior === "curve" || (bullet.pattern || "").startsWith("boss:")
-              ? 74
-              : bullet.pattern === "laneWall" || bullet.pattern === "commandCross"
-                ? 76
-                : 64;
-    const fuseUrgency = explosive && bullet.triggerAge > 0 ? clamp((1.05 - fuseLeft) / 1.05, 0, .5) : 0;
-    const dx = player.x - closest.x;
-    const dy = player.y - closest.y;
-    if (targetedHoming && closest.range < safety) {
-      const bulletSpeed = Math.sqrt(velocitySquared);
-      const perpendicularX = -bullet.vy / bulletSpeed;
-      const perpendicularY = bullet.vx / bulletSpeed;
-      const centerBias = (W / 2 - player.x) * perpendicularX + (H - 48 - player.y) * perpendicularY;
-      const dodgeSide = centerBias >= 0 ? 1 : -1;
-      const urgency = clamp((safety - closest.range) / safety + fuseUrgency, 0, 1.25);
-      if (urgency < .025) continue;
-      threat.x += (perpendicularX * dodgeSide * 10.2 + dx / Math.max(8, closest.range) * 3.4) * urgency;
-      threat.y += (perpendicularY * dodgeSide * 5.6 + dy / Math.max(8, closest.range) * 2.2) * urgency;
-      threat.severity = Math.max(threat.severity, urgency);
-      threat.count += 1;
-      threat.reason = "homing";
-    } else {
-      const weight = bullet.pattern === "laneWall" || bullet.pattern === "commandCross" ? 8.2 : explosive ? 9.4 : bullet.behavior === "curve" ? 7.4 : 6.4;
-      addPoint(dx, dy, safety, weight, explosive ? bullet.behavior : bullet.behavior === "curve" ? "curve" : "bullet", fuseUrgency);
+    const fuse = Math.max(0, (bullet.triggerAge || 0) - (bullet.age || 0));
+    let previous = { x: bullet.x, y: bullet.y };
+    const flow = bullet.anchored ? { x: 0, y: 0 } : SpaceAnomalies.bulletFlow(world.activeAnomaly, world.anomalyElapsed, bullet, W, H, true);
+    for (const [i, seconds] of times.entries()) {
+      const future = aiForecastBullet(bullet, explosive ? Math.min(seconds, fuse) : seconds);
+      future.x += flow.x * seconds; future.y += flow.y * seconds;
+      const radius = explosive && fuse <= seconds + .16
+        ? (bullet.blastRadius || (bullet.behavior === "mine" ? 26 : 34)) + player.hurtRadius
+        : (bullet.r || 3) + player.hurtRadius;
+      const guiding = bullet.behavior === "homing" && (bullet.age || 0) + seconds < bullet.homingDuration;
+      const uncertainty = guiding ? 4 + seconds * 8 : 4;
+      const proximity = bullet.behavior === "blast" && !bullet.anchored && (bullet.age || 0) + seconds >= .32;
+      hazards[i].push({ ...future, previous, radius: proximity ? Math.max(radius, (bullet.blastRadius || 34) + player.hurtRadius) : radius,
+        margin: uncertainty, weight: explosive ? 1.5 : 1, reason: bullet.behavior || "bullet" });
+      previous = future;
     }
   }
   for (const enemy of world.enemies) {
-    for (const line of telegraphedBeamSegments(enemy)) addLine(line, 62, 10.4, "beam");
-    if (enemy.weaponState === "windup" && enemy.attackPattern === "ramCharge") {
-      const path = enemy.attackCommit?.ram;
-      if (path) addLine({ x1: path.x, y1: path.y, x2: path.endX, y2: path.endY }, (enemy.bodyRadius || enemy.r) + player.bodyRadius + 22, 9.2, "ram");
+    if (enemy.dead) continue;
+    for (const [i, seconds] of times.entries()) {
+      if (enemy.y > 0) hazards[i].push({ x: enemy.x + (enemy.vx || 0) * seconds, y: enemy.y + (enemy.vy || 0) * seconds,
+        previous: { x: enemy.x + (enemy.vx || 0) * (times[i - 1] || 0), y: enemy.y + (enemy.vy || 0) * (times[i - 1] || 0) },
+        radius: (enemy.bodyRadius || enemy.r) + player.bodyRadius, margin: 8, weight: 2, reason: "body" });
+      // Tracking warnings are not yet lethal. Begin planning for their final lock.
+      if (enemy.weaponState === "windup" && enemy.weaponTimer <= seconds + .18) {
+        for (const ray of telegraphedBeamSegments(enemy)) {
+          const line = futureBeam(ray, enemy, seconds);
+          hazards[i].push({ line, previousLine: futureBeam(ray, enemy, Math.max(times[i - 1] || 0, Math.min(seconds, enemy.weaponTimer))),
+            startFraction: clamp((enemy.weaponTimer - (times[i - 1] || 0)) / (seconds - (times[i - 1] || 0)), 0, 1), radius: player.hurtRadius + (ray.width || 5), margin: 7, weight: 2, reason: "beam" });
+        }
+        if (enemy.attackPattern === "ramCharge" && enemy.attackCommit?.ram) {
+          const ram = enemy.attackCommit.ram;
+          hazards[i].push({ line: { x1: ram.x, y1: ram.y, x2: ram.endX, y2: ram.endY }, radius: (enemy.bodyRadius || enemy.r) + player.bodyRadius, margin: 8, weight: 2, reason: "ram" });
+        }
+      }
     }
-    if (!enemy.dead && !enemy.boss) {
-      const safety = (enemy.bodyRadius || enemy.r) + player.bodyRadius + 18;
-      addPoint(player.x - enemy.x, player.y - enemy.y, safety, 5.8, "body");
+  }
+  for (const beam of world.enemyBeams) if (!beam.dead) {
+    for (const [i, seconds] of times.entries()) if (beam.duration - beam.age >= seconds - .12) {
+      hazards[i].push({ line: futureBeam(beam, beamSources.get(beam.sourceId), seconds),
+        previousLine: futureBeam(beam, beamSources.get(beam.sourceId), times[i - 1] || 0), radius: player.hurtRadius + beam.width, margin: 6, weight: 2, reason: "beam" });
     }
   }
-  for (const beam of world.enemyBeams) if (!beam.dead) addLine(beam, 48 + (beam.width || 5), 11.2, "beam");
-  for (const hazard of world.encounterObjects.filter((object) => object.type === "meteor" && !object.dead)) {
-    const futureX = hazard.x + hazard.vx * .42;
-    const futureY = hazard.y + hazard.vy * .42;
-    addPoint(player.x - futureX, player.y - futureY, 76, 7.4, "meteor");
+  for (const meteor of world.encounterObjects) if (meteor.type === "meteor" && !meteor.dead) {
+    for (const [i, seconds] of times.entries()) hazards[i].push({ x: meteor.x + meteor.vx * seconds, y: meteor.y + meteor.vy * seconds,
+      previous: { x: meteor.x + meteor.vx * (times[i - 1] || 0), y: meteor.y + meteor.vy * (times[i - 1] || 0) },
+      radius: player.bodyRadius + (meteor.r || 12), margin: 8, weight: 2, reason: "meteor" });
   }
-  const magnitude = Math.hypot(threat.x, threat.y);
-  if (magnitude > 0) {
-    threat.x /= magnitude;
-    threat.y /= magnitude;
-  }
-  return threat;
+  return { times, hazards };
 }
 
-function rankAiPickup(player, partner) {
-  const livePickups = world.pickups.filter((pickup) => !pickup.dead);
-  if (!livePickups.length) return null;
-  const missingHull = world.players.reduce((sum, pilot) => sum + Math.max(0, pilot.maxHp - Math.max(0, pilot.hp)), 0);
-  const missingShield = world.players.reduce((sum, pilot) => sum + Math.max(0, pilot.maxShield - pilot.shield), 0);
-  const healthRatio = world.players.reduce((sum, pilot) => sum + Math.max(0, pilot.hp) / Math.max(1, pilot.maxHp), 0) / Math.max(1, world.players.length);
-  return livePickups
-    .map((pickup) => {
-      const range = distance(player, pickup);
-      const sustain = pickup.type === "repair" || pickup.type === "shield";
-      const needed = pickup.type === "repair" ? missingHull > 0 : pickup.type === "shield" ? missingShield > 0 : true;
-      const risk = aiThreatAtPoint(player, pickup.x, pickup.y);
-      const utility = pickup.type === "repair"
-        ? 140 + missingHull * 16
-        : pickup.type === "shield"
-          ? 92 + missingShield * 10
-          : pickup.type === "weapon"
-            ? 48
-            : 30;
-      const partnerNear = partner && !partner.downed ? Math.max(0, 1 - distance(partner, pickup) / 180) * 12 : 0;
-      const urgent = sustain && needed && (healthRatio <= .72 || player.hp / Math.max(1, player.maxHp) <= .55);
-      return { pickup, range, sustain, needed, urgent, risk, score: needed ? utility + partnerNear - range * .42 - risk * 96 : -Infinity };
-    })
-    .sort((a, b) => b.score - a.score)[0] || null;
+function aiHazardSeparation(hazard, x, y, previous) {
+  if (!hazard.line) {
+    const start = hazard.previous || hazard;
+    return pointToSegmentDistance(0, 0, previous.x - start.x, previous.y - start.y, x - hazard.x, y - hazard.y);
+  }
+  const line = hazard.line, start = hazard.previousLine || line;
+  const fraction = hazard.startFraction || 0;
+  const px = lerp(previous.x, x, fraction) + line.x1 - start.x1;
+  const py = lerp(previous.y, y, fraction) + line.y1 - start.y1;
+  const cross = (ax, ay, bx, by) => ax * by - ay * bx;
+  const ax = x - px, ay = y - py, bx = line.x2 - line.x1, by = line.y2 - line.y1;
+  const denominator = cross(ax, ay, bx, by);
+  if (Math.abs(denominator) > 1e-8) {
+    const dx = line.x1 - px, dy = line.y1 - py;
+    const t = cross(dx, dy, bx, by) / denominator, u = cross(dx, dy, ax, ay) / denominator;
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) return 0;
+  }
+  return Math.min(pointToSegmentDistance(x, y, line.x1, line.y1, line.x2, line.y2),
+    pointToSegmentDistance(px, py, line.x1, line.y1, line.x2, line.y2),
+    pointToSegmentDistance(line.x1, line.y1, px, py, x, y), pointToSegmentDistance(line.x2, line.y2, px, py, x, y));
 }
 
-function chooseAiStrategicGoal(player, partner, threat) {
-  const goal = { x: partner?.x ?? W * .55, y: H - 43, intent: "formation", priority: 0 };
-  const setGoal = (x, y, intent, priority) => {
-    if (priority < goal.priority) return;
-    goal.x = x;
-    goal.y = y;
-    goal.intent = intent;
-    goal.priority = priority;
-  };
-  if (partner?.downed) {
-    setGoal(partner.x, partner.y, "rescue", 90);
-    return goal;
-  }
-  const pickup = rankAiPickup(player, partner);
-  if (pickup?.needed && pickup.urgent && pickup.range <= 190 && pickup.risk < .88) {
-    setGoal(pickup.pickup.x, clamp(pickup.pickup.y + 8, H * .48, H - 30), "resupply", 78);
-  }
-  const encounter = world.activeEncounter;
-  if (!pickup?.urgent || goal.priority < 78) {
-    if (encounter?.kind === "hold" || encounter?.kind === "escort") {
-      setGoal(encounter.x, encounter.y, "objective", 66);
-    } else if (encounter?.kind === "collect") {
-      const shard = world.encounterObjects
-        .filter((object) => object.type === "salvage" && !object.dead)
-        .sort((a, b) => distance(player, a) - distance(player, b))[0];
-      if (shard) setGoal(shard.x, shard.y, "salvage", 66);
-    } else if (encounter?.kind === "siege") {
-      setGoal(encounter.x, goal.y, "siege", 64);
+function aiNavigate(player, goal, partner, forecast = aiHazardForecast(player)) {
+  const status = statusBonuses(player), rush = SpaceRush.combatMultipliers(rushActive(), teamRushBonuses());
+  const speed = player.speed * status.speed * anomalyConfig().playerSpeed * rush.moveSpeed;
+  const handling = player.handling * rush.handling;
+  const field = SpaceAnomalies.playerForce(world.activeAnomaly, world.anomalyElapsed, player.x, player.y, W, H);
+  const dx = goal.x - player.x, dy = goal.y - player.y, range = Math.hypot(dx, dy);
+  const desired = { x: dx / Math.max(speed * .55, range), y: dy / Math.max(speed * .55, range) };
+  const candidates = [desired, { x: 0, y: 0 }, { x: desired.x * .45, y: desired.y * .45 }];
+  for (let i = 0; i < 16; i++) candidates.push({ x: Math.cos(i * TAU / 16), y: Math.sin(i * TAU / 16) });
+  let best = null;
+  for (const control of candidates) {
+    let risk = 0, peak = 0, reason = "clear", end = player;
+    let previous = { x: player.x, y: player.y };
+    for (const [i, seconds] of forecast.times.entries()) {
+      // Analytic integration of the same velocity response as updatePlayers.
+      const lag = (1 - Math.exp(-handling * seconds)) / handling;
+      const vx = control.x * speed + field.x, vy = control.y * speed + field.y;
+      const x = clamp(player.x + vx * seconds + (player.vx - vx) * lag, 13, W - 13);
+      const y = clamp(player.y + vy * seconds + (player.vy - vy) * lag, 32, H - 14);
+      let stepRisk = 0;
+      for (const hazard of forecast.hazards[i]) {
+        const separation = aiHazardSeparation(hazard, x, y, previous);
+        const clearance = separation - hazard.radius;
+        if (clearance >= hazard.margin) continue;
+        const danger = (clearance < 0 ? 16 + Math.min(12, -clearance) : 6 * (1 - clearance / hazard.margin)) * hazard.weight;
+        stepRisk += danger;
+        if (danger > peak) { peak = danger; reason = hazard.reason; }
+      }
+      // Discourage clipping an edge and losing an escape direction.
+      risk += stepRisk * (1.15 - seconds * .5);
+      if ((x === previous.x && Math.abs(control.x) > .5) || (y === previous.y && Math.abs(control.y) > .5)) risk += .6;
+      previous = end = { x, y };
     }
+    const goalDistance = goal.area
+      ? Math.max(0, distance(end, goal.area) - goal.area.radius) + distance(end, goal) * .15
+      : Math.max(0, distance(end, goal) - (goal.radius || (goal.intent === "rescue" ? 24 : 0)));
+    const urgency = goal.intent === "rescue" ? .09 : goal.intent === "resupply" ? .07 : .055;
+    const edge = Math.max(0, 26 - end.x) + Math.max(0, end.x - W + 26) + Math.max(0, end.y - H + 24);
+    const previousControl = player.aiControl || desired;
+    const turn = Math.hypot(control.x - previousControl.x, control.y - previousControl.y) * .3;
+    const linkRange = Math.max(player.linkRange, partner?.linkRange || 0) * (world.activeBranch?.reward.link || 1);
+    const peer = partner && { x: partner.x + partner.vx * .4, y: partner.y + partner.vy * .4 };
+    const link = partner && !partner.downed
+      ? Math.max(0, distance(end, peer) - linkRange * .88) * (goal.urgent ? .012 : .035) : 0;
+    const cost = risk + goalDistance * urgency + edge * .1 + turn + link;
+    if (control === desired) { player.aiDesiredRisk = risk; player.aiDesiredThreat = peak ? `${reason}:${peak.toFixed(2)}` : "clear"; }
+    if (!best || cost < best.cost) best = { control, cost, risk, peak, reason };
   }
-  const liveEnemies = world.enemies.filter((enemy) => !enemy.dead);
-  if (liveEnemies.length && goal.priority < 70) {
-    const target = liveEnemies.reduce((best, enemy) => {
-      const targetingAi = enemy.squadTargetIndex === player.index && enemy.weaponState === "windup";
-      const rolePriority = enemy.hullRole === "command" ? -54 : enemy.hullRole === "artillery" || enemy.weaponModule === "sniper" ? -34 : 0;
-      const rangeScore = Math.abs(enemy.x - player.x) + Math.max(0, enemy.y - 155) * .4;
-      const score = rangeScore + rolePriority + (targetingAi ? -48 : 0);
-      return !best || score < best.score ? { enemy, score } : best;
-    }, null)?.enemy;
-    if (target) setGoal(clamp(target.x, 25, W - 25), goal.y, target.hullRole === "command" ? "focus-command" : "focus-fire", target.hullRole === "command" ? 62 : 54);
-  }
-  if (partner && !partner.downed && !["objective", "salvage", "siege", "resupply"].includes(goal.intent)) {
-    const range = Math.max(player.linkRange, partner.linkRange);
-    const separation = distance(player, partner);
-    if (separation > range * .8 || player.aiLinkReturning) {
-      player.aiLinkReturning = separation > range * .62;
-      setGoal(
-        lerp(goal.x, partner.x + (partner.x > W / 2 ? -1 : 1) * range * .55, .7),
-        lerp(goal.y, partner.y - range * .22, .55),
-        "formation",
-        50
-      );
-    } else {
-      player.aiLinkReturning = false;
-    }
-  }
-  if (pickup?.needed && !pickup.urgent && pickup.range <= (pickup.sustain ? 145 : 86) && pickup.risk < .45 && goal.priority < 58) {
-    setGoal(pickup.pickup.x, clamp(pickup.pickup.y + 8, H * .48, H - 30), "resupply", 58);
-  }
-  if (player.hp <= 2 && partner) {
-    setGoal(lerp(goal.x, partner.x, .68), Math.min(H - 30, partner.y + 14), "survival", 82);
-  }
-  if (threat.severity >= .72 && goal.intent !== "rescue") {
-    setGoal(clamp(player.x + threat.x * 90, 20, W - 20), clamp(player.y + threat.y * 72, 42, H - 18), "evasion", 95);
-  }
-  return goal;
+  player.aiNavigationRisk = best.risk;
+  player.aiThreats = best.peak ? `${best.reason}:${best.peak.toFixed(2)}` : player.aiDesiredThreat || "clear";
+  if (player.aiDesiredRisk > best.risk + 2 && Math.hypot(best.control.x - desired.x, best.control.y - desired.y) > .25) player.aiIntent = "evasion";
+  return best.control;
 }
 
 function aiPilotControls(player) {
   if (!player) return { x: 0, y: 0 };
   if (player.downed) return { x: 0, y: 0 };
   const partner = aiPilotPartner(player);
-  player.aiThreats = "clear";
-
   if (world.routeChoice && partner) {
     const targetLane = partner.x < W / 3 ? 0 : partner.x > W * 2 / 3 ? 2 : 1;
     const targetX = [W * .19, W * .5, W * .81][targetLane];
@@ -1699,29 +1760,16 @@ function aiPilotControls(player) {
     return magnitude > 3 ? { x: dx / Math.max(3, magnitude), y: dy / Math.max(3, magnitude) } : { x: 0, y: 0 };
   }
 
-  const threat = evaluateAiThreats(player);
-  const goal = chooseAiStrategicGoal(player, partner, threat);
+  if (player.aiControl && world.time < (player.aiNextDecision || 0) && player.aiPartnerDown === Boolean(partner?.downed)
+    && player.aiHealth === player.hp && !player.aiGoal?.target?.dead) return player.aiControl;
+  player.aiNextDecision = world.time + .1;
+  player.aiPartnerDown = Boolean(partner?.downed);
+  player.aiHealth = player.hp;
+  const forecast = aiHazardForecast(player);
+  const goal = chooseAiStrategicGoal(player, partner, forecast);
   player.aiIntent = goal.intent;
-  player.aiThreats = threat.count ? `${threat.reason}:${threat.severity.toFixed(2)}:${threat.count}` : "clear";
-
-  const strategicX = goal.intent === "rescue" ? 4.2 : goal.intent === "resupply" ? 3.4 : 2.7;
-  const strategicY = goal.intent === "rescue" ? 3.8 : goal.intent === "resupply" ? 3.1 : 2.4;
-  let steerX = clamp((goal.x - player.x) * 0.045, -strategicX, strategicX);
-  let steerY = clamp((goal.y - player.y) * 0.05, -strategicY, strategicY);
-  if (threat.count > 0) {
-    const dangerWeight = 3.8 + threat.severity * 8.5 + Math.min(3.2, threat.count * .35);
-    steerX = lerp(steerX, 0, clamp(threat.severity * .28, 0, .45)) + threat.x * dangerWeight;
-    steerY = lerp(steerY, 0, clamp(threat.severity * .18, 0, .35)) + threat.y * dangerWeight;
-    if (threat.severity >= .34 || goal.intent === "evasion") player.aiIntent = "evasion";
-  }
-  if (player.x < 28) steerX += 2.4;
-  if (player.x > W - 28) steerX -= 2.4;
-  if (player.y < 80) steerY += 1.8;
-  if (player.y > H - 24) steerY -= 1.2;
-
-  const magnitude = Math.hypot(steerX, steerY);
-  if (magnitude > 1) return { x: steerX / magnitude, y: steerY / magnitude };
-  return { x: steerX, y: steerY };
+  player.aiControl = aiNavigate(player, goal, partner, forecast);
+  return player.aiControl;
 }
 
 function updateModeUI() {
@@ -2371,6 +2419,8 @@ function createPlayer(index) {
     shieldIncomingX: 0,
     shieldIncomingY: 0,
     shieldImpactDamage: 0,
+    shieldImpactColor: "#8deaff",
+    shieldImpacts: [],
     shieldBreakTimer: 0,
     shieldReformTimer: 0,
     hullHitTimer: 0,
@@ -3243,8 +3293,8 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
   const adaptiveThreat = threatConfig();
   const combat = COMBAT.curveFor(world.stageIndex, progress);
   const anomaly = anomalyConfig();
-  const eliteHealth = elite ? (QA_FORCE_ELITE ? 20 : 4.8) : 1;
-  const powerHealth = [lerp(1, .68, clamp(progress / .3, 0, 1)), .62, .58][world.stageIndex];
+  const eliteHealth = elite ? (QA_FORCE_ELITE ? 20 : [3.8, 4.4, 4.8][world.stageIndex]) : 1;
+  const powerHealth = [lerp(1, .68, clamp(progress / .3, 0, 1)), .72, 1.15][world.stageIndex];
   const maxHp = stats.hp * eliteHealth * contractHealth * build.hp * adaptiveThreat.enemyHp * powerHealth;
   const enemyRadius = stats.r * (elite ? 1.4 : 1) * build.scale;
   const enemyId = ++world.enemySerial;
@@ -3267,7 +3317,7 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
     bodyRadius: enemyRadius * .8,
     score: Math.round(stats.score * (elite ? 4 : 1) * build.score),
     age: 0,
-    initialFireDelay: rand(1.6, 3),
+    initialFireDelay: rand(.65, 1.05),
     seed: rand(0, TAU),
     dead: false,
     boss: false,
@@ -3342,9 +3392,9 @@ function makeEnemy(type, x = rand(25, W - 25), y = -15, options = {}) {
 }
 
 function addFormationEnemy(type, x, y, options = {}) {
-  if (world.stageIndex > 0) {
+  {
     const curve = COMBAT.curveFor(world.stageIndex, world.stageTime / activeStage().duration);
-    const budget = 10 + world.stageIndex * 2 + (curve.beat.id === "killzone" ? 2 : 0);
+    const budget = world.stageIndex === 0 ? 7 + curve.sector : 10 + world.stageIndex * 2 + (curve.beat.id === "killzone" ? 2 : 0);
     const occupied = world.enemies.reduce((sum, enemy) => sum + (enemy.dead || enemy.boss ? 0 : enemy.elite ? 2.5 : 1), 0);
     if (occupied + (options.elite ? 2.5 : 1) > budget) return null;
   }
@@ -3521,7 +3571,7 @@ function spawnEnemy(maxMembers = 1) {
 
 function spawnBoss() {
   if (world.activeEncounter) finishEncounter(false);
-  const baseHealth = [340, 490, 690][world.stageIndex];
+  const baseHealth = [1050, 1650, 2300][world.stageIndex];
   const stage = activeStage();
   const health = (QA_BOSS_STATE_MODE ? baseHealth * 100 : QA_FAST_MODE ? baseHealth * .14 : baseHealth) * (world.contract?.enemyHp || 1) * (stage.biome?.enemyHp || 1) * (world.activeBranch?.enemyHp || 1);
   world.boss = {
@@ -3534,11 +3584,19 @@ function spawnBoss() {
     vy: 0,
     hp: health,
     maxHp: health,
-    r: [28, 32, 37][world.stageIndex],
-    bodyRadius: [28, 32, 37][world.stageIndex],
+    r: [38, 42, 46][world.stageIndex],
+    bodyRadius: [38, 42, 46][world.stageIndex],
     score: 5000 * (world.stageIndex + 1),
     age: 0,
-    secondaryTimer: 3.4,
+    secondaryTimer: 8,
+    opening: 0,
+    phaseMorph: 0,
+    phaseRecovery: 0,
+    salvoIndex: 0,
+    salvoCount: 1,
+    salvoTimer: 0,
+    salvoAge: 1,
+    pendingPhase: 0,
     weaponState: "cooldown",
     attackId: "",
     weaponTimer: 1.15,
@@ -3557,33 +3615,52 @@ function spawnBoss() {
   };
   world.enemies.push(world.boss);
   world.bossSpawned = true;
-  world.enemyBullets = [];
-  world.enemyBeams = [];
+  // Arrival continues the current battlefield, including committed hazards.
   world.stageEvent = null;
   world.cinematic = { type: "boss", timer: 2.4, total: 2.4 };
-  world.flash = 0.7;
-  world.shake = 0.5;
+  world.shake = Math.max(world.shake, .16);
   audio.setStage(world.stageIndex, true);
   audio.sfx("boss");
   showToast(t("toast.warning", { boss: stageText(stage, "boss") }));
 }
 
 function enterBossPhase(boss, nextPhase) {
-  boss.phaseLevel = nextPhase;
-  boss.phaseShield = QA_FAST_MODE ? .28 : 1.15;
-  setEnemyWeaponState(boss, "cooldown", QA_FAST_MODE ? .32 : .9);
+  if (nextPhase <= boss.phaseLevel) return;
+  // Finish both an advertised attack and an already-started phase recovery.
+  if (boss.weaponState === "windup" || boss.weaponState === "fire" || boss.phaseRecovery > 0) {
+    boss.pendingPhase = Math.max(boss.pendingPhase || 0, nextPhase);
+    return;
+  }
+  boss.phaseLevel = Math.min(boss.phaseLevel + 1, nextPhase);
+  boss.pendingPhase = 0;
+  boss.phaseMorph = 1.4;
+  boss.phaseRecovery = 2.8;
+  boss.phaseShield = 0;
+  boss.opening = 2.8;
+  setEnemyWeaponState(boss, "cooldown", 2.8);
   boss.attackCommit = null;
   boss.attackId = "";
-  world.enemyBullets = [];
-  world.enemyBeams = [];
-  world.flash = Math.max(world.flash, .62);
-  world.shake = Math.max(world.shake, .52);
-  world.cinematic = { type: "phase", timer: 1.1, total: 1.1 };
-  burst(boss.x, boss.y, activeStage().accent, 42, 120);
+  boss.secondaryTimer = Math.max(boss.secondaryTimer, 4);
+  world.shake = Math.max(world.shake, .16);
+  burst(boss.x, boss.y, activeStage().accent, 20, 65);
   addNovaCharge("bossPhase", 5);
   addRushCharge("bossPhase");
   audio.sfx("bossPhase");
-  showToast(`${t("hud.phaseTitle", { phase: nextPhase })} // ${bossPhaseText(world.stageIndex, nextPhase)}`);
+  showToast(`${t("hud.phaseTitle", { phase: boss.phaseLevel })} // ${bossPhaseText(world.stageIndex, boss.phaseLevel)}`);
+}
+
+function enemyBulletSpeedMultiplier(source) {
+  const stage = activeStage();
+  const progress = world.stageTime / stage.duration;
+  const combat = COMBAT.curveFor(world.stageIndex, progress);
+  const branchSpeed = world.stageIndex === 0 && progress < .08
+    ? Math.min(1, world.activeBranch?.bulletSpeed || 1)
+    : world.activeBranch?.bulletSpeed || 1;
+  const biomeSpeed = world.stageIndex === 0 && progress < .08
+    ? Math.min(1, stage.biome?.bulletSpeed || 1)
+    : stage.biome?.bulletSpeed || 1;
+  const tacticalSpeed = source?.boss ? 1 : combat.bulletSpeed;
+  return (world.contract?.bulletSpeed || 1) * biomeSpeed * branchSpeed * threatConfig().bulletSpeed * anomalyConfig().enemyBulletSpeed * tacticalSpeed;
 }
 
 function enemyBullet(x, y, vx, vy, color = "#ff7d8b", size = 3, source = null, options = {}) {
@@ -3594,14 +3671,7 @@ function enemyBullet(x, y, vx, vy, color = "#ff7d8b", size = 3, source = null, o
   const budgetBonus = budgetClass === "boss" ? 34 : budgetClass === "deathrattle" ? 12 : 0;
   const bulletCap = combat.bulletCap + budgetBonus;
   if (world.enemyBullets.filter((bullet) => !bullet.dead).length >= bulletCap) return null;
-  const branchSpeed = world.stageIndex === 0 && progress < .08
-    ? Math.min(1, world.activeBranch?.bulletSpeed || 1)
-    : world.activeBranch?.bulletSpeed || 1;
-  const biomeSpeed = world.stageIndex === 0 && progress < .08
-    ? Math.min(1, stage.biome?.bulletSpeed || 1)
-    : stage.biome?.bulletSpeed || 1;
-  const tacticalSpeed = source?.boss ? 1 : combat.bulletSpeed;
-  const speedMultiplier = (world.contract?.bulletSpeed || 1) * biomeSpeed * branchSpeed * threatConfig().bulletSpeed * anomalyConfig().enemyBulletSpeed * tacticalSpeed;
+  const speedMultiplier = enemyBulletSpeedMultiplier(source);
   const finiteInput = [x, y, vx, vy].every(Number.isFinite);
   if (!finiteInput) world.combatInvalidProjectiles += 1;
   const safeX = Number.isFinite(x) ? x : W / 2;
@@ -3775,27 +3845,27 @@ function fireHunterSeeker(enemy, cluster = false, pattern = "hunterSeeker") {
     target,
     pattern,
     behavior: "homing",
-    homing: academy ? 1.55 : cluster ? 2.05 : 2.35,
-    homingDuration: academy ? (cluster ? 1.45 : 1.7) : cluster ? 2.7 : 3.15,
+    homing: pattern === "boss:voidPincer" ? 1.7 : academy ? 1.55 : cluster ? 2.05 : 2.35,
+    homingDuration: pattern === "boss:voidPincer" ? 1.8 : academy ? (cluster ? 1.45 : 1.7) : cluster ? 2.7 : 3.15,
     targetIndex: target.index,
   });
 }
 
 function fireBlastSeed(enemy, cluster = false, pattern = "blastSeed") {
   const target = lockedAttackTarget(enemy);
-  const count = cluster ? 3 : 1;
+  const count = pattern === "boss:twinBloom" ? 2 : cluster ? 3 : 1;
   for (let index = 0; index < count; index += 1) {
     const speed = (56 + world.stageIndex * 6 + index * 2) * (enemy.weaponBulletSpeed || 1);
     const velocity = aimedVelocity(enemy, speed, 0, target);
     const angle = Math.atan2(velocity.vy, velocity.vx) + (index - (count - 1) / 2) * .18;
-    const blastRadius = cluster ? 34 : 42;
+    const blastRadius = pattern === "boss:twinBloom" ? 25 : cluster ? 34 : 42;
     const origin = Number.isFinite(enemy.heading) ? ENEMY_AI.muzzle(enemy) : { x: enemy.x, y: enemy.y + enemy.r * .45 };
     const travelDistance = Math.hypot(target.x - origin.x, target.y - origin.y);
     const projectile = enemyBullet(origin.x, origin.y, Math.cos(angle) * speed, Math.sin(angle) * speed, "#ff7a4f", 3.6, enemy, {
       pattern,
       behavior: "blast",
       blastRadius,
-      blastDamage: enemy.elite ? 3 : 2,
+      blastDamage: pattern === "boss:twinBloom" ? 1 : enemy.elite ? 3 : 2,
       burstCount: cluster ? 8 : 10,
       burstSpeed: cluster ? 58 : 64,
       targetIndex: target.index,
@@ -3814,11 +3884,46 @@ function fireLaser(enemy, sweep = false, pattern = "laserLance") {
     pattern,
     angleOffset,
     width: sweep ? 4.6 : enemy.elite ? 7 : 5.4,
-    damage: enemy.elite ? 3 : 2,
+    damage: enemy.boss && world.stageIndex === 0 ? 1 : enemy.elite ? 3 : 2,
     duration: sweep ? .42 : .32,
     color: sweep ? "#ff72d4" : "#ffe070",
   });
   audio.sfx("enemySniper");
+}
+
+function aimedPatternSpeed(pattern, stage = world.stageIndex) {
+  const values = { snapBurst: 62 + stage * 8, twinBurst: 68 + stage * 8, predictiveFan: 70 + stage * 9,
+    sweep: 66 + stage * 8, lance: 108 + stage * 12, twinLance: 108 + stage * 12,
+    heavyFan: 64 + stage * 7, commandSalvo: 72 + stage * 8, eliteCross: 78 + stage * 8 };
+  return values[pattern] || 0;
+}
+
+function enemyWindupDuration(enemy, pattern = enemy.attackPattern) {
+  if (!enemy.boss && ENEMY_AI.hasChip(enemy) && ENEMY_AI.isLaser(pattern)) return ENEMY_AI.CHIP.laserWindup;
+  let duration = ENEMY_AI.profile(enemy).windup * Math.max(.78, 1 / (1 + world.stageIndex * .1 + (enemy.elite ? .16 : 0)));
+  if (pattern === "laserLance") duration = Math.max(duration, 1.12);
+  else if (pattern === "laserSweep") duration = Math.max(duration, 1.28);
+  else if (pattern === "ramCharge") duration = Math.max(duration, .85);
+  return duration;
+}
+
+function enemyAimPoint(enemy, target, pattern) {
+  let lead = ENEMY_AI.aimLead(enemy);
+  const delay = enemy.weaponState === "windup" ? enemy.weaponTimer : enemyWindupDuration(enemy, pattern);
+  const movingAim = !enemy.boss && (ENEMY_AI.isLaser(pattern) || ENEMY_AI.hasChip(enemy));
+  const driftX = movingAim ? (enemy.vx || 0) * delay : 0, driftY = movingAim ? (enemy.vy || 0) * delay : 0;
+  if (ENEMY_AI.hasChip(enemy)) {
+    const speed = aimedPatternSpeed(pattern);
+    if (ENEMY_AI.isLaser(pattern)) lead = 0;
+    else if (speed) {
+      const muzzle = ENEMY_AI.muzzle(enemy);
+      lead = ENEMY_AI.interceptLead({ x: muzzle.x + driftX, y: muzzle.y + driftY }, target,
+        speed * (enemy.weaponBulletSpeed || 1) * enemyBulletSpeedMultiplier(enemy), delay);
+    }
+  }
+  // Compensate for our own committed translation; the launch still comes from the moving muzzle.
+  return { x: clamp(target.x + (target.vx || 0) * lead, 12, W - 12) - driftX,
+    y: clamp(target.y + (target.vy || 0) * lead, 24, H - 12) - driftY, index: target.index };
 }
 
 function executeEnemyPattern(enemy) {
@@ -3831,15 +3936,15 @@ function executeEnemyPattern(enemy) {
   world.combatPatterns.add(pattern);
   enemy.attackCycle += 1;
   if (pattern === "snapBurst") {
-    fireAimed(enemy, 62 + stage * 8, tier >= 3 ? 2 : 1, .08, "#ff8aa3", { target, targetIndex: target.index, pattern, behavior: tier >= 3 ? "homing" : "linear", homing: .82, homingDuration: .72 });
+    fireAimed(enemy, aimedPatternSpeed(pattern), tier >= 3 ? 2 : 1, .08, "#ff8aa3", { target, targetIndex: target.index, pattern, behavior: tier >= 3 ? "homing" : "linear", homing: .82, homingDuration: .72 });
   } else if (pattern === "twinBurst") {
-    fireAimed(enemy, 68 + stage * 8, 2, .12, "#ffc45e", { target, pattern });
+    fireAimed(enemy, aimedPatternSpeed(pattern), 2, .12, "#ffc45e", { target, pattern });
   } else if (pattern === "predictiveFan") {
-    fireAimed(enemy, 70 + stage * 9, 3 + Math.floor(tier / 3), .16, "#ff936b", { target, pattern });
+    fireAimed(enemy, aimedPatternSpeed(pattern), 3 + Math.floor(tier / 3), .16, "#ff936b", { target, pattern });
   } else if (pattern === "sweep") {
-    fireAimed(enemy, 66 + stage * 8, 5, .2, "#ff6f88", { target, pattern, behavior: "curve", curve: Math.sin(enemy.seed) * .2 });
+    fireAimed(enemy, aimedPatternSpeed(pattern), 5, .2, "#ff6f88", { target, pattern, behavior: "curve", curve: Math.sin(enemy.seed) * .2 });
   } else if (pattern === "lance" || pattern === "twinLance") {
-    fireAimed(enemy, 108 + stage * 12, pattern === "twinLance" ? 2 : 1, .055, "#ffcf62", { target, pattern, behavior: "brake", damage: enemy.elite ? 3 : 2 });
+    fireAimed(enemy, aimedPatternSpeed(pattern), pattern === "twinLance" ? 2 : 1, .055, "#ffcf62", { target, pattern, behavior: "brake", damage: enemy.elite ? 3 : 2 });
   } else if (pattern === "laserLance" || pattern === "laserSweep") {
     fireLaser(enemy, pattern === "laserSweep", pattern);
   } else if (pattern === "hunterSeeker") {
@@ -3849,7 +3954,7 @@ function executeEnemyPattern(enemy) {
   } else if (pattern === "ramCharge") {
     audio.sfx("enemyThrust");
   } else if (pattern === "heavyFan") {
-    fireAimed(enemy, 64 + stage * 7, 4, .2, "#ff6f63", { target, pattern });
+    fireAimed(enemy, aimedPatternSpeed(pattern), 4, .2, "#ff6f63", { target, pattern });
   } else if (pattern === "laneWall") {
     fireLaneWall(enemy, 60 + stage * 8, pattern);
   } else if (pattern === "spiral") {
@@ -3862,7 +3967,7 @@ function executeEnemyPattern(enemy) {
   } else if (pattern === "seedMine" || pattern === "seedCluster") {
     fireSeedMine(enemy, pattern === "seedCluster");
   } else if (pattern === "commandSalvo") {
-    fireAimed(enemy, 72 + stage * 8, 3, .13, "#ffe16c", { target, pattern });
+    fireAimed(enemy, aimedPatternSpeed(pattern), 3, .13, "#ffe16c", { target, pattern });
     fireRing(enemy, 5 + stage, 48 + stage * 5, enemy.age * .28, "#ff87d7", { pattern });
   } else if (pattern === "commandCross") {
     fireLaneWall(enemy, 64 + stage * 8, pattern);
@@ -3871,7 +3976,7 @@ function executeEnemyPattern(enemy) {
     fireRing(enemy, 8 + stage * 2, 56 + stage * 7, enemy.age * .34, activeStage().accent, { pattern, behavior: "curve", curve: .28, damage: 2 });
   } else if (pattern === "eliteCross") {
     firePincer(enemy, 74 + stage * 8, pattern);
-    fireAimed(enemy, 78 + stage * 8, 3, .16, "#fff0a0", { target, pattern, damage: 2 });
+    fireAimed(enemy, aimedPatternSpeed(pattern), 3, .16, "#fff0a0", { target, pattern, damage: 2 });
   }
   world.shake = Math.max(world.shake, enemy.elite ? .24 : .08);
 }
@@ -3897,7 +4002,7 @@ function cancelEnemyAttack(enemy, reason) {
   enemy.stateReason = reason;
 }
 
-function enemyAttackAvailable(enemy, pattern) {
+function enemyAttackAvailable(enemy, pattern, checkQueue = true) {
   const combat = COMBAT.curveFor(world.stageIndex, clamp(world.stageTime / activeStage().duration, 0, 1));
   const release = combat.beat.id === "release" || world.growthGrace > 0 || world.boss;
   const active = world.enemies.filter(other => other !== enemy && !other.dead && !other.boss && ENEMY_AI.committed(other));
@@ -3910,12 +4015,18 @@ function enemyAttackAvailable(enemy, pattern) {
     for (const bullet of world.enemyBullets) if (!bullet.dead && bullet.behavior === "blast") reserved.add(bullet.sourceId);
     if (reserved.size >= (release ? 1 : 2)) return false;
   }
+  if (checkQueue && world.enemies.some(other => other !== enemy && !other.dead && !other.boss
+    && other.weaponState === "align" && other.stableAim >= .1 && other.weaponEligible
+    && ((other.weaponReadyAt ?? world.time) < (enemy.weaponReadyAt ?? world.time)
+      || (other.weaponReadyAt === enemy.weaponReadyAt && other.id < enemy.id))
+    && enemyAttackAvailable(other, other.attackPattern, false))) return false;
   return true;
 }
 
 function enemyRemoteEmitters(enemy) {
   const pattern = enemy.attackPattern;
   const nodes = [];
+  if (enemy.attackCommit?.rays) return [];
   if (["laneWall", "commandCross"].includes(pattern)) {
     for (let x = 18; x <= W - 18; x += 34) if (Math.abs(x - enemy.attackTargetX) >= 39) nodes.push({ x, y: enemy.y + enemy.r * .45, kind: "wall" });
   }
@@ -3928,6 +4039,7 @@ function enemyRemoteEmitters(enemy) {
 function beginEnemyWindup(enemy, target) {
   enemy.attackTargetX = target.x; enemy.attackTargetY = target.y; enemy.attackTargetIndex = target.index;
   enemy.attackCommit = null;
+  enemy.laserPlan = ENEMY_AI.multiLaser(enemy) ? ENEMY_AI.chooseLaserPlan(enemy, target, world.enemies) : null;
   const origin = ENEMY_AI.muzzle(enemy);
   const commit = { x: enemy.x, y: enemy.y, heading: enemy.heading, weaponYaw: enemy.weaponYaw, angle: enemy.weaponAim, origin };
   if (ENEMY_AI.isLaser(enemy.attackPattern)) commit.rays = ENEMY_AI.beamRays(enemy, W, H).map(ray => ({ ...ray }));
@@ -3938,16 +4050,42 @@ function beginEnemyWindup(enemy, target) {
   }
   enemy.attackCommit = commit;
   if (ENEMY_AI.hasChip(enemy)) enemy.chipReason = "predictive-attack";
-  let duration = ENEMY_AI.profile(enemy).windup * Math.max(.78, 1 / (1 + world.stageIndex * .1 + (enemy.elite ? .16 : 0)));
-  if (enemy.attackPattern === "laserLance") duration = Math.max(duration, 1.12);
-  else if (enemy.attackPattern === "laserSweep") duration = Math.max(duration, 1.28);
-  else if (enemy.attackPattern === "ramCharge") duration = Math.max(duration, .85);
-  setEnemyWeaponState(enemy, "windup", duration);
+  setEnemyWeaponState(enemy, "windup", enemyWindupDuration(enemy));
+  if (!ENEMY_AI.tracksLaser(enemy)) lockEnemyMotion(enemy);
   enemy.remoteEmitters = enemyRemoteEmitters(enemy);
-  world.enemyNextAttackAt = world.time + .22 + (enemy.id % 3) * .035;
+  world.enemyNextAttackAt = world.time + (world.stageIndex === 0 ? .38 : .25) + (enemy.id % 3) * .035;
   world.combatTelegraphs++;
   if (enemy.attackPattern === "ramCharge") audio.sfx("enemyThrust");
   else if (ENEMY_AI.isLaser(enemy.attackPattern)) audio.sfx("enemyLock");
+}
+
+function lockEnemyMotion(enemy) {
+  const commit = enemy.attackCommit;
+  if (!commit || commit.motion || commit.ram) return;
+  commit.motion = { vx: enemy.vx, vy: enemy.vy, heading: enemy.heading, weaponYaw: enemy.weaponYaw,
+    angle: enemy.weaponAim, bank: enemy.bank, pitch: enemy.pitch };
+}
+
+function moveLockedEnemy(enemy, dt) {
+  const commit = enemy.attackCommit, motion = commit.motion;
+  const margin = Math.max(16, (enemy.bodyRadius || enemy.r) + 7);
+  enemy.x = clamp(enemy.x + motion.vx * dt, margin, W - margin);
+  const minY = enemy.boss ? 36 : 20, maxY = enemy.boss ? 108 : H - margin;
+  enemy.y = clamp(enemy.y + motion.vy * dt, minY, maxY);
+  // Arena edges stop the blocked component; no bounce or renewed target tracking.
+  if (enemy.x === margin || enemy.x === W - margin) motion.vx = 0;
+  if (enemy.y === minY || enemy.y === maxY) motion.vy = 0;
+  enemy.vx = motion.vx; enemy.vy = motion.vy;
+  enemy.heading = motion.heading; enemy.weaponYaw = motion.weaponYaw; enemy.weaponAim = motion.angle;
+  enemy.bank = motion.bank; enemy.pitch = motion.pitch; enemy.turnRate = 0;
+  const dx = enemy.x - commit.x, dy = enemy.y - commit.y;
+  commit.x = enemy.x; commit.y = enemy.y;
+  commit.origin.x += dx; commit.origin.y += dy;
+  for (const ray of commit.rays || []) { ray.x1 += dx; ray.x2 += dx; ray.y1 += dy; ray.y2 += dy; }
+  for (const beam of world.enemyBeams) if (!beam.dead && beam.sourceId === enemy.id) {
+    beam.x1 += dx; beam.x2 += dx; beam.y1 += dy; beam.y2 += dy;
+  }
+  enemy.remoteEmitters = enemyRemoteEmitters(enemy);
 }
 
 function updateEnemyTactics(enemy, dt, canFire) {
@@ -3958,42 +4096,60 @@ function updateEnemyTactics(enemy, dt, canFire) {
   let intent = ENEMY_AI.plan(enemy, target, context, dt);
   const combat = COMBAT.curveFor(world.stageIndex, clamp(world.stageTime / activeStage().duration, 0, 1));
   const pattern = COMBAT.patternFor({ role: enemy.hullRole, weaponId: enemy.weaponModule, weaponPattern: enemy.weaponPattern, speciesPattern: enemy.speciesPattern, patternTier: combat.patternTier, cycle: enemy.attackCycle, elite: enemy.elite });
-  const lead = ENEMY_AI.aimLead(enemy);
-  const aimTarget = target ? { x: clamp(target.x + (target.vx || 0) * lead, 12, W - 12), y: clamp(target.y + (target.vy || 0) * lead, 24, H - 12), index: target.index } : { x: W / 2, y: H };
+  const aimPattern = enemy.weaponState === "cooldown" ? pattern : enemy.attackPattern;
+  const aimTarget = target ? enemyAimPoint(enemy, target, aimPattern) : { x: W / 2, y: H };
   enemy.weaponTimer = Math.max(0, enemy.weaponTimer - dt);
   enemy.weaponAge += dt;
-  if (enemy.weaponState === "cooldown" && enemy.weaponTimer <= 0 && canFire && target && enemy.tacticState === "engage") {
+  enemy.weaponEligible = Boolean(canFire && target && enemy.y >= 24 && enemy.x >= 12 && enemy.x <= W - 12
+    && enemy.age >= (enemy.formationDelay || 0) && distance(enemy, target) < 300);
+  if (enemy.weaponState === "cooldown" && enemy.weaponTimer <= 0 && enemy.weaponEligible) {
+    enemy.weaponReadyAt = world.time;
     setEnemyWeaponState(enemy, "align"); enemy.attackPattern = pattern; enemy.stableAim = 0;
   }
   if (enemy.weaponState === "align") {
-    if (!canFire || !target || !["engage", "maneuver"].includes(enemy.tacticState)) cancelEnemyAttack(enemy, "firing-lane-lost");
+    if (!canFire || !target) cancelEnemyAttack(enemy, "target-unavailable");
     else {
-      // Every frozen launch must settle first; residual drift used to cancel the warning.
+      // Navigation continues while the hull and weapon establish their firing direction.
       const heading = Math.atan2(aimTarget.y - enemy.y, aimTarget.x - enemy.x);
-      intent = { ...intent, face: heading, stop: true, lock: true };
+      intent = { ...intent, face: heading };
     }
   }
-  if (ENEMY_AI.committed(enemy)) {
-    const c = enemy.attackCommit;
-    const ram = enemy.weaponState === "fire" && c?.ram;
-    intent = { ...intent, x: ram ? ram.endX : enemy.x, y: ram ? ram.endY : enemy.y,
-      face: c?.heading ?? enemy.heading, stop: !ram, lock: !ram, ram: Boolean(ram), speed: ram ? (enemy.elite ? 188 : 158) : 0 };
+  const trackingLaser = Boolean(target && target.index === enemy.attackTargetIndex && ENEMY_AI.tracksLaser(enemy));
+  const committed = ENEMY_AI.committed(enemy);
+  const ramCommit = committed && enemy.attackCommit?.ram;
+  if (ramCommit) {
+    const ram = enemy.weaponState === "fire";
+    intent = { ...intent, x: ram ? ramCommit.endX : enemy.x, y: ram ? ramCommit.endY : enemy.y,
+      face: enemy.attackCommit.heading, stop: !ram, lock: !ram, ram, speed: ram ? (enemy.elite ? 188 : 158) : 0 };
+  } else if (target) intent.face = Math.atan2(aimTarget.y - enemy.y, aimTarget.x - enemy.x);
+  if (committed && !ramCommit && !trackingLaser) lockEnemyMotion(enemy);
+  if (committed && enemy.attackCommit?.motion) moveLockedEnemy(enemy, dt);
+  else {
+    ENEMY_AI.flight(enemy, intent, context, dt);
+    if (!ramCommit) ENEMY_AI.aim(enemy, aimTarget, dt, enemy.attackPattern === "ramCharge");
   }
-  ENEMY_AI.flight(enemy, intent, context, dt);
-  if (!ENEMY_AI.committed(enemy)) ENEMY_AI.aim(enemy, aimTarget, dt, enemy.attackPattern === "ramCharge");
+  if (trackingLaser) {
+    const previous = enemy.attackCommit;
+    enemy.attackCommit = null;
+    enemy.attackTargetX = aimTarget.x; enemy.attackTargetY = aimTarget.y;
+    const rays = ENEMY_AI.beamRays(enemy, W, H).map(ray => ({ ...ray }));
+    enemy.attackCommit = { ...previous, x: enemy.x, y: enemy.y, heading: enemy.heading, weaponYaw: enemy.weaponYaw, angle: enemy.weaponAim, origin: ENEMY_AI.muzzle(enemy), rays };
+    enemy.remoteEmitters = enemyRemoteEmitters(enemy);
+    if (!ENEMY_AI.tracksLaser(enemy)) lockEnemyMotion(enemy);
+  }
   if (enemy.weaponState === "align") {
     const precise = ENEMY_AI.isLaser(enemy.attackPattern) || enemy.attackPattern === "ramCharge";
-    const settled = Math.hypot(enemy.vx, enemy.vy) < .04;
     const aligned = ENEMY_AI.isRadial(enemy.attackPattern) || enemy.aimError < (precise ? .025 : .1);
-    enemy.stableAim = settled && aligned ? enemy.stableAim + dt : 0;
-    if (enemy.stableAim >= .15 && enemyAttackAvailable(enemy, enemy.attackPattern)) beginEnemyWindup(enemy, aimTarget);
+    enemy.stableAim = aligned && enemy.weaponEligible ? enemy.stableAim + dt : 0;
+    if (enemy.stableAim >= .1 && enemyAttackAvailable(enemy, enemy.attackPattern)) beginEnemyWindup(enemy, aimTarget);
   } else if (enemy.weaponState === "windup") {
-    if (enemy.attackCommit && Math.hypot(enemy.x - enemy.attackCommit.x, enemy.y - enemy.attackCommit.y) > 1) cancelEnemyAttack(enemy, "launch-position-disturbed");
-    else if (!world.players.some(player => !player.downed && player.index === enemy.attackTargetIndex) && !enemy.attackCommit?.ram) cancelEnemyAttack(enemy, "target-lost");
+    if (!world.players.some(player => !player.downed && player.index === enemy.attackTargetIndex) && !enemy.attackCommit?.ram) cancelEnemyAttack(enemy, "target-lost");
     else {
       enemy.weaponCharge = clamp(1 - enemy.weaponTimer / enemy.weaponDuration, 0, 1);
       if (enemy.weaponTimer <= 0) {
         setEnemyWeaponState(enemy, "fire", enemy.attackPattern === "ramCharge" ? 3 : Math.max(ENEMY_AI.profile(enemy).fireDuration, ENEMY_AI.isLaser(enemy.attackPattern) ? .46 : .18));
+        enemy.firstFireAge ??= enemy.age;
+        enemy.movingAttacks = (enemy.movingAttacks || 0) + (Math.hypot(enemy.vx, enemy.vy) > 2 ? 1 : 0);
         executeEnemyPattern(enemy);
       }
     }
@@ -4013,54 +4169,107 @@ function updateEnemyTactics(enemy, dt, canFire) {
   world.combatStateTransitions += enemy.tacticTransitions - transitions;
 }
 
+function bossSalvoCount(boss) {
+  const phase = boss.phaseLevel;
+  if (["sunLance", "twinBloom", "tripleEclipse"].includes(boss.attackId)) return 1;
+  if (boss.attackId === "petalBurst") return phase;
+  if (boss.attackId === "seedSpiral" || boss.attackId === "spiralCrown") return phase >= 3 ? 3 : 2;
+  if (boss.attackId === "voidPincer") return phase >= 2 ? 2 : 1;
+  if (boss.attackId === "doubleRail") return 3;
+  if (boss.attackId === "thunderFan") return phase >= 2 ? 3 : 2;
+  return 2;
+}
+
 function beginBossAttack(boss, stage) {
   const sequence = BOSS_ATTACK_SEQUENCES[stage][boss.phaseLevel - 1];
   boss.attackId = sequence[boss.attackIndex % sequence.length];
   boss.attackIndex += 1;
+  boss.salvoCount = bossSalvoCount(boss);
+  boss.salvoIndex = 0;
+  boss.salvoAge = 1;
   setEnemyWeaponState(boss, "windup", (BOSS_ATTACK_TELEGRAPH[boss.attackId] || .8) * (QA_FAST_MODE ? .52 : 1));
   const target = enemyTarget(boss);
   boss.attackTargetX = target.x;
   boss.attackTargetY = target.y;
   boss.attackTargetIndex = Number.isInteger(target.index) ? target.index : null;
   boss.attackCommit = null;
+  boss.laserPlan = ENEMY_AI.multiLaser(boss) ? ENEMY_AI.chooseLaserPlan(boss, target, world.enemies) : null;
   const rays = ENEMY_AI.beamRays(boss, W, H);
   boss.attackCommit = { x: boss.x, y: boss.y, heading: boss.heading, angle: boss.weaponAim, origin: ENEMY_AI.muzzle(boss), rays: rays.length ? rays.map(ray => ({ ...ray })) : undefined };
+  lockEnemyMotion(boss);
   audio.sfx("bossCharge");
 }
 
+function fireBossPetals(boss, spiral = false) {
+  const target = lockedAttackTarget(boss);
+  const origin = ENEMY_AI.muzzle(boss);
+  const aim = boss.attackCommit?.angle ?? Math.atan2(target.y - origin.y, target.x - origin.x);
+  // A readable central gap; petals curve away from it, not back across it.
+  const pairs = spiral ? 4 : 3;
+  for (const side of [-1, 1]) for (let i = 0; i < pairs; i++) {
+    const sweep = boss.salvoIndex ? (boss.salvoIndex % 2 ? .24 : -.24) : 0;
+    const angle = aim + sweep + side * (.24 + i * .22);
+    const speed = 57 + boss.phaseLevel * 4 + i * 2;
+    enemyBullet(origin.x, origin.y, Math.cos(angle) * speed, Math.sin(angle) * speed,
+      side < 0 ? "#ff72ac" : "#ffca58", 2.5, boss,
+      { pattern: spiral ? "boss:seedSpiral" : "boss:petalBurst", behavior: spiral ? "curve" : "linear", curve: spiral ? side * .12 : 0 });
+  }
+}
+
+function fireBossEclipse(boss, paired = false) {
+  // Opposite handed arcs originate on the two visible scythes.
+  for (const side of paired ? [-1, 1] : [boss.attackIndex % 2 ? -1 : 1]) {
+    const origin = ENEMY_AI.muzzle(boss, side);
+    for (let i = 0; i < 6; i++) {
+      const angle = .25 + i * .52 + (boss.salvoIndex || 0) * .15;
+      enemyBullet(origin.x, origin.y, Math.cos(angle) * (side < 0 ? 1 : -1) * 66, Math.sin(angle) * 66,
+        side < 0 ? "#c183ff" : "#ff6680", 2.5, boss,
+        { pattern: paired ? "boss:eclipseTwin" : "boss:spiralCrown", behavior: "curve", curve: side * .18 });
+    }
+  }
+}
+
 function executeBossAttack(boss, stage) {
+  boss.salvoCount = bossSalvoCount(boss);
+  boss.salvoIndex = 0;
+  boss.salvoInterval = [.72, .68, .64][stage];
+  boss.salvoTimer = boss.salvoInterval;
+  setEnemyWeaponState(boss, "fire", (boss.salvoCount - 1) * boss.salvoInterval + .55);
+  executeBossVolley(boss, stage);
+}
+
+function executeBossVolley(boss, stage) {
+  boss.salvoAge = 0;
+  boss.firstFireAge ??= boss.age;
+  boss.movingAttacks = (boss.movingAttacks || 0) + (Math.hypot(boss.vx, boss.vy) > 2 ? 1 : 0);
   const phase = boss.phaseLevel;
   const id = boss.attackId;
   if (id === "petalBurst") {
-    fireRing(boss, 7 + phase * 2, 58 + phase * 7, boss.age * .42, "#ff72ac", { pattern: "boss:petalBurst" });
+    fireBossPetals(boss);
   } else if (id === "sunLance") {
     fireLaser(boss, phase >= 3, "boss:sunLance");
   } else if (id === "seedSpiral") {
-    fireRing(boss, 8 + phase * 2, 54 + phase * 6, boss.age * .68, "#ff9dcc", { pattern: "boss:seedSpiral" });
-    fireRing(boss, 5 + phase, 72, -boss.age * .42, "#ffca58", { pattern: "boss:seedSpiral" });
+    fireBossPetals(boss, true);
   } else if (id === "twinBloom") {
     fireBlastSeed(boss, true, "boss:twinBloom");
   } else if (id === "railWall") {
-    for (const geometry of ENEMY_AI.beamRays(boss, W, H)) enemyBeam(boss, lockedAttackTarget(boss), { geometry, pattern: "boss:railWall", width: 5.8, damage: phase >= 3 ? 3 : 2, duration: .38, color: geometry.color });
+    for (const geometry of ENEMY_AI.beamRays(boss, W, H)) enemyBeam(boss, lockedAttackTarget(boss), { geometry, pattern: "boss:railWall", width: 5.8, damage: 2, duration: .38, color: geometry.color });
   } else if (id === "thunderFan") {
     fireAimed(boss, 82 + phase * 8, 2 + phase, .16, "#ffe16c", { damage: phase >= 3 ? 2 : 1, pattern: "boss:thunderFan" });
   } else if (id === "forgeCross") {
-    fireRing(boss, 6 + phase * 2, 62 + phase * 7, Math.PI / 4, "#70eaff", { pattern: "boss:forgeCross" });
-    fireAimed(boss, 84, 2, .12, "#ffe16c", { pattern: "boss:forgeCross" });
+    fireAimed(boss, 78, 4, .3, "#70eaff", { pattern: "boss:forgeCross", behavior: "brake" });
   } else if (id === "doubleRail") {
-    for (const geometry of ENEMY_AI.beamRays(boss, W, H)) enemyBeam(boss, lockedAttackTarget(boss), { geometry, pattern: "boss:doubleRail", width: 7.2, damage: 3, duration: .46, color: geometry.color });
+    for (const geometry of ENEMY_AI.beamRays(boss, W, H)) enemyBeam(boss, lockedAttackTarget(boss), { geometry, pattern: "boss:doubleRail", width: 7.2, damage: 2, duration: .46, color: geometry.color });
   } else if (id === "spiralCrown") {
-    fireRing(boss, 9 + phase * 3, 58 + phase * 7, -boss.age * .62, "#c183ff", { pattern: "boss:spiralCrown" });
+    fireBossEclipse(boss);
   } else if (id === "voidPincer") {
     fireHunterSeeker(boss, true, "boss:voidPincer");
   } else if (id === "eclipseTwin") {
-    fireRing(boss, 8 + phase * 2, 62, boss.age * .36, "#c183ff", { pattern: "boss:eclipseTwin" });
-    fireRing(boss, 7 + phase, 78, -boss.age * .28, "#ff4f70", { pattern: "boss:eclipseTwin", damage: phase >= 3 ? 2 : 1 });
+    fireBossEclipse(boss, true);
   } else if (id === "tripleEclipse") {
     fireBlastSeed(boss, true, "boss:tripleEclipse");
-    fireRing(boss, 10 + phase, 72, boss.age * -.38, "#c183ff", { pattern: "boss:tripleEclipse" });
+    // Detonation is the attack; do not stack a second ring over its escape lanes.
   }
-  setEnemyWeaponState(boss, "fire", .5);
   world.shake = Math.max(world.shake, .2 + stage * .05);
   audio.sfx("bossAttack");
 }
@@ -4079,7 +4288,11 @@ function updateBoss(boss, dt) {
   const stage = world.stageIndex;
   const phase = 1 - boss.hp / boss.maxHp;
   boss.secondaryTimer -= dt;
+  boss.salvoAge = (boss.salvoAge || 0) + dt;
   boss.phaseShield = Math.max(0, boss.phaseShield - dt);
+  boss.phaseMorph = Math.max(0, (boss.phaseMorph || 0) - dt);
+  boss.phaseRecovery = Math.max(0, (boss.phaseRecovery || 0) - dt);
+  boss.opening = Math.max(0, (boss.opening || 0) - dt);
   const nextPhase = phase >= .68 ? 3 : phase >= .34 ? 2 : 1;
   if (nextPhase > boss.phaseLevel) enterBossPhase(boss, nextPhase);
 
@@ -4088,10 +4301,15 @@ function updateBoss(boss, dt) {
   const context = { width: W, height: H, enemies: [], bullets: [] };
   if (boss.weaponState === "windup" && !world.players.some(p => !p.downed && p.index === boss.attackTargetIndex)) cancelEnemyAttack(boss, "target-lost");
   const committed = ENEMY_AI.committed(boss);
-  const ready = target && (boss.weaponState === "align" || boss.weaponTimer <= .1) && boss.phaseShield <= 0;
   const face = committed ? boss.attackCommit.heading : Math.atan2(aimTarget.y - boss.y, aimTarget.x - boss.x);
-  ENEMY_AI.flight(boss, { x: W / 2 + Math.sin(boss.age * .24) * (100 + stage * 12), y: 52,
-    face, speed: 34, stop: committed || ready, lock: committed || ready }, context, dt);
+  const drift = stage === 0 ? Math.sin(boss.age * .2) * 70
+    : stage === 1 ? Math.sin(boss.age * .12) * 52
+      : Math.sin(boss.age * .28) * 82;
+  const depth = stage === 0 ? Math.sin(boss.age * .4) * 7
+    : stage === 1 ? (boss.opening > 0 ? 12 : 0) : Math.cos(boss.age * .34) * 16;
+  if (committed && boss.attackCommit?.motion) moveLockedEnemy(boss, dt);
+  else ENEMY_AI.flight(boss, { x: W / 2 + drift, y: 78 + depth,
+    face, speed: boss.opening > 0 ? 16 : [30, 23, 34][stage] }, context, dt);
   if (boss.y < 36) return;
   const tactic = target ? "engage" : "acquire";
   if (boss.tacticState !== tactic) world.combatStateTransitions++;
@@ -4100,24 +4318,34 @@ function updateBoss(boss, dt) {
   if (boss.phaseShield > 0) return;
   boss.weaponTimer = Math.max(0, boss.weaponTimer - dt);
   boss.weaponAge += dt;
+  if (boss.weaponState === "fire" && boss.salvoIndex + 1 < boss.salvoCount) {
+    boss.salvoTimer -= dt;
+    if (boss.salvoTimer <= 0) {
+      boss.salvoIndex += 1;
+      boss.salvoTimer += boss.salvoInterval;
+      executeBossVolley(boss, stage);
+    }
+  }
   if (boss.weaponState === "windup") {
     boss.weaponCharge = clamp(1 - boss.weaponTimer / boss.weaponDuration, 0, 1);
     if (boss.weaponTimer <= 0) executeBossAttack(boss, stage);
   } else if (boss.weaponState === "fire" && boss.weaponTimer <= 0) {
-    const recovery = Math.max(.66, 1.42 - boss.phaseLevel * .15 - stage * .08) * (QA_FAST_MODE ? .58 : 1);
-    setEnemyWeaponState(boss, "cooldown", Math.max(0, recovery - .5));
+    const signature = ["sunLance", "twinBloom", "doubleRail", "railWall", "voidPincer", "tripleEclipse"].includes(boss.attackId);
+    const recovery = signature ? [2.4, 2.6, 2.2][stage] : [1.5, 1.35, 1.15][stage];
+    boss.opening = signature ? recovery : 0;
+    setEnemyWeaponState(boss, "cooldown", recovery);
     boss.attackCommit = null;
   } else if (boss.weaponState === "cooldown" && boss.weaponTimer <= 0 && target) {
     setEnemyWeaponState(boss, "align");
-  } else if (boss.weaponState === "align" && target && boss.aimError < .04 && Math.hypot(boss.vx, boss.vy) < .04) {
+  } else if (boss.weaponState === "align" && target && boss.aimError < .04) {
     beginBossAttack(boss, stage);
   }
 
-  if (boss.secondaryTimer <= 0) {
+  if (boss.secondaryTimer <= 0 && boss.weaponState === "cooldown" && boss.opening <= 0 && boss.phaseLevel >= 2) {
     const nativeType = activeStage().biome?.speciesId;
     const liveAdds = world.enemies.filter((enemy) => !enemy.dead && !enemy.boss).length;
-    const addBudget = Math.max(0, [8, 10, 12][stage] - liveAdds);
-    const desiredAdds = stage < 2 ? 2 : 3;
+    const addBudget = Math.max(0, [2, 3, 4][stage] - liveAdds);
+    const desiredAdds = stage < 2 ? 1 : 2;
     const addCount = Math.min(desiredAdds, addBudget);
     if (stage === 0) {
       for (let i = 0; i < addCount; i += 1) world.enemies.push(makeEnemy(i === 0 && nativeType ? nativeType : "dart", boss.x + (i ? 22 : -22), boss.y + 20, { bossAdd: true }));
@@ -4127,7 +4355,7 @@ function updateBoss(boss, dt) {
     } else {
       for (let i = 0; i < addCount; i += 1) world.enemies.push(makeEnemy(i === 1 && nativeType ? nativeType : i % 2 ? "mine" : "dart", rand(30, W - 30), -10, { bossAdd: true }));
     }
-    boss.secondaryTimer = Math.max(3, 5.4 - phase * 1.2 - stage * 0.3);
+    boss.secondaryTimer = [11, 10, 9][stage];
   }
 }
 
@@ -4219,7 +4447,7 @@ function triggerArc(player, enemy, extra = 1) {
 
 function damageEnemy(enemy, amount, shieldScale = 1) {
   if (amount <= 0 || enemy.dead || (enemy.boss && enemy.phaseShield > 0)) return { hull: 0, barrier: 0, broken: false };
-  let remaining = amount;
+  let remaining = amount * (enemy.boss && enemy.opening > 0 ? 1.3 : 1);
   const hullBefore = Math.max(0, enemy.hp);
   let barrierDamage = 0;
   let broken = false;
@@ -4362,6 +4590,7 @@ function updateNova(dt) {
 // Presentation is emitted only after shield charge actually increases.
 function shieldRestored(player, previous) {
   if (player.shield <= previous) return;
+  if (previous <= 0) player.shieldImpacts = [];
   player.shieldReformTimer = .72;
   player.shieldHitTimer = 0;
   player.shieldBreakTimer = 0;
@@ -4374,9 +4603,43 @@ function restorePlayerShield(player, amount) {
   shieldRestored(player, previous);
 }
 
+// Every consumed contact owns its age/geometry; invulnerability only gates damage accounting.
+function recordShieldContact(player, incoming, impact, absorbed = 0) {
+  const strength = absorbed || incoming;
+  const event = { age: 0, duration: .8, absorbed, contactOnly: absorbed === 0 };
+  // Presentation metadata only: source side, with reverse velocity at point overlap.
+  let impactX = Number.isFinite(impact?.x) ? impact.x - player.x : 0;
+  let impactY = Number.isFinite(impact?.y) ? impact.y - player.y : 0;
+  if (Math.hypot(impactX, impactY) < .01) {
+    impactX = -(impact?.vx || 0); impactY = -(impact?.vy || 0);
+  }
+  event.shieldImpactOffsetX = impactX;
+  event.shieldImpactOffsetY = impactY;
+  const moving = Math.hypot(impact?.vx || 0, impact?.vy || 0) > .01;
+  const relativeX = moving ? (impact.vx || 0) - (impact.kind === "beam" ? 0 : player.vx || 0) : -impactX;
+  const relativeY = moving ? (impact.vy || 0) - (impact.kind === "beam" ? 0 : player.vy || 0) : -impactY;
+  const relativeLength = Math.hypot(relativeX, relativeY);
+  event.shieldIncomingX = relativeLength > .01 ? relativeX / relativeLength : 0;
+  event.shieldIncomingY = relativeLength > .01 ? relativeY / relativeLength : 0;
+  event.shieldImpactDamage = strength;
+  // Source colour follows this impulse along the perimeter, without a whole-shield tint.
+  event.shieldImpactColor = (impact?.debuff && impact.payloadColor) || impact?.color || "#8deaff";
+  const impactLength = Math.hypot(impactX, impactY);
+  event.shieldImpactX = impactLength > 0 ? impactX / impactLength : 0;
+  event.shieldImpactY = impactLength > 0 ? impactY / impactLength : 0;
+  player.shieldImpacts ||= [];
+  if (player.shieldImpacts.length >= 12) player.shieldImpacts.shift();
+  player.shieldImpacts.push(event);
+  return event;
+}
+
 function damagePlayer(player, amount = 1, impact = null) {
-  if (player.invulnerability > 0 || player.downed) return false;
+  if (player.downed) return false;
   const incoming = Math.max(1, Math.round(Number(amount) || 1));
+  if (player.invulnerability > 0) {
+    if (impact && (player.shield > 0 || player.shieldBreakTimer === .8)) recordShieldContact(player, incoming, impact);
+    return false;
+  }
   let remaining = incoming;
   player.damageTaken += incoming;
   if (player.shield > 0) {
@@ -4384,24 +4647,8 @@ function damagePlayer(player, amount = 1, impact = null) {
     const absorbed = Math.min(player.shield, remaining);
     player.shield -= absorbed;
     player.shieldAbsorbed += absorbed;
-    // Presentation metadata only: source side, with reverse velocity at point overlap.
-    let impactX = Number.isFinite(impact?.x) ? impact.x - player.x : 0;
-    let impactY = Number.isFinite(impact?.y) ? impact.y - player.y : 0;
-    if (Math.hypot(impactX, impactY) < .01) {
-      impactX = -(impact?.vx || 0); impactY = -(impact?.vy || 0);
-    }
-    player.shieldImpactOffsetX = impactX;
-    player.shieldImpactOffsetY = impactY;
-    const moving = Math.hypot(impact?.vx || 0, impact?.vy || 0) > .01;
-    const relativeX = moving ? (impact.vx || 0) - (impact.kind === "beam" ? 0 : player.vx || 0) : -impactX;
-    const relativeY = moving ? (impact.vy || 0) - (impact.kind === "beam" ? 0 : player.vy || 0) : -impactY;
-    const relativeLength = Math.hypot(relativeX, relativeY);
-    player.shieldIncomingX = relativeLength > .01 ? relativeX / relativeLength : 0;
-    player.shieldIncomingY = relativeLength > .01 ? relativeY / relativeLength : 0;
-    player.shieldImpactDamage = absorbed;
-    const impactLength = Math.hypot(impactX, impactY);
-    player.shieldImpactX = impactLength > 0 ? impactX / impactLength : 0;
-    player.shieldImpactY = impactLength > 0 ? impactY / impactLength : 0;
+    const contact = recordShieldContact(player, incoming, impact, absorbed);
+    for (const key of Object.keys(contact)) if (key.startsWith("shield")) player[key] = contact[key];
     player.shieldHitTimer = .48;
     player.shieldReformTimer = 0;
     player.shieldBreakTimer = player.shield <= 0 ? .8 : 0;
@@ -4475,6 +4722,8 @@ function updatePlayers(dt) {
     const controls = input.player(player.index);
     player.controls = controls;
     player.invulnerability = Math.max(0, player.invulnerability - dt);
+    for (const impact of player.shieldImpacts || []) impact.age += dt;
+    if (player.shieldImpacts) player.shieldImpacts = player.shieldImpacts.filter(impact => impact.age < impact.duration);
     player.shieldHitTimer = Math.max(0, player.shieldHitTimer - dt);
     player.shieldBreakTimer = Math.max(0, player.shieldBreakTimer - dt);
     player.shieldReformTimer = Math.max(0, (player.shieldReformTimer || 0) - dt);
@@ -5008,7 +5257,7 @@ function updateStage(dt) {
   if (world.spawnTimer <= 0 && !preBossRecovery && !releaseBacklog && world.growthGrace <= 0) {
     const adaptiveThreat = threatConfig();
     const rawEnemyCap = Math.max(4, 6 + world.stageIndex * 2 + intensity.enemyCapBonus + adaptiveThreat.capBonus + combat.capBonus);
-    const chapterBudget = world.stageIndex > 0 ? 10 + world.stageIndex * 2 + (combat.beat.id === "killzone" ? 2 : 0) : rawEnemyCap;
+    const chapterBudget = world.stageIndex > 0 ? 10 + world.stageIndex * 2 + (combat.beat.id === "killzone" ? 2 : 0) : 7 + combat.sector;
     const enemyCap = QA_FORCE_ELITE ? 1 : Math.min(rawEnemyCap, chapterBudget);
     const activeEnemies = world.enemies.filter((enemy) => !enemy.dead && !enemy.boss).length;
     const weightedEnemies = world.enemies.reduce((sum, enemy) => sum + (enemy.dead || enemy.boss ? 0 : enemy.elite ? 2.5 : 1), 0);
@@ -5166,7 +5415,7 @@ function updateObjects(dt) {
       if (player.downed || beam.hitIds.includes(player.index)) continue;
       if (pointToSegmentDistance(player.x, player.y, beam.x1, beam.y1, beam.x2, beam.y2) <= player.hurtRadius + beam.width) {
         beam.hitIds.push(player.index);
-        if (damagePlayer(player, beam.damage, { x: beam.x1, y: beam.y1, vx: beam.x2 - beam.x1, vy: beam.y2 - beam.y1, kind: "beam" })) {
+        if (damagePlayer(player, beam.damage, { x: beam.x1, y: beam.y1, vx: beam.x2 - beam.x1, vy: beam.y2 - beam.y1, kind: "beam", color: beam.color, debuff: beam.debuff, payloadColor: beam.payloadColor })) {
           world.combatLaserHits += 1;
           applyEnemyDebuff(player, beam);
         }
@@ -5361,7 +5610,7 @@ function handleCollisions() {
       const correction = Math.min(.65, (bodyRange - range) * .22);
       a.x -= nx * correction; a.y -= ny * correction; b.x += nx * correction; b.y += ny * correction;
       a.contactCorrections = (a.contactCorrections || 0) + 1; b.contactCorrections = (b.contactCorrections || 0) + 1;
-      for (const enemy of [a, b]) if (enemy.weaponState === "windup") cancelEnemyAttack(enemy, "contact-interrupted");
+      for (const enemy of [a, b]) if (enemy.weaponState === "windup" && enemy.attackPattern === "ramCharge") cancelEnemyAttack(enemy, "contact-interrupted");
       if (closing > 0) {
         a.vx -= nx * closing * .5; a.vy -= ny * closing * .5;
         b.vx += nx * closing * .5; b.vy += ny * closing * .5;
@@ -6178,8 +6427,16 @@ function drawHud() {
 
   if (world.boss) {
     pixelText(stageText(stage, "boss"), W / 2, 34, stage.accent, "center", 7);
-    drawBar(W / 2 - 82, 38, 164, world.boss.hp / world.boss.maxHp, stage.accent);
-    const phaseLabel = t(world.boss.phaseShield > 0 ? "hud.coreShift" : "hud.phase", { phase: world.boss.phaseLevel });
+    const barX = W / 2 - 112, barWidth = 224;
+    drawBar(barX, 38, barWidth, world.boss.hp / world.boss.maxHp, stage.accent);
+    ctx.fillStyle = "#121524";
+    for (let segment = 1; segment < 24; segment++) ctx.fillRect(barX + barWidth * segment / 24, 38, .6, 3);
+    ctx.fillStyle = "#ffe0b1";
+    for (const threshold of [.32, .66]) ctx.fillRect(barX + barWidth * threshold, 37, 1, 5);
+    pixelText(`${Math.ceil(world.boss.hp)} / ${Math.ceil(world.boss.maxHp)}`, barX + barWidth + 4, 41, "#b5aec6", "left", 4.5);
+    const phaseLabel = world.boss.opening > 0 ? t("boss.opening")
+      : ["windup", "fire"].includes(world.boss.weaponState) ? t("boss.salvo", { attack: t(`boss.attack.${world.boss.attackId}`), count: world.boss.salvoCount })
+        : t(world.boss.phaseShield > 0 ? "hud.coreShift" : "hud.phase", { phase: world.boss.phaseLevel });
     pixelText(phaseLabel, W / 2, 48, world.boss.phaseShield > 0 ? "#ffffff" : "#85849e", "center", 5.5);
   }
 
@@ -6261,7 +6518,7 @@ function drawVariantNotice() {
 
 function drawCinematic() {
   const cinematic = world.cinematic;
-  if (!cinematic) return;
+  if (!cinematic || cinematic.type === "boss" || cinematic.type === "phase") return;
   const progress = clamp(1 - cinematic.timer / cinematic.total, 0, 1);
   const amount = Math.sin(progress * Math.PI);
   ctx.save();
@@ -6269,15 +6526,6 @@ function drawCinematic() {
   ctx.fillStyle = "#03040d";
   ctx.fillRect(0, 0, W, 12 * amount);
   ctx.fillRect(0, H - 12 * amount, W, 12 * amount);
-  if (cinematic.type === "boss" && world.boss) {
-    ctx.globalAlpha = Math.min(1, amount * 1.5);
-    pixelText(t("hud.threat"), W / 2, 102, "#ff6b77", "center", 7);
-    pixelText(stageText(activeStage(), "boss"), W / 2, 124, "#ffffff", "center", 15);
-  } else if (cinematic.type === "phase" && world.boss) {
-    ctx.globalAlpha = Math.min(.9, amount * 1.4);
-    pixelText(t("hud.phaseTitle", { phase: world.boss.phaseLevel }), W / 2, 112, activeStage().accent, "center", 13);
-    pixelText(bossPhaseText(world.stageIndex, world.boss.phaseLevel), W / 2, 130, "#ffffff", "center", 7);
-  }
   ctx.restore();
 }
 
@@ -6355,7 +6603,15 @@ function enemyLayoutStats() {
 }
 
 function draw() {
-  renderer3D.render(world, world.routeStages.length ? world.routeStages : STAGES, PLAYER_CONFIG, profile.settings);
+  const rendered = renderer3D.render(world, world.routeStages.length ? world.routeStages : STAGES, PLAYER_CONFIG, profile.settings);
+  if (rendered && !bootComplete) {
+    bootComplete = true;
+    const revealDelay = Math.max(0, 650 - (performance.now() - bootStartedAt));
+    window.setTimeout(() => {
+      bootSplash.classList.add("is-ready");
+      window.setTimeout(() => { bootSplash.hidden = true; }, 600);
+    }, revealDelay);
+  }
   resizeHudCanvas();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -6440,7 +6696,7 @@ function draw() {
   canvas.dataset.combatPatternTier = String(world.combatPatternTier);
   canvas.dataset.combatBulletCap = String(world.combatBulletCap);
   canvas.dataset.combatHardBulletCap = String(world.combatBulletCap + (world.boss ? 34 : 12));
-  canvas.dataset.bossAddCap = String(world.boss ? [8, 10, 12][world.stageIndex] : 0);
+  canvas.dataset.bossAddCap = String(world.boss ? [2, 3, 4][world.stageIndex] : 0);
   canvas.dataset.bossAdds = String(world.boss ? activeEnemies.filter((enemy) => enemy.bossAdd).length : 0);
   canvas.dataset.combatStateTransitions = String(world.combatStateTransitions);
   canvas.dataset.combatTelegraphs = String(world.combatTelegraphs);
@@ -6456,6 +6712,9 @@ function draw() {
   canvas.dataset.enemyWeaponStates = [...new Set(activeEnemies.map(e => e.weaponState))].filter(Boolean).join(",");
   canvas.dataset.enemyChips = activeEnemies.filter(e => ENEMY_AI.hasChip(e)).map(e => `${e.id}|${e.chipId}|${e.chipDecisions || 0}|${e.chipEvades || 0}|${e.chipReason || ""}|${e.chipDefenses || 0}|${e.attackCycle || 0}`).join(",");
   canvas.dataset.enemyChipCount = String(activeEnemies.filter(e => ENEMY_AI.hasChip(e)).length);
+  canvas.dataset.enemyChipAim = activeEnemies.filter(e => ENEMY_AI.hasChip(e)).map(e => `${e.id}|${ENEMY_AI.tracksLaser(e) ? "tracking" : ENEMY_AI.committed(e) ? "locked" : "acquiring"}`).join(",");
+  canvas.dataset.enemyWeaponActivity = activeEnemies.map(e => `${e.id}|${e.firstFireAge?.toFixed(2) ?? "pending"}|${e.movingAttacks || 0}|${(e.boss ? e.attackIndex : e.attackCycle) || 0}`).join(",");
+  canvas.dataset.enemyLaserPlans = activeEnemies.filter(e => e.laserPlan && ENEMY_AI.committed(e)).map(e => `${e.id}|${e.laserPlan.mode}|${e.laserPlan.allyId ?? ""}|${e.laserPlan.halfGap}`).join(",");
   canvas.dataset.enemyChipCap = String(ENEMY_AI.CHIP.cap[world.stageIndex]);
   canvas.dataset.enemyTargetSwitches = activeEnemies.reduce((sum, e) => sum + (e.targetSwitches || 0), 0);
   canvas.dataset.enemyBoundaryCorrections = activeEnemies.reduce((sum, e) => sum + (e.boundaryCorrections || 0), 0);
@@ -6515,6 +6774,12 @@ function draw() {
   canvas.dataset.anomalyEnergyRate = anomalyMultipliers.energyRate.toFixed(3);
   canvas.dataset.anomalyPickupMagnet = anomalyMultipliers.pickupMagnet.toFixed(2);
   canvas.dataset.anomalyScore = anomalyMultipliers.score.toFixed(3);
+  canvas.dataset.bossEncounter = ["petal-weave", "rail-siege", "eclipse-hunt"][world.stageIndex];
+  canvas.dataset.bossSalvo = world.boss ? `${world.boss.salvoIndex + 1}/${world.boss.salvoCount}` : "0/0";
+  canvas.dataset.bossPhaseRecovery = (world.boss?.phaseRecovery || 0).toFixed(2);
+  canvas.dataset.bossOpening = (world.boss?.opening || 0).toFixed(2);
+  canvas.dataset.bossPendingPhase = String(world.boss?.pendingPhase || 0);
+  canvas.dataset.bossContinuity = "preserve-hazards-fixed-camera";
   canvas.dataset.bossPhase = world.boss ? String(world.boss.phaseLevel) : "0";
   canvas.dataset.bossWeaponState = world.boss?.weaponState || "off";
   canvas.dataset.bossAttack = world.boss?.attackId || "";
@@ -6526,6 +6791,8 @@ function draw() {
   canvas.dataset.playerHullDamage = world.players.map((player) => player.hullDamageTaken).join(",");
   canvas.dataset.playerDamageState = world.players.map((player) => player.downed ? "downed" : player.hp / player.maxHp <= .3 ? "critical" : player.hp / player.maxHp <= .6 ? "damaged" : "healthy").join(",");
   canvas.dataset.playerShieldImpactDamage = world.players.map(player => player.shieldImpactDamage || 0).join(",");
+  canvas.dataset.playerShieldImpactCount = world.players.map(player => player.shieldImpacts?.length || 0).join(",");
+  canvas.dataset.playerShieldImpactColor = world.players.map(player => player.shieldImpactColor || "#8deaff").join(",");
   canvas.dataset.playerShieldReform = world.players.map(player => (player.shieldReformTimer || 0).toFixed(2)).join(",");
   canvas.dataset.playerHitFeedback = world.players.map((player) => `${player.shieldHitTimer.toFixed(2)}|${player.shieldBreakTimer.toFixed(2)}|${player.hullHitTimer.toFixed(2)}`).join(",");
   canvas.dataset.playerSpeed = world.players.map((player) => player.speed).join(",");
@@ -6539,12 +6806,17 @@ function draw() {
   canvas.dataset.playerDownCount = world.players.map((player) => player.downCount).join(",");
   canvas.dataset.playerRescueCount = world.players.map((player) => player.rescueCount).join(",");
   canvas.dataset.playerProjectiles = String(world.bullets.length);
+  canvas.dataset.aiNavigation = world.players.map(p => `${p.index}|${p.aiFocusId || 0}|${(p.aiNavigationRisk || 0).toFixed(2)}`).join(",");
+  canvas.dataset.aiGoals = world.players.map(p => `${p.index}|${p.aiGoal?.intent || "human"}|${p.aiDecisionScores || ""}`).join(",");
   canvas.dataset.aiThreats = world.gameMode === "solo" ? world.players.map((player) => player.aiThreats || "clear").join(",") : "human-coop";
   canvas.dataset.growthCapstones = world.players.map((player) => `${player.burstCadence > 0 ? 1 : 0}|${player.prismEcho > 0 ? 1 : 0}|${player.droneVolley > 0 ? 1 : 0}`).join(",");
   canvas.dataset.growthCapstoneProcs = world.players.map((player) => `${player.capstoneHeavyProcs}|${player.capstonePrismProcs}|${player.capstoneDroneProcs}`).join(",");
   canvas.dataset.qaGrowth = QA_GROWTH_MODE || "off";
   canvas.dataset.aiIntent = world.gameMode === "solo" ? world.players[1]?.aiIntent || "formation" : "human-coop";
   canvas.dataset.fps = String(measuredFps);
+  canvas.dataset.audioState = audio.context?.state || "uninitialized";
+  canvas.dataset.audioTransport = audio.transportStarted ? "running" : "waiting-for-gesture";
+  canvas.dataset.audioStep = String(audio.step);
   canvas.dataset.qa = QA_LABEL;
   canvas.dataset.frame = world.loadoutFrame;
   canvas.dataset.module = world.loadoutModule;
@@ -6830,4 +7102,8 @@ window.addEventListener("gamepaddisconnected", (event) => {
 updateModeUI();
 syncSettingsUI();
 resetWorld();
+audio.start().catch(() => {});
+const unlockAudio = () => { audio.start().catch(() => {}); };
+window.addEventListener("pointerdown", unlockAudio, { capture: true, once: true });
+window.addEventListener("keydown", unlockAudio, { capture: true, once: true });
 requestAnimationFrame(frame);

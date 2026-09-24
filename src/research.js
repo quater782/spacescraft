@@ -38,8 +38,8 @@
     const rank = sanitize(research).ranks;
     return Object.freeze({
       sectorEnergy: rank.wayfinder * 4,
-      encounterRepair: rank.fieldMedic * .5,
-      pickupShieldEvery: rank.reclaimer ? 10 - rank.reclaimer * 2 : 0,
+      encounterRepair: rank.fieldMedic ? .5 + rank.fieldMedic * .5 : 0,
+      pickupShieldEvery: [0, 8, 6, 5][rank.reclaimer],
       pickupEnergy: rank.fluxSalvage ? rank.fluxSalvage + 1 : 0,
       markEvery: rank.breaker ? 9 - rank.breaker : 0,
       novaShieldEvery: rank.guardian ? 4 - rank.guardian : 0,

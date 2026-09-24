@@ -39,13 +39,13 @@
   function calculateEffects(unlocks) {
     const owned = new Set(sanitizeUnlocks(unlocks));
     return Object.freeze({
-      speed: owned.has("vectorThrusters") ? 1.06 : 1,
+      speed: owned.has("vectorThrusters") ? 1.08 : 1,
       handling: owned.has("kineticDrift") ? 1.16 : 1,
       pickupMagnet: owned.has("kineticDrift") ? 24 : 0,
       radius: owned.has("phaseAnchor") ? .92 : 1,
       invulnerability: owned.has("phaseAnchor") ? .08 : 0,
-      damage: owned.has("pulseTuning") ? 1.07 : 1,
-      fireRate: owned.has("autoLoader") ? 1.09 : 1,
+      damage: owned.has("pulseTuning") ? 1.09 : 1,
+      fireRate: owned.has("autoLoader") ? 1.10 : 1,
       projectileSpeed: owned.has("autoLoader") ? 1.06 : 1,
       energyGain: owned.has("novaMatrix") ? 1.08 : 1,
       novaChargeRate: owned.has("novaMatrix") ? 1.08 : 1,

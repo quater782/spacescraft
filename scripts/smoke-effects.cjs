@@ -47,12 +47,13 @@ async function run() {
       result.push({dx,dy,x:p.shieldImpactX,y:p.shieldImpactY,shield:p.shield});
     }
     cleanEffects();
-    const p=world.players[0];world.enemyBeams=[{x1:p.x,y1:20,x2:p.x,y2:260,width:5,age:0,duration:.6,damage:1,hitIds:[]}];
+    const p=world.players[0];world.enemyBeams=[{x1:p.x,y1:20,x2:p.x,y2:260,width:5,age:0,duration:.6,damage:1,hitIds:[],color:'#ffdf68',debuff:'glitch',payloadColor:'#d986ff'}];
     updateObjects(1/60);
-    result.push({laser:true,x:p.shieldImpactX,y:p.shieldImpactY,shield:p.shield});
+    result.push({laser:true,x:p.shieldImpactX,y:p.shieldImpactY,shield:p.shield,color:p.shieldImpactColor});
     return result;
   })()`);
   for(const hit of directions) { assert.equal(hit.shield,2); assert.equal(hit.x,hit.laser?0:hit.dx); assert.equal(hit.y,hit.laser?-1:hit.dy); }
+  assert.equal(directions.at(-1).color,'#d986ff','actual beam collision must forward its payload colour');
   const shieldEvents = await win.webContents.executeJavaScript(`(() => {
     cleanEffects();world.gameMode='duo';const p=world.players[0];p.shield=2;
     const sounds=[];const original=audio.sfx.bind(audio);
@@ -65,7 +66,7 @@ async function run() {
       p.invulnerability=0;damagePlayer(p,1,{x:p.x-20,y:p.y});
       checks.break=p.shield===0&&p.shieldBreakTimer===.8&&sounds.at(-1)==='shieldBreak';
       applyPickup(p,{type:'shield',x:p.x,y:p.y,dead:false});
-      checks.pickup=p.shield===2&&p.shieldReformTimer===.72&&p.shieldBreakTimer===0&&sounds.at(-1)==='shieldReform';
+      checks.pickup=p.shield===2&&p.shieldReformTimer===.72&&p.shieldBreakTimer===0&&p.shieldImpacts.length===0&&sounds.at(-1)==='shieldReform';
       p.shield=p.maxShield;const full=sounds.length;applyPickup(p,{type:'shield',x:p.x,y:p.y,dead:false});checks.full=sounds.length===full;
       p.shield=0;p.shieldRegenInterval=1;p.shieldRegenTimer=0;updatePlayers(1/60);
       checks.regen=p.shield===1&&p.shieldReformTimer===.72&&sounds.at(-1)==='shieldReform';
@@ -81,7 +82,7 @@ async function run() {
     for(const damage of [1,4]) {
       p.shield=6;p.invulnerability=0;p.vx=p.vy=0;world.enemyBullets=[];
       enemyBullet(p.x-2,p.y,60,0,'#ffdf68',3,null,{damage});
-      handleCollisions();results.push({damage,absorbed:p.shieldImpactDamage,remaining:p.shield,incoming:p.shieldIncomingX});
+      handleCollisions();results.push({damage,absorbed:p.shieldImpactDamage,remaining:p.shield,incoming:p.shieldIncomingX,color:p.shieldImpactColor});
     }
     p.shield=1;p.invulnerability=0;const hp=p.hp;damagePlayer(p,4,{x:p.x-2,y:p.y,vx:60,vy:0});
     const overflow={absorbed:p.shieldImpactDamage,hullLost:hp-p.hp};
@@ -90,13 +91,49 @@ async function run() {
       const contact=renderer3D.shieldContact(base,profile,{shieldImpactOffsetX:-2,shieldImpactOffsetY:z*13.3,shieldIncomingX:1,shieldIncomingY:0});
       return {incidence:contact.incidence,surface:contact.point.x**2+((contact.point.y-.18)/.8)**2+contact.point.z**2,reflectionZ:contact.reflection.z};
     });
-    return {results,overflow,angles};
+    const contact=renderer3D.shieldContact(base,profile,{shieldImpactOffsetX:-2,shieldIncomingX:1});
+    const pulse=(age,damage,color='#ffb45f')=>({contact,age,damage,color:renderer3D.pixelEffects.color.clone().set(color)});
+    const response=(angle,...pulses)=>renderer3D.shieldRingResponse(angle,pulses);
+    const heavy=pulse(.045,4),light=pulse(.045,1),other=pulse(.045,2,'#70eaff');
+    const a=response(contact.angle,heavy),b=response(contact.angle,other);
+    const both=response(contact.angle,heavy,other),reverse=response(contact.angle,other,heavy);
+    const field={compression:a.radial,rebound:response(contact.angle,pulse(.20,4)).radial,
+      far:response(contact.angle+Math.PI,heavy).radial,light:response(contact.angle,light).radial,
+      sumError:Math.abs(both.displacement-a.displacement-b.displacement),
+      orderError:Math.abs(both.radial-reverse.radial),
+      colorError:Math.abs(both.color.r-reverse.color.r)+Math.abs(both.color.g-reverse.color.g)+Math.abs(both.color.b-reverse.color.b),
+      seamError:Math.abs(response(-Math.PI+.03,heavy).radial-response(Math.PI+.03,heavy).radial),
+      cancellation:Math.abs(response(contact.angle,heavy,pulse(.20,4)).displacement)<Math.abs(a.displacement)};
+    cleanEffects();const q=world.players[0];q.shield=8;q.vx=q.vy=0;
+    for(const [dx,dy,color] of [[-1,0,'#ffb45f'],[1,0,'#70eaff'],[0,-1,'#ff83d7']])
+      enemyBullet(q.x+dx*2,q.y+dy*2,-dx*60,-dy*60,color,3,null,{damage:1});
+    const simultaneousBullets=[...world.enemyBullets];handleCollisions();
+    const simultaneous={count:q.shieldImpacts.length,colors:q.shieldImpacts.map(e=>e.shieldImpactColor),
+      sides:q.shieldImpacts.map(e=>[e.shieldImpactX,e.shieldImpactY]),shield:q.shield,damage:q.damageTaken,
+      absorbed:q.shieldAbsorbed,consumed:simultaneousBullets.filter(b=>b.dead).length};
+    updatePlayers(1/60);simultaneous.ages=q.shieldImpacts.map(e=>e.age);
+    for(let i=0;i<30;i++)damagePlayer(q,1,{x:q.x-2,y:q.y,vx:60,vy:0});
+    simultaneous.bounded=q.shieldImpacts.length;
+    for(let i=0;i<50;i++)updatePlayers(1/60);
+    simultaneous.expired=q.shieldImpacts.length;
+    return {results,overflow,angles,field,simultaneous};
   })()`);
-  for(const hit of impacts.results){assert.equal(hit.absorbed,hit.damage);assert.equal(hit.remaining,6-hit.damage);assert.equal(hit.incoming,1);}
+  for(const hit of impacts.results){assert.equal(hit.absorbed,hit.damage);assert.equal(hit.remaining,6-hit.damage);assert.equal(hit.incoming,1);assert.equal(hit.color,'#ffdf68');}
   assert.deepEqual(impacts.overflow,{absorbed:1,hullLost:3});
   impacts.angles.forEach(contact=>assert.ok(Math.abs(contact.surface-1)<1e-6));
   assert.ok(impacts.angles[0].incidence>.99&&impacts.angles[1].incidence<.5&&impacts.angles[2].incidence<.5);
   assert.ok(impacts.angles[1].reflectionZ>0&&impacts.angles[2].reflectionZ<0);
+  assert.ok(impacts.field.compression<.75,'heavy impact must make a clearly visible dent');
+  assert.ok(impacts.field.rebound>1,'the same perimeter patch must rebound after compression');
+  assert.ok(Math.abs(impacts.field.far-1)<.01,'the far side must not move before the wave arrives');
+  assert.ok(1-impacts.field.compression>3*(1-impacts.field.light),'heavy deformation must exceed light deformation by at least 3x');
+  for(const key of ['sumError','orderError','colorError','seamError'])assert.ok(impacts.field[key]<1e-9,key);
+  assert.ok(impacts.field.cancellation,'opposed phases must cancel instead of adding unsigned deformation');
+  assert.equal(impacts.simultaneous.count,3);assert.equal(new Set(impacts.simultaneous.colors).size,3);
+  assert.deepEqual(impacts.simultaneous.sides,[[-1,0],[1,0],[0,-1]]);
+  assert.equal(impacts.simultaneous.shield,7);assert.equal(impacts.simultaneous.damage,1);assert.equal(impacts.simultaneous.absorbed,1);
+  assert.equal(impacts.simultaneous.consumed,3);impacts.simultaneous.ages.forEach(age=>assert.equal(age,1/60));
+  assert.equal(impacts.simultaneous.bounded,12);assert.equal(impacts.simultaneous.expired,0);
   let audioPeaks=[];
   // Visual iterations need not depend on the host audio device clock.
   if (!process.argv.includes('--visual-only')) {
@@ -122,11 +159,71 @@ async function run() {
   await win.webContents.executeJavaScript(`audio.toggleMute();true;`);
   }
   const capture = async (name, script) => {
-    await win.webContents.executeJavaScript(`(() => {${script}; draw(); document.querySelector('#game').style.visibility='hidden';document.querySelector('#toast').style.visibility='hidden';return true;})()`);
+    await win.webContents.executeJavaScript(`(() => {${script};world.players.forEach(p=>(p.shieldImpacts||[]).forEach(e=>e.age=p.shieldBreakTimer>0?.8-p.shieldBreakTimer:Math.max(0,.48-p.shieldHitTimer))); draw(); document.querySelector('#game').style.visibility='hidden';document.querySelector('#toast').style.visibility='hidden';return true;})()`);
     await delay(100);
     fs.writeFileSync(path.join(output,name+'.png'),(await win.webContents.capturePage()).toPNG());
-    if(['shield-directions','shield-damage','shield-angle','link-overload','link-intercept'].includes(name)) fs.writeFileSync(path.join(output,name+'-detail.png'),(await win.webContents.capturePage({x:410,y:495,width:620,height:190})).toPNG());
+    if(name.startsWith('shield-') || ['link-overload','link-intercept'].includes(name)) fs.writeFileSync(path.join(output,name+'-detail.png'),(await win.webContents.capturePage({x:410,y:495,width:620,height:190})).toPNG());
   };
+  if (process.argv.includes('--field-gallery')) {
+    // Real contact creation and renderer; only presentation ages / approaching bullets are staged.
+    await win.webContents.executeJavaScript(`cleanEffects();
+      document.querySelector('#qualitySetting').value='high';document.querySelector('#qualitySetting').dispatchEvent(new Event('change'));
+      const orange='#ffb45f',cyan='#70eaff',pink='#ff83d7';
+      const shot=(dx,dy,damage,color=orange,offset=0)=>({dx,dy,damage,color,offset,payload:color===cyan?'cryo':color===pink?'glitch':'fracture'});
+      window.fieldCases=[
+        {label:'轻击 1 / LIGHT',x:100,y:118,shots:[shot(0,1,1)]},
+        {label:'中击 2 / MEDIUM',x:240,y:118,shots:[shot(0,1,2)]},
+        {label:'重击 4 / HEAVY',x:380,y:118,shots:[shot(0,1,4)]},
+        {label:'两侧相撞 / OPPOSING',x:120,y:212,shots:[shot(1,0,2,cyan),shot(-1,0,2,pink)]},
+        {label:'三向叠加 / THREE HITS',x:240,y:212,shots:[shot(0,1,2),shot(1,0,2,cyan),shot(-1,0,2,pink)]},
+        {label:'斜擦重击 / GLANCING 4',x:360,y:212,shots:[shot(1,0,4,cyan,15)]}];
+      const template=world.players[0];world.players=fieldCases.map((c,i)=>{
+        const p={...template,index:i%2,x:c.x,y:c.y,vx:0,vy:0,shield:12,shieldImpacts:[],invulnerability:0};
+        for(const shot of c.shots){
+          damagePlayer(p,shot.damage,{x:p.x-shot.dx*40,y:p.y-shot.dy*40+shot.offset,vx:shot.dx*120,vy:shot.dy*120,color:shot.color});
+          shot.event={...p.shieldImpacts.at(-1)};
+          const base=renderer3D.scene.matrix.clone().identity().makeScale(.8528,.8528,.8528);base.setPosition(...renderer3D.toWorld(p.x,p.y,.32));
+          const contact=renderer3D.shieldContact(base,{span:1.3,bodyLength:1.7},shot.event);
+          shot.endX=p.x+contact.point.x*.8528*21.5;shot.endY=p.y+contact.point.z*.8528*13.3;
+        }
+        return p;
+      });
+      window.fieldLandmark=renderer3D.drawLandmark;renderer3D.drawLandmark=()=>{};
+      const layer=document.createElement('div');layer.id='fieldGalleryLabels';layer.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:999;color:#bddbe7;font:600 15px system-ui';document.body.append(layer);
+      world.particles=[];world.power.effects=[];world.flash=0;world.shake=0;world.activeAnomaly=null;world.sectorFlashTimer=0;
+      window.fieldFrame=(time)=>{
+        world.time=2+time;world.enemyBullets=[];
+        world.players.forEach((p,i)=>{
+          const c=fieldCases[i];p.shield=6;p.shieldHitTimer=0;p.shieldBreakTimer=0;p.shieldImpacts=[];
+          p.shieldReformTimer=time<.72?.72-time:0;
+          for(const [index,shot] of c.shots.entries())for(const arrival of [1.08,2.35+index*.07]){
+            const age=time-arrival;
+            if(age>=0&&age<.8)p.shieldImpacts.push({...shot.event,age});
+            if(age>=-.32&&age<0){
+              const travel=-age*125;
+              world.enemyBullets.push({x:shot.endX-shot.dx*travel,y:shot.endY-shot.dy*travel,vx:shot.dx*125,vy:shot.dy*125,r:3,age:.32+age,behavior:'linear',weaponModule:'pulse',payloadModule:shot.payload,color:shot.color,payloadColor:shot.color});
+            }
+          }
+        });draw();document.querySelector('#game').style.visibility='hidden';document.querySelector('#toast').style.visibility='hidden';
+        const rect=document.querySelector('#scene').getBoundingClientRect();
+        layer.replaceChildren();fieldCases.forEach(c=>{
+          const p=renderer3D.pixelEffects.position.clone().set(...renderer3D.toWorld(c.x,c.y,.32)).project(renderer3D.camera);
+          const x=rect.left+(p.x+1)*rect.width/2,y=rect.top+(1-p.y)*rect.height/2;
+          const label=document.createElement('div');label.textContent=c.label;
+          label.style.cssText='position:absolute;left:'+x+'px;top:'+(y-88)+'px;transform:translateX(-50%);color:'+(c.shots.length>1?'#cdeafa':c.shots[0].color);layer.append(label);
+        });
+        const phase=time<.76?'粒子逐颗汇入 / FORMING':time<1.08?'同色 · 同角度 · 不同伤害 / SAME ANGLE, DIFFERENT DAMAGE':time<1.88?'沿原有外缘传导 / WAVES ON THE EXISTING PERIMETER':time<2.35?'下一轮 / NEXT VOLLEY':time<3.3?'连续命中叠加 / OVERLAPPING IMPULSES':'衰减归位 / SETTLING';
+        const title=document.createElement('div');title.textContent=phase;
+        title.style.cssText='position:absolute;left:50%;top:195px;transform:translateX(-50%);font-size:18px';layer.append(title);
+      };fieldFrame(0);true;`);
+    for (let frame=0;frame<96;frame++) {
+      await win.webContents.executeJavaScript(`fieldFrame(${frame/24});true;`);
+      await delay(42);
+      fs.writeFileSync(path.join(output,`perimeter-${String(frame).padStart(3,'0')}.png`),(await win.webContents.capturePage({x:140,y:180,width:1160,height:570})).toPNG());
+    }
+    assert.equal(await win.webContents.executeJavaScript(`document.querySelector('#scene').dataset.effectDropped`),'0');
+    await win.webContents.executeJavaScript(`renderer3D.drawLandmark=fieldLandmark;document.querySelector('#fieldGalleryLabels').remove();cleanEffects();true;`);
+  }
   // New VFX use production event creation and simulation ages, without advancing combat.
   const skillFrames = [];
   for (const quality of ['low', 'balanced', 'high']) {
@@ -163,6 +260,37 @@ async function run() {
   await capture('shield-angle', `cleanEffects();world.players.forEach((p,i)=>{p.shield=6;p.vx=p.vy=0;damagePlayer(p,2,{x:p.x-2,y:p.y+(i?15:0),vx:60,vy:0});p.shieldHitTimer=.32;});world.particles=[];`);
   await capture('shield-break', `world.players.forEach((p,i)=>{p.invulnerability=0;p.shield=1;damagePlayer(p,1,{x:p.x,y:120});p.shieldBreakTimer=.53;p.shieldHitTimer=.21;});world.particles=[];`);
   await capture('shield-reform', `cleanEffects();world.gameMode='duo';world.players.forEach(p=>{p.shield=0;applyPickup(p,{type:'shield',x:p.x,y:p.y,dead:false});p.shieldReformTimer=.39;});world.particles=[];`);
+  // Isolate each visible input: amount, colour and incidence, at the same effect age.
+  for (const quality of ['low','balanced','high']) {
+    await capture('shield-idle-'+quality, `cleanEffects();document.querySelector('#qualitySetting').value='${quality}';document.querySelector('#qualitySetting').dispatchEvent(new Event('change'));`);
+    for (const kind of ['damage','color','angle','shatter']) {
+      await capture('shield-response-'+kind+'-'+quality, `cleanEffects();world.players.forEach((p,i)=>{
+        const amount='${kind}'==='damage'||'${kind}'==='shatter'?(i?4:1):2;
+        p.shield='${kind}'==='shatter'?amount:6;p.vx=p.vy=0;
+        damagePlayer(p,amount,{x:p.x-2,y:p.y+('${kind}'==='angle'&&i?15:0),vx:60,vy:0,color:'${kind}'==='color'?(i?'#d986ff':'#ff795e'):'#ffb45f'});
+        p.shieldHitTimer=.33;if(p.shield===0)p.shieldBreakTimer=.65;
+      });world.particles=[];`);
+      assert.equal(await win.webContents.executeJavaScript(`document.querySelector('#scene').dataset.effectDropped`),'0');
+    }
+  }
+  await win.webContents.executeJavaScript(`document.querySelector('#qualitySetting').value='balanced';document.querySelector('#qualitySetting').dispatchEvent(new Event('change'));true;`);
+  if(process.argv.includes('--shield-response-motion')) {
+    await win.webContents.executeJavaScript(`cleanEffects();world.players.forEach((p,i)=>{
+      p.shield=6;p.vx=p.vy=0;damagePlayer(p,i?4:1,{x:p.x-2,y:p.y+(i?15:0),vx:60,vy:0,color:i?'#d986ff':'#ff795e'});
+    });world.particles=[];true;`);
+    for(let frame=0;frame<84;frame++) {
+      const time=frame/30;
+      await win.webContents.executeJavaScript(`world.time=2+${time};world.players.forEach(p=>{
+        p.shield=${time}<.8?2:${time}<1.8?0:3;
+        p.shieldHitTimer=${time}<.8?Math.max(0,.48-(${time}-.15)):0;if(${time}<.15)p.shieldHitTimer=0;
+        p.shieldBreakTimer=${time}>=.8&&${time}<1.8?Math.max(0,.8-(${time}-.8)):0;
+        p.shieldReformTimer=${time}>=1.8?Math.max(0,.72-(${time}-1.8)):0;
+        p.shieldImpacts=[{...p,age:${time}<.8?Math.max(0,${time}-.15):${time}-.8,duration:.8}];if(${time}<.15||${time}>=1.8)p.shieldImpacts=[];
+      });draw();true;`);
+      await delay(34);
+      fs.writeFileSync(path.join(output,`response-${String(frame).padStart(3,'0')}.png`),(await win.webContents.capturePage({x:410,y:420,width:620,height:310})).toPNG());
+    }
+  }
   await capture('link-charge', `cleanEffects();world.linked=true;world.rushCharge=65;world.upgrades.rushGuard=1;world.power.guardNodes=3;world.players.forEach(p=>p.shield=0);`);
   await capture('link-overload', `world.rushTimer=4;world.rushCharge=0;world.power.guardNodes=1;world.time=2.17;`);
   await capture('link-intercept', `world.power.effects=[{kind:'intercept',x:240,y:205,radius:9,color:'#b9efff',tier:2,duration:.3,age:.1}];`);

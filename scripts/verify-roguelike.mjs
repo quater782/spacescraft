@@ -133,7 +133,7 @@ for (let level = 1; level <= 2; level += 1) applyUpgradeToPlayer(ceilings, "phas
 for (let level = 1; level <= 3; level += 1) applyUpgradeToPlayer(ceilings, "capacitor", level);
 for (let level = 1; level <= 3; level += 1) applyUpgradeToPlayer(ceilings, "novaCore", level);
 for (let level = 1; level <= 3; level += 1) applyUpgradeToPlayer(ceilings, "resonanceArray", level);
-assert.ok(ceilings.primaryRateBonus === .3 && ceilings.damage === 1 && ceilings.heavyDamage === 2.4, "ordinary fire growth exceeded its ceiling");
+assert.ok(ceilings.primaryRateBonus === .36 && ceilings.damage === 1 && ceilings.heavyDamage === 2.4, "ordinary fire growth exceeded its ceiling");
 assert.ok(ceilings.hitInvulnerability <= .79 + 1e-9, "run upgrades exceeded their invulnerability budget");
 assert.ok(Math.abs(ceilings.novaChargeRate - 1.45) < 1e-9 && ceilings.novaDamage <= 1.45 + 1e-9, "capacitor must strengthen charging without inflating Nova damage");
 assert.equal(ceilings.novaRadiusBonus, 36, "each core level must widen both local radii");

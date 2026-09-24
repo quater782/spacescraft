@@ -1,5 +1,48 @@
 # 开发与验证
 
+## 2026-09-25 护盾外缘传导与多发叠加验收
+
+`npm run smoke:effects -- --visual-only --field-gallery` 检查实际普通弹三向同帧接触：全部消弹、三个方向/颜色独立保留，但保护时间只允许一次扣伤和吸收计数；固定步年龄、12 次上限、到期回收及破盾重建清理一并检查。渲染夹具检查压缩、回弹、远侧延迟、轻重幅度至少三倍、正负相位抵消、叠加顺序无关与周期接缝连续。
+
+演示生成系统临时目录 `spacescraft-particle-effects/perimeter-000.png` 至 `perimeter-095.png`（24 FPS、4 秒）。上排固定颜色、角度与时刻，仅比较 1/2/4 点伤害；下排是青/粉两侧同时冲击、橙/青/粉三向同时冲击和青色斜擦重击。第二轮多弹错开 70 毫秒，检查新冲击不会覆盖仍在传播的旧冲击。展示包含错时生成、接近弹、原有外缘传导与衰减，中英标签仅存在于隔离演示页。
+
+画廊由正式 `damagePlayer` 生成接触数据，使用正式渲染器，手动采样特效年龄并安排展示弹到达可见盾面；不是六人玩法或自然战斗录像。真实碰撞由独立夹具检查。展示结束恢复两机与场景方法，再执行三档特效、颜色/角度/伤害/破盾对照和正常首章 20 秒。`--fixtures-only` 明确跳过正常开局；`--visual-only` 跳过声音专项。标签通过 DOM 样式属性设置，不放宽正式 CSP。
+
+2026-09-25 Boss 两侧装饰移除：使用 `npm run smoke:boss-encounters -- --presentation-only` 检查三章高/低画质截图及既有机制夹具；本轮不调整战斗数值，无需重复整场难度长测。
+
+2026-09-25 巨型首领专项：默认 `smoke:boss-encounters` 独立 Boss 超时上限改为 240 秒；新增 `--simulation` 以正式固定步快速初筛三章数值，明确跳过正常开局和真实 FPS 验收。新增跨阶段连续齐射完整性/承诺不重瞄检查，`--presentation-only` 还检查模型共享表面批次零丢弃。新增 `data-boss-salvo`（当前轮/总轮），12 个动态招式名加入双语门禁。
+
+## 2026-09-25 矩形护盾反馈验收
+
+`npm run smoke:effects -- --visual-only --shield-response-motion` 在三档画质分别输出常态盾，以及轻重击、同伤害不同颜色、同伤害正撞/斜擦、轻重破盾对照。截图为临时目录 `spacescraft-particle-effects/shield-idle-<quality>.png`、`shield-response-<damage|color|angle|shatter>-<quality>.png`，另有 `-detail.png` 局部图。每个对照只变化对应维度。`response-000.png` 至 `response-083.png` 为 30 FPS、2.8 秒受控动态：左侧珊瑚色轻击/正撞，右侧紫色重击/斜擦，随后破盾和重组；手动驱动展示计时器，不当作真实战斗录像。
+
+实际碰撞夹具验证普通弹颜色、激光异常载荷色、四向命中、1/4 点实际吸收及溢出伤害，保留预警、激光宽度、技能三档与正常首章 20 秒检查。新增 `#game` 的 `data-player-shield-impact-color` 与 `#scene` 的 `data-effect-particle-shape`。`--visual-only` 跳过声音专项；完整章节、真人双人/手柄与 Windows 不在本次短检查覆盖范围。
+
+
+2026-09-25 友军动态协作：`npm run smoke:balance -- --fixtures-only` 增加实际接取上半屏维修、满盾获取 Buff、队友受袭与任务期限的优先级反转、安全残血收尾击杀、到达并完成救援、采样间高速横穿弹、闪避后恢复/目标消失释放、限角追踪预测误差及真实占点/护航/回收/攻坚完成。保留已有回队/补给、单次预测复用和随船激光检查。`data-ai-goals` 提供战略目标和前三候选得分，动作闪避时仍保留目标。完整章节使用 `npm run smoke:balance -- --stages=1 --builds=balanced --seeds=260924`；正常时间单人用 `npm run smoke:chapter-one -- --sample-seconds=60`，两者不能互相替代。
+
+2026-09-24 Boss 连续蜕变补验：`npm run smoke:boss-encounters -- --fixtures-only` 新增跨双耐久阈值后仍完整保留第二阶段恢复的断言。`--presentation-only` 运行同组机制夹具，并输出三章 0.7/1.4 秒形变截图及真实 `AudioEngine` 生成的 `boss-phase-cues.wav`，检查音频非静音/非削波，不执行独立战斗与普通开局。`--first-chapter --wounded --defense` 使用两张防御卡、双机 3 HP/零护盾正常 1× 入场；`--offense` 切换两张输出卡，默认仍为均衡构筑。新增 `data-boss-phase-recovery`，记录阶段恢复剩余秒数。所有测试模式都应在结果中明确，不将离线音频检查当作主观听感通过。
+
+2026-09-24 连续航程补验：`npm run smoke:balance -- --campaign --builds=balanced,full --seeds=260924` 从零局内卡开始，按真实过章流程自然取得 14 张卡，记录三章检查点；不使用独立后续章节的预装卡片。新增夹具覆盖活动光束随船预测、边界停止、发射船死亡后的静止光束，以及 20 个拾取物只触发一次危险预测。固定步代理测试不代表真人胜率；最新结果见项目状态。
+
+2026-09-24 新增 `npm run smoke:balance`：完整固定步章节 × 裸机/局内构筑/局外养成代理对照，`--fixtures-only` 单独检查友军决策和随船锁定；可传 `--seeds=260901,260924,2706 --stages=1,3 --builds=none,balanced,full`。严格区分固定步模拟、独立后续章节夹具、正常速度和真人体验，口径见[平衡校准](./BALANCE-REBASE.md)。
+
+2026-09-24 Boss 专项：新增 `npm run smoke:boss-encounters`，覆盖保留危险对象、原生态/战区连续、承诺攻击完成后转阶段、×1.3 暴露伤害、固定镜头、三章四招、2/3/4 增援上限与音乐 transport。随后以正式 1× 速度、两张/五张/八张合法卡和双生产 AI 检查独立 Boss，最后检查正常单人/本地双人前 20 秒。`--skip-openings` 仅跳过已检查的普通开局；`--first-two` 用于只复查前两章调校，`--final-chapter` 仅复查终章。报告必须区分模式，不能把跳过当作通过。输出为系统临时目录 `spacescraft-boss-encounters`。
+
+新增诊断：`data-boss-encounter`、`data-boss-opening`、`data-boss-pending-phase`、`data-boss-continuity`、3D `data-boss-battlefield`。旧 `smoke:boss-state` 仍是强化耐久的快速 QA 火力/伤害测试，不能作为自然胜率证据。最新机制与边界见 [Boss 章节设计](./BOSS-ENCOUNTERS.md)。
+
+2026-09-23 时长调整：芯片敌机单束/多束激光总瞄准 3 秒（实时校准 2.25 秒 + 固定预警 0.75 秒），普通敌机和 Boss 保持原时长。 `smoke:enemy-ai` 断言单束/多束实际蓄力时长、发射时间及最后 0.75 秒射线冻结，并继续检查移动中开火、共享队列和正常速度单人/双人前 20 秒。
+
+## 2026-09-23 移动射击与激光协同回归
+
+`npm run smoke:enemy-ai` 新增 16 格并行矩阵（普通/芯片 × 脉冲/激光 × 机动/闪避/后撤/重定位），记录首次开火、移动中发射次数与路程；8 机首章预算队列检查所有成员都能轮到开火。多束激光覆盖独立直瞄、普通机忽略未就绪友军、已蓄力友军协同、芯片提前读取友军对准；检查直瞄束穿过目标、通道真实留空、锁定后船仍移动、实际双束与最终预警一致。`multi-laser-strike.png` / `multi-laser-corridor.png` 在低画质展示发射节点和两种几何。
+
+原 16 船体、三章 Boss、移动目标预测、持续来弹、正常单人/本地双人前 20 秒保留；正常速度首章 210 秒样本继续覆盖芯片开放后的压力。纯逻辑门禁区分仅冲撞占用运动承诺，普通蓄力期间仍允许闪避。不能把短场景中的首发时间视作所有自然出生位置的保证，更不通过无敌或保底存活强迫敌人开火。
+
+## 2026-09-21 芯片武器瞄准专项
+
+`npm run smoke:enemy-ai` 新增移动目标普通弹实际发射误差检查，以及普通/芯片激光对照：前段校准、末段锁定、最终光束与预警逐坐标相同。输出 `laser-tracking.png`、`laser-locked.png`、`laser-locked-later.png` 可查看移动目标离开冻结射线的过程；`--mechanics-only` 可在已检查正常开局后，仅重跑机制和画面，不宣称完成正常开局。纯逻辑验证覆盖拦截方程、快慢弹提前量、同速/超速目标、预测上限和 0.75 秒临界点。正常首章继续使用 210 秒双生产 AI 样本覆盖芯片开放后阶段，短样本不代表完整章节通过。
+
 ## 2026-09-19 战斗反馈材质验收
 
 `npm run smoke:effects -- --visual-only --motion` 覆盖护盾入射/吸收/破盾/装载、星链充能/过载/拦截、电弧与技能、炮口、激光、低画质和正常首章 20 秒；输出 108 帧受控护盾/激光动画，验证不会新增战斗按键或改动判定。声音专项明确跳过，生产声音不变。

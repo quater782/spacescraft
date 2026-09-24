@@ -7,6 +7,7 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const offenseBuild = process.argv.includes('--offense');
 const dualAi = process.argv.includes('--dual-ai');
+const noUpgrades = process.argv.includes('--no-upgrades');
 const sampleSeconds = Number(process.argv.find(arg => arg.startsWith('--sample-seconds='))?.split('=')[1]) || 0;
 if (sampleSeconds && (sampleSeconds < 20 || sampleSeconds > 570)) throw new Error('sample-seconds must be 20..570');
 const outputRoot = path.join(os.tmpdir(), dualAi ? `spacescraft-chapter-one-dual-ai-${offenseBuild ? 'offense' : 'survival'}` : offenseBuild ? "spacescraft-chapter-one-offense" : "spacescraft-chapter-one-soak");
@@ -25,6 +26,8 @@ function instrumentGame(source) {
     if (source.split(from).length !== 2) throw new Error(`Fixture anchor missing or ambiguous: ${from}`);
     source = source.replace(from, to);
   };
+  if (noUpgrades) replaceOnce('function applyPickup(player, pickup) {', 'function applyPickup(player, pickup) { if (pickup.type === "weapon") { pickup.dead = true; return; }');
+  if (noUpgrades) replaceOnce('  applyRunUpgrade(upgrade);\n  upgradePanel.hidden = true;', '  // Bare-loadout balance fixture: dismiss the offered card without applying it.\n  upgradePanel.hidden = true;');
   if (dualAi) {
     replaceOnce('if (index === 1 && world.gameMode === "solo") return aiPilotControls(world.players[1]);',
       'if (world.gameMode === "solo") { window.__pilotQA.controlCalls[index]++; return aiPilotControls(world.players[index]); }');
@@ -321,6 +324,7 @@ async function run() {
   delete result.fpsTotal;
   delete result.fpsSamples;
   result.buildPolicy = offenseBuild ? 'offense' : 'survival';
+  result.noUpgrades = noUpgrades;
   result.controller = dualAi ? 'dual-production-ai-symmetric-partner' : 'direction-script-plus-wingman';
   result.sampleSeconds = sampleSeconds;
   result.survived = finalState?.mode !== 'ended';

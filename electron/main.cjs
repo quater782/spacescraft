@@ -7,6 +7,7 @@ if (require("electron-squirrel-startup")) app.quit();
 
 app.commandLine.appendSwitch("high-dpi-support", "1");
 app.commandLine.appendSwitch("force-device-scale-factor", "1");
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
 function createWindow() {
   const window = new BrowserWindow({

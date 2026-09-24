@@ -27,12 +27,13 @@
   const isLaser = pattern => ["laserLance", "laserSweep", "sunLance", "railWall", "doubleRail"].includes(pattern);
   const isRadial = pattern => ["spiral", "counterSpiral", "eliteHalo", "seedMine", "seedCluster", "laneWall", "pincer", "commandCross", "eliteCross"].includes(pattern);
   const committed = e => e.weaponState === "windup" || e.weaponState === "fire";
+  const movementCommitted = e => committed(e) && e.attackPattern === "ramCharge";
   const hasChip = e => e.chipId === "adaptive";
-  const CHIP = Object.freeze({ id: "adaptive", chance: [.14, .22, .28], cap: [2, 3, 4], hp: 1.25, speed: 1.18, turn: 1.3, accel: 1.35, brake: 1.25 });
+  const CHIP = Object.freeze({ id: "adaptive", chance: [.10, .20, .28], cap: [1, 2, 4], hp: 1.25, speed: 1.298, laserWindup: 3, laserLock: .75, turn: 1.3, accel: 1.35, brake: 1.25 });
 
   function chipFor({ runSeed, id, stageIndex, progress, active = 0, relief = false }) {
     const stage = clamp(stageIndex, 0, 2);
-    if (relief || (stage === 0 && progress < .25) || active >= CHIP.cap[stage]) return "";
+    if (relief || (stage === 0 && progress < .35) || active >= CHIP.cap[stage]) return "";
     // Independent deterministic draw: chip assignment must not consume the combat/loot random stream.
     let hash = Math.imul((runSeed ^ Math.imul(id, 0x9e3779b1)) >>> 0, 0x85ebca6b);
     hash ^= hash >>> 13; hash = Math.imul(hash, 0xc2b2ae35); hash ^= hash >>> 16;
@@ -126,6 +127,24 @@
   function aimLead(e) {
     return Math.min(.65, (e.aiLead || 0) + (profile(e).aimLead || 0) + (hasChip(e) ? .16 : 0));
   }
+  // Solve constant-velocity interception after launch delay, with a bounded observation horizon.
+  function interceptLead(origin, target, speed, delay = 0, cap = 1.5) {
+    const vx = target.vx || 0, vy = target.vy || 0;
+    const rx = target.x + vx * delay - origin.x, ry = target.y + vy * delay - origin.y;
+    const a = vx * vx + vy * vy - speed * speed, b = 2 * (rx * vx + ry * vy), c = rx * rx + ry * ry;
+    let time = length(rx, ry) / Math.max(1, speed);
+    if (Math.abs(a) < 1e-6) { if (b < -1e-6) time = -c / b; }
+    else {
+      const discriminant = b * b - 4 * a * c;
+      if (discriminant >= 0) {
+        const roots = [(-b - Math.sqrt(discriminant)) / (2 * a), (-b + Math.sqrt(discriminant)) / (2 * a)].filter(t => t >= 0);
+        if (roots.length) time = Math.min(...roots);
+      }
+    }
+    return Math.min(cap, delay + time, 90 / Math.max(1, length(vx, vy)));
+  }
+  const tracksLaser = e => hasChip(e) && !e.boss && isLaser(e.attackPattern)
+    && e.weaponState === "windup" && e.weaponTimer > CHIP.laserLock;
   function station(e, target, ctx) {
     const d = profile(e);
     const side = e.flightSide;
@@ -185,7 +204,7 @@
       return { ...goal, speed: p.speed, face };
     }
     if (e.tacticState === "acquire") transition(e, "maneuver", "target-acquired");
-    if (e.sensedThisStep && !committed(e) && (hasChip(e) || e.aiEvasion > 0) && e.evadeCooldown <= 0 && ["maneuver", "engage"].includes(e.tacticState)) {
+    if (e.sensedThisStep && !movementCommitted(e) && (hasChip(e) || e.aiEvasion > 0) && e.evadeCooldown <= 0 && ["maneuver", "engage"].includes(e.tacticState)) {
       const threat = ctx.bullets.find(b => {
         if (b.dead) return false;
         const rx = b.x - e.x, ry = b.y - e.y, vx = b.vx - e.vx, vy = b.vy - e.vy;
@@ -206,7 +225,7 @@
         transition(e, "evade", "perceived-intercept"); e.evadeCooldown = hasChip(e) ? 2.2 : 1.8;
       }
     }
-    if (hasChip(e) && e.sensedThisStep && !committed(e) && e.chipDefenseCooldown <= 0
+    if (hasChip(e) && e.sensedThisStep && !movementCommitted(e) && e.chipDefenseCooldown <= 0
       && ["maneuver", "engage"].includes(e.tacticState) && e.hp < e.maxHp * .45 && laneRisk(e, e, { ...ctx, enemies: [] }) > 12) {
       const candidates = [-1, 1].map(side => ({ x: clamp(e.x + side * 48, 32, ctx.width - 32), y: clamp(e.y - 28, 32, ctx.height - 90) }));
       const cover = candidates.reduce((a, b) => laneRisk(e, a, ctx) <= laneRisk(e, b, ctx) ? a : b);
@@ -225,7 +244,7 @@
       }
       return { x: e.pathX, y: e.pathY, speed: p.speed, face };
     }
-    if (!committed(e) && range < Math.max(55, d.engagementRange - d.rangeBand * 2.2)) {
+    if (!movementCommitted(e) && range < Math.max(55, d.engagementRange - d.rangeBand * 2.2)) {
       const retreat = { x: e.x + (e.x - target.x) / Math.max(1, range) * 60, y: e.y + (e.y - target.y) / Math.max(1, range) * 60 };
       if (retreat.y < 32) retreat.x += e.flightSide * 48;
       setPath(e, retreat.x, retreat.y, ctx, "standoff-breached");
@@ -234,7 +253,7 @@
     }
     const inRange = range <= d.engagementRange + d.rangeBand * 1.8;
     if (e.tacticState === "maneuver" && inRange && length(goal.x - e.x, goal.y - e.y) < 44) transition(e, "engage", "firing-lane-ready");
-    if (e.tacticState === "engage" && !committed(e) && range > d.engagementRange + d.rangeBand * 2.6) transition(e, "maneuver", "target-left-band");
+    if (e.tacticState === "engage" && !movementCommitted(e) && range > d.engagementRange + d.rangeBand * 2.6) transition(e, "maneuver", "target-left-band");
     return { ...goal, speed: p.speed, face, arrivalRadius: e.tacticState === "engage" ? 6 : 2 };
   }
   function flight(e, intent, ctx, dt) {
@@ -313,7 +332,7 @@
   function aim(e, target, dt, bodyOnly = false) {
     const p = profile(e);
     const targetHeading = Math.atan2(target.y - e.y, target.x - e.x);
-    const desired = bodyOnly || !p.turret ? 0 : clamp(angleDelta(yaw(targetHeading), yaw(e.heading)), -.61, .61);
+    const desired = bodyOnly || !(p.turret || e.weaponModule === "laser") ? 0 : clamp(angleDelta(yaw(targetHeading), yaw(e.heading)), -.61, .61);
     e.weaponYaw = approach(e.weaponYaw || 0, desired, 1.8 * dt);
     const axisYaw = yaw(e.heading) + e.weaponYaw;
     e.weaponAim = Math.atan2(-Math.cos(axisYaw) * 13.3, -Math.sin(axisYaw) * 21.5);
@@ -321,12 +340,13 @@
     return e.aimError;
   }
   function muzzle(e, slot = 0) {
-    const scale = (e.boss ? 1.32 : e.elite ? 1.4 : 1.18) * (e.moduleScale || 1);
+    const bossStage = e.type === "boss2" ? 1 : e.type === "boss3" ? 2 : 0;
+    const scale = (e.boss ? 1.62 * [1.08, 1.12, 1.16][bossStage] : e.elite ? 1.4 : 1.18) * (e.moduleScale || 1);
     const socket = hardpoints[e.type] || hardpoints.scout;
     const muzzleDepth = ["laser", "sniper"].includes(e.weaponModule) ? -.73 : e.weaponModule === "bomb" ? -.57 : -.62;
     const gunYaw = e.weaponYaw || 0;
     let x = Math.sin(gunYaw) * muzzleDepth + slot * .2, y = .25, z = socket[0] + Math.cos(gunYaw) * muzzleDepth;
-    if (e.boss) { x = slot * 1.15; y = .3; z = -1.45; }
+    if (e.boss) { x = slot * [1.32, 1.95, 2.46][bossStage]; y = [.53, .52, .36][bossStage]; z = [-1.33, -2.16, -2.33][bossStage]; }
     // Same YXZ body transform used by the WebGL renderer.
     const bank = e.bank || 0, pitch = e.pitch || 0, bodyYaw = yaw(e.heading ?? Math.PI / 2);
     const bx = x * Math.cos(bank) - y * Math.sin(bank), by = x * Math.sin(bank) + y * Math.cos(bank);
@@ -338,11 +358,36 @@
     const reach = length(width, height) * 1.45;
     return { x1: origin.x, y1: origin.y, x2: origin.x + Math.cos(angle) * reach, y2: origin.y + Math.sin(angle) * reach, ...extra };
   }
+  const multiLaser = e => ["laserSweep", "doubleRail", "railWall"].includes(e.boss ? e.attackId : e.attackPattern)
+    || (e.boss && e.attackId === "sunLance" && e.phaseLevel >= 3);
+  function chooseLaserPlan(e, target, enemies) {
+    const smart = hasChip(e);
+    const ally = enemies.find(other => other !== e && !other.dead
+      && (committed(other) ? other.attackTargetIndex : other.targetId) === target.index
+      && (committed(other) || (smart && other.weaponState === "align"))
+      && !(committed(other) && other.laserPlan?.mode === "corridor") && length(other.x - target.x, other.y - target.y) < 290);
+    const mode = ally && (smart || (e.attackCycle ?? e.attackIndex ?? 0) % 2 === 0) ? "corridor" : "strike";
+    const side = Math.sign(target.vx || (ally ? target.x - ally.x : target.x - e.x)) || e.flightSide || 1;
+    return { mode, side, halfGap: smart ? 20 : 26, allyId: ally?.id ?? null, targetIndex: target.index };
+  }
   function beamRays(e, width = 480, height = 270) {
     if (e.attackCommit?.rays) return e.attackCommit.rays;
     const pattern = e.boss ? e.attackId : e.attackPattern;
     if (!isLaser(pattern)) return [];
     const origin = muzzle(e);
+    if (multiLaser(e) && e.laserPlan) {
+      const plan = e.laserPlan;
+      const target = { x: e.attackTargetX, y: e.attackTargetY };
+      const direction = Math.atan2(target.y - origin.y, target.x - origin.x);
+      const nx = -Math.sin(direction), ny = Math.cos(direction);
+      const offsets = plan.mode === "strike" ? [0, plan.side * plan.halfGap * 2] : [-plan.halfGap, plan.halfGap];
+      if (pattern === "railWall") offsets.push(plan.side * plan.halfGap * 3);
+      return offsets.map((offset, index) => {
+        const start = muzzle(e, index % 2 ? 1 : -1);
+        const angle = Math.atan2(target.y + ny * offset - start.y, target.x + nx * offset - start.x);
+        return ray(start, angle, width, height, { width: pattern === "railWall" ? 5.8 : e.boss ? (pattern === "sunLance" ? 4.6 : 7.2) : 4.6, color: plan.mode === "corridor" ? "#e88dff" : "#ffe070" });
+      });
+    }
     const angle = e.weaponAim ?? Math.atan2(e.attackTargetY - origin.y, e.attackTargetX - origin.x);
     if (pattern === "railWall" || pattern === "doubleRail") return (pattern === "railWall" ? [-1, 0, 1] : [-1, 1]).map(side => {
       const start = muzzle(e, side);
@@ -362,6 +407,6 @@
     if (reach < 55) return null;
     return { x: e.x, y: e.y, endX: e.x + nx * reach, endY: e.y + ny * reach, angle, length: reach };
   }
-  window.SpaceEnemyAI = Object.freeze({ profiles, profile, CHIP, chipFor, hasChip, aimLead, init, transition, chooseTarget, plan, flight, aim,
+  window.SpaceEnemyAI = Object.freeze({ profiles, profile, CHIP, chipFor, hasChip, aimLead, interceptLead, tracksLaser, movementCommitted, multiLaser, chooseLaserPlan, init, transition, chooseTarget, plan, flight, aim,
     hardpoints, yaw, angleDelta, muzzle, beamRays, ray, ramPath, isLaser, isRadial, committed });
 })();
