@@ -2,9 +2,9 @@
 
 ## 2026-09-25 — 0.30.0 正式发行链
 
-`v0.30.0` 通过[桌面发行工作流](../.github/workflows/build-windows.yml)在 Windows x64 与 Apple Silicon macOS arm64 构建并运行包内启动检查，随后发布[SPACECRAFT 0.30.0 Release](https://github.com/quater782/spacescraft/releases/tag/v0.30.0)。附件包括 Windows 安装器、完整免安装 ZIP、macOS arm64 DMG 与两份 SHA-256 清单。实际运行记录以 GitHub Actions 页面和 Release 附件为准。
+`v0.30.0` 的[桌面发行工作流 #36040210888](https://github.com/quater782/spacescraft/actions/runs/36040210888)已通过验证、Windows x64 与 Apple Silicon macOS arm64 构建及包内启动检查，并发布[SPACECRAFT 0.30.0 Release](https://github.com/quater782/spacescraft/releases/tag/v0.30.0)。附件为 `SPACECRAFT-0.30.0-windows-x64-Setup.exe`、`SPACECRAFT-0.30.0-windows-x64-portable.zip`、`SPACECRAFT-0.30.0-macOS-arm64.dmg` 与两份平台 `SHA256SUMS-*.txt` 清单。
 
-网页使用[Pages 工作流](../.github/workflows/deploy-pages.yml)从发布标签源码构建并执行 WebGL 冒烟，部署地址为 <https://quater782.github.io/spacescraft/>。标签发行后也可在 `main` 同提交显式运行 Pages 工作流，以应对 GitHub 不派发由 `GITHUB_TOKEN` 发布的 Release 事件。
+网页由 [Pages 工作流 #36040278705](https://github.com/quater782/spacescraft/actions/runs/36040278705)从 `main` 同提交构建，完整验证、WebGL 冒烟和 Pages 部署均通过；部署地址为 <https://quater782.github.io/spacescraft/>，实际页面确认显示 0.30.0 及新脚本/CSS 缓存版本。标签发行后显式触发 `main` 可应对 GitHub 不派发由 `GITHUB_TOKEN` 发布的 Release 事件。
 
 ## 2026-09-21 — 0.29.0 正式发行链
 

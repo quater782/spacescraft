@@ -6,7 +6,7 @@
 
 验证：`npm run verify` 完整通过；护盾画廊及多点冲击检查通过，正常首章 20.15 秒时双机 7/7 HP、60 FPS、零页面错误；Boss 展示与三章独立遭遇专项通过。三章独立 Boss 使用正式 AI 与合法构筑，受控样本均击破，但不能代替真人胜率。
 
-发布：桌面与网页产物由 `v0.30.0` Actions 工作流生成；正式附件和网页部署状态记录在[打包指南](./PACKAGING.md)。Windows 未代码签名，macOS 未公证。
+发布：桌面发行工作流 [#36040210888](https://github.com/quater782/spacescraft/actions/runs/36040210888)全部成功，Windows x64 与 macOS arm64 的构建后启动检查通过；[Release](https://github.com/quater782/spacescraft/releases/tag/v0.30.0)含两个 Windows 包、macOS DMG 和两份平台 SHA-256 清单。Pages 工作流 [#36040278705](https://github.com/quater782/spacescraft/actions/runs/36040278705)通过 WebGL 冒烟并部署，实际页面确认版本与缓存入口已更新。详细附件见[打包指南](./PACKAGING.md)。Windows 未代码签名，macOS 未公证。
 
 尚未完成：真人双人及双手柄、Windows 真实用户设备、主观音频体验与不同构筑/路线的真人胜率验证。既有代理样本和专项通过结果不代表这些验收已完成。
 
