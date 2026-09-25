@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const surfaces = fs.readFileSync(new URL("../src/render-surfaces.js", import.meta.url), "utf8");
-const renderer = fs.readFileSync(new URL("../src/renderer3d.js", import.meta.url), "utf8");
+const rendererMain = fs.readFileSync(new URL("../src/renderer3d.js", import.meta.url), "utf8");
+const sceneSource = ["environment", "scenery", "events", "settings"].map(name => fs.readFileSync(new URL(`../src/scene/${name}.js`, import.meta.url), "utf8")).join("\n");
+const renderer = rendererMain + "\n" + sceneSource;
+import { SCENE_SETTINGS, SCENE_QUALITY, BIOME_SCENES, resolveScene } from "../src/scene/settings.js";
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const style = fs.readFileSync(new URL("../style.css", import.meta.url), "utf8");
 const smoke = fs.readFileSync(new URL("./smoke-electron.cjs", import.meta.url), "utf8");
@@ -15,11 +18,11 @@ const packageJson = JSON.parse(fs.readFileSync(new URL("../package.json", import
 const methodBody = (name, nextName) => renderer.slice(renderer.indexOf(`  ${name}(`), renderer.indexOf(`  ${nextName}(`));
 
 assert.equal(packageJson.dependencies?.three, "0.185.1", "Three.js must be an exact production dependency");
-assert.equal(packageJson.version, "0.30.0", "package metadata must match the Cooperative Front release");
+assert.equal(packageJson.version, "0.31.0", "package metadata must match the Scene Constellation release");
 assert.match(html, /<script type="importmap">\{"imports":\{"three":"\.\/node_modules\/three\/build\/three\.module\.min\.js"\}\}<\/script>/);
-assert.match(html, /<script type="module" src="\.\/src\/renderer3d\.js\?v=31"><\/script>/);
-assert.match(html, /<script type="module" src="\.\/src\/game\.js\?v=39"><\/script>/);
-assert.match(html, /COOPERATIVE FRONT 0\.30\.0/);
+assert.match(html, /<script type="module" src="\.\/src\/renderer3d\.js\?v=32"><\/script>/);
+assert.match(html, /<script type="module" src="\.\/src\/game\.js\?v=40"><\/script>/);
+assert.match(html, /SCENE CONSTELLATION 0\.31\.0/);
 assert.match(renderer, /import \{ PixelEffects \} from "\.\/pixel-effects\.js\?v=2"/);
 assert.match(renderer, /import \* as THREE from "three"/);
 assert.match(renderer, /UnrealBloomPass/);
@@ -53,13 +56,13 @@ assert.match(renderer, /bossFamilies = "3-organic-phase-forms"/);
 assert.match(renderer, /expeditionSectors = "9-progressive-voxel-gates"/);
 assert.match(renderer, /sectorAnomalies = "9-seeded-gameplay-fields"/);
 assert.match(renderer, /const MIN_PIXEL_EDGE = \.12/);
-assert.match(renderer, /const CAMERA_FOV = 55/);
+assert.equal(SCENE_SETTINGS.camera.fov, 55);
 assert.match(renderer, /const PLAYER_MODEL_SCALE = \.82/);
 assert.match(renderer, /const REGULAR_ENEMY_SCALE = 1\.18/);
 assert.match(renderer, /const ELITE_ENEMY_SCALE = 1\.4/);
 assert.match(renderer, /const BOSS_MODEL_SCALE = 1\.62/);
 assert.match(renderer, /const HOSTILE_PROJECTILE_SCALE = 1\.05/);
-assert.match(renderer, /new THREE\.PerspectiveCamera\(CAMERA_FOV, 16 \/ 9, \.1, 96\)/);
+assert.match(rendererMain, /new THREE\.PerspectiveCamera\(CAMERA_FOV, 16 \/ 9, SCENE_SETTINGS\.camera\.near, SCENE_SETTINGS\.camera\.far\)/);
 assert.match(renderer, /scale\.map\(quantizePixelEdge\)/);
 assert.doesNotMatch(renderer, /this\.floor\s*=/, "the world must not retain a hidden or visible continuous floor");
 assert.match(renderer, /const litFace = x >= 1 && y >= -1 && z <= 1/, "voxel planets need a side terminator instead of a cylinder-like bright cap");
@@ -83,18 +86,21 @@ assert.match(renderer, /drawPlayerDamage\(player, base, profile\)/);
 assert.match(renderer, /bossGalleryView = "neutral-silhouette"/);
 assert.match(renderer, /macroLayout = "alternating-edge-anchors"/);
 assert.match(renderer, /celestialScaffolding = "opposed-biome-horizon-bodies"/);
-assert.match(renderer, /const ECOLOGY_ANCHORS = Object\.freeze/);
-for (const anchor of [
-  /sugarBloom: \[-15\.2, 1\.8, -24\]/,
-  /crystalOrchard: \[14, -\.6, -24\]/,
-  /eclipseCarnival: \[0, -\.8, -28\]/,
-  /voidGarden: \[14, \.2, -25\]/,
-]) assert.match(renderer, anchor, "ecology macros must occupy distinct left/right/top anchors");
+assert.equal(Object.keys(BIOME_SCENES).length, 9);
+for (const biome of Object.values(BIOME_SCENES)) {
+  assert.ok(Object.isFrozen(biome));
+  assert.equal(resolveScene({ biome: { id: biome.id } }), biome);
+  assert.ok(biome.anchor.every(Number.isFinite));
+  for (const color of [biome.sky, biome.accent, biome.secondary, biome.star]) assert.match(color, /^#[0-9a-f]{6}$/);
+}
+assert.equal(resolveScene(null, 99).id, "sugarBloom");
+assert.doesNotMatch(game, /function (?:drawBackground|drawStageLandmark|drawPerspectiveGrid|makeStars|updateStars)\(/);
 assert.match(renderer, /projectileReadability = "dim-friendly-hot-hostile"/);
 assert.match(renderer, /playerProjectileDensity = "capstone-low-bloom"/);
 assert.match(renderer, /ringGrammar = "continuous-segmented-arcs"/);
 assert.match(style, /#scene\s*\{[^}]*image-rendering: auto/s);
-assert.match(renderer, /const nativeRatio = Math\.min\(1\.5, window\.devicePixelRatio \|\| 1\)/);
+assert.equal(SCENE_QUALITY.high.maxDpr, 1.5);
+assert.match(rendererMain, /if \(this\.viewportKey === key\) return/);
 assert.match(renderer, /fighterNose\(base, palette/);
 assert.match(renderer, /sweptWing\(base, side, palette/);
 assert.match(renderer, /tailFins\(base, palette/);
@@ -162,9 +168,8 @@ assert.match(renderer, /projectileArt = "extruded-pixel-stamps"/);
 assert.doesNotMatch(methodBody("drawProjectile", "drawPickup"), /surfaces\.solid|"orb"/, "projectile heads must keep hand-authored pixel silhouettes instead of lens meshes");
 assert.doesNotMatch(methodBody("projectileTrail", "drawProjectile"), /surfaces\.segment/, "projectile trails must not round over the pixel head with additive tubes");
 for (const stage of [0, 1, 2]) assert.match(renderer, new RegExp(`bullet\\.bossStage === ${stage}`), `missing stage ${stage + 1} boss projectile form`);
-assert.match(renderer, /drawLandmark\(stageIndex, biome\)/);
-assert.match(renderer, /drawFlightCorridor\(biome\)/);
-assert.match(renderer, /drawCosmicBiomeFeatures\(biome\)/);
+assert.match(rendererMain, /this\.environment\.drawBackground\(world\)/);
+assert.doesNotMatch(renderer, /drawFlightCorridor|drawBiomeFeatures/);
 assert.match(renderer, /drawSpaceEcology\(biome\)/);
 assert.match(renderer, /drawDistantCelestial\(biome\)/);
 assert.match(renderer, /createNebulaCloud\(count, size, seed, opacity\)/);
@@ -173,16 +178,13 @@ assert.match(renderer, /new THREE\.CanvasTexture\(canvas\)/);
 assert.match(renderer, /THREE\.AdditiveBlending/);
 assert.match(renderer, /voxelRing\(base, radius/);
 assert.match(renderer, /voxelPolyline\(base, points/);
-assert.match(renderer, /new UnrealBloomPass\(new THREE\.Vector2\(1280, 720\), \.3, \.1, 1\.03\)/, "bloom must stay compact and above display white");
+assert.deepEqual([SCENE_SETTINGS.post.bloom, SCENE_SETTINGS.post.radius, SCENE_SETTINGS.post.threshold], [.3, .1, 1.03]);
 assert.match(renderer, /material\.color\.multiplyScalar\(1\.65\)/, "energy voxels must enter HDR without lifting ordinary hulls");
-assert.doesNotMatch(methodBody("drawLandmark", "projectileTrail"), /drawBiomeFeatures\(/, "the live environment path must not restore the old tunnel-side prop stream");
-assert.match(renderer, /this\.renderer\.toneMappingExposure = \.9/);
-assert.match(renderer, /new THREE\.AmbientLight\("#dce8ff", \.16\)/);
-assert.match(renderer, /new THREE\.HemisphereLight\("#c8dcf2", "#29183d", \.64\)/);
-assert.match(renderer, /new THREE\.DirectionalLight\("#e5eff5", 1\.08\)/);
-assert.match(renderer, /streamZ\(slot, spacing/);
-assert.match(renderer, /distantEcologyZ\(slot, spacing/);
-assert.match(renderer, /const depthBand = 30/, "background ecology must remain inside a bounded far-depth band");
+assert.doesNotMatch(rendererMain, /drawSpaceEcology|drawAnomalyField|createNebulaCloud/, "environment builders must live only in scene modules");
+assert.equal(SCENE_SETTINGS.post.exposure, .9);
+assert.deepEqual(SCENE_SETTINGS.lights.ambient, ["#dce8ff", .16]);
+assert.deepEqual(SCENE_SETTINGS.lights.sky, ["#c8dcf2", "#29183d", .64]);
+assert.deepEqual(SCENE_SETTINGS.lights.key, ["#e5eff5", 1.08]);
 assert.match(renderer, /projectileTrail\(base, color/);
 assert.match(methodBody("drawBeam", "drawEnemyBeam"), /this\.surfaces\.line/, "resonance filaments must use native rendered lines");
 assert.match(methodBody("drawLaserTelegraph", "drawRamTelegraph"), /this\.surfaces\.line/, "laser sights must remain fine native lines");
@@ -203,7 +205,7 @@ assert.doesNotMatch(hostileBeam, /surfaces\.segment|surfaces\.solid|voxelSegment
 assert.match(renderer, /Math\.hypot\(particle\.vx/);
 assert.match(renderer, /emissiveBatchFor\(color\)/);
 for (const biome of ["sugarBloom", "crystalOrchard", "cometTide", "auroraFoundry", "thunderWorks", "cloudReef", "eclipseCarnival", "prismGrave", "voidGarden"]) {
-  assert.match(renderer, new RegExp(`biome\\.id === "${biome}"`), `missing dedicated ${biome} diorama`);
+  assert.ok(BIOME_SCENES[biome]?.hero, `missing authored ${biome} composition`);
   assert.ok(biomeSmoke.includes(`"${biome}"`), `biome matrix smoke is missing ${biome}`);
 }
 assert.match(game, /URL_PARAMS\.get\("qa-biome"\)/);

@@ -4,7 +4,7 @@ import vm from "node:vm";
 
 const threatSource = fs.readFileSync(new URL("../src/threat.js", import.meta.url), "utf8");
 const gameSource = fs.readFileSync(new URL("../src/game.js", import.meta.url), "utf8");
-const rendererSource = fs.readFileSync(new URL("../src/renderer3d.js", import.meta.url), "utf8");
+const rendererSource = ["renderer3d", "scene/events", "scene/scenery"].map(name => fs.readFileSync(new URL(`../src/${name}.js`, import.meta.url), "utf8")).join("\n");
 const indexSource = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const sandbox = { window: {} };
 vm.runInNewContext(threatSource, sandbox, { filename: "src/threat.js" });
@@ -45,7 +45,7 @@ assert.match(gameSource, /adaptiveThreat\.enemyHp/);
 assert.match(gameSource, /adaptiveThreat\.spawnRate/);
 assert.match(gameSource, /dataset\.threatSpawnRate/);
 assert.match(gameSource, /result\.threatSummary/);
-assert.match(rendererSource, /drawThreatMatrix\(world\)/);
+assert.match(rendererSource, /syncThreatState\(world\)/);
 assert.match(rendererSource, /adaptiveThreat = "5-tier-telegraphed"/);
 
-console.log("Adaptive Threat Matrix verified: five monotonic tiers, opening and distress protection, one-step hysteresis, combat/reward/music coupling, telemetry, HUD/results, and a localized voxel pressure buoy.");
+console.log("Adaptive Threat Matrix verified: five monotonic tiers, opening and distress protection, one-step hysteresis, combat/reward/music coupling, telemetry, HUD/results, and HUD pressure feedback.");

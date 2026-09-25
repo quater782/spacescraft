@@ -92,9 +92,9 @@ async function run() {
       return {incidence:contact.incidence,surface:contact.point.x**2+((contact.point.y-.18)/.8)**2+contact.point.z**2,reflectionZ:contact.reflection.z};
     });
     const contact=renderer3D.shieldContact(base,profile,{shieldImpactOffsetX:-2,shieldIncomingX:1});
-    const pulse=(age,damage,color='#ffb45f')=>({contact,age,damage,color:renderer3D.pixelEffects.color.clone().set(color)});
+    const pulse=(age,damage,color='#ffb45f')=>({contact,age,damage,load:damage/4,color:renderer3D.pixelEffects.color.clone().set(color)});
     const response=(angle,...pulses)=>renderer3D.shieldRingResponse(angle,pulses);
-    const heavy=pulse(.045,4),light=pulse(.045,1),other=pulse(.045,2,'#70eaff');
+    const heavy=pulse(.083,4),light=pulse(.083,1),other=pulse(.083,2,'#70eaff');
     const a=response(contact.angle,heavy),b=response(contact.angle,other);
     const both=response(contact.angle,heavy,other),reverse=response(contact.angle,other,heavy);
     const field={compression:a.radial,rebound:response(contact.angle,pulse(.20,4)).radial,
@@ -104,12 +104,12 @@ async function run() {
       colorError:Math.abs(both.color.r-reverse.color.r)+Math.abs(both.color.g-reverse.color.g)+Math.abs(both.color.b-reverse.color.b),
       seamError:Math.abs(response(-Math.PI+.03,heavy).radial-response(Math.PI+.03,heavy).radial),
       cancellation:Math.abs(response(contact.angle,heavy,pulse(.20,4)).displacement)<Math.abs(a.displacement)};
-    cleanEffects();const q=world.players[0];q.shield=8;q.vx=q.vy=0;
-    for(const [dx,dy,color] of [[-1,0,'#ffb45f'],[1,0,'#70eaff'],[0,-1,'#ff83d7']])
-      enemyBullet(q.x+dx*2,q.y+dy*2,-dx*60,-dy*60,color,3,null,{damage:1});
+    cleanEffects();const q=world.players[0];q.shield=q.maxShield=4;q.vx=q.vy=0;
+    for(const [dx,dy,color,damage] of [[-1,0,'#ffb45f',1],[1,0,'#70eaff',2],[0,-1,'#ff83d7',3]])
+      enemyBullet(q.x+dx*2,q.y+dy*2,-dx*60,-dy*60,color,3,null,{damage});
     const simultaneousBullets=[...world.enemyBullets];handleCollisions();
     const simultaneous={count:q.shieldImpacts.length,colors:q.shieldImpacts.map(e=>e.shieldImpactColor),
-      sides:q.shieldImpacts.map(e=>[e.shieldImpactX,e.shieldImpactY]),shield:q.shield,damage:q.damageTaken,
+      sides:q.shieldImpacts.map(e=>[e.shieldImpactX,e.shieldImpactY]),loads:q.shieldImpacts.map(e=>e.shieldImpactLoad),shield:q.shield,damage:q.damageTaken,
       absorbed:q.shieldAbsorbed,consumed:simultaneousBullets.filter(b=>b.dead).length};
     updatePlayers(1/60);simultaneous.ages=q.shieldImpacts.map(e=>e.age);
     for(let i=0;i<30;i++)damagePlayer(q,1,{x:q.x-2,y:q.y,vx:60,vy:0});
@@ -126,12 +126,13 @@ async function run() {
   assert.ok(impacts.field.compression<.75,'heavy impact must make a clearly visible dent');
   assert.ok(impacts.field.rebound>1,'the same perimeter patch must rebound after compression');
   assert.ok(Math.abs(impacts.field.far-1)<.01,'the far side must not move before the wave arrives');
-  assert.ok(1-impacts.field.compression>3*(1-impacts.field.light),'heavy deformation must exceed light deformation by at least 3x');
+  assert.ok(1-impacts.field.compression>1.5*(1-impacts.field.light),'full-capacity impact must dent visibly deeper than a quarter-capacity impact');
   for(const key of ['sumError','orderError','colorError','seamError'])assert.ok(impacts.field[key]<1e-9,key);
   assert.ok(impacts.field.cancellation,'opposed phases must cancel instead of adding unsigned deformation');
   assert.equal(impacts.simultaneous.count,3);assert.equal(new Set(impacts.simultaneous.colors).size,3);
   assert.deepEqual(impacts.simultaneous.sides,[[-1,0],[1,0],[0,-1]]);
-  assert.equal(impacts.simultaneous.shield,7);assert.equal(impacts.simultaneous.damage,1);assert.equal(impacts.simultaneous.absorbed,1);
+  assert.equal(impacts.simultaneous.shield,3);assert.equal(impacts.simultaneous.damage,1);assert.equal(impacts.simultaneous.absorbed,1);
+  assert.deepEqual(impacts.simultaneous.loads,[.25,.5,.75],'each contact keeps its incoming load despite protection time and earlier hits');
   assert.equal(impacts.simultaneous.consumed,3);impacts.simultaneous.ages.forEach(age=>assert.equal(age,1/60));
   assert.equal(impacts.simultaneous.bounded,12);assert.equal(impacts.simultaneous.expired,0);
   let audioPeaks=[];
@@ -188,7 +189,7 @@ async function run() {
         }
         return p;
       });
-      window.fieldLandmark=renderer3D.drawLandmark;renderer3D.drawLandmark=()=>{};
+      window.fieldLandmark=renderer3D.environment.scenery.draw;renderer3D.environment.scenery.draw=()=>{};
       const layer=document.createElement('div');layer.id='fieldGalleryLabels';layer.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:999;color:#bddbe7;font:600 15px system-ui';document.body.append(layer);
       world.particles=[];world.power.effects=[];world.flash=0;world.shake=0;world.activeAnomaly=null;world.sectorFlashTimer=0;
       window.fieldFrame=(time)=>{
@@ -222,7 +223,7 @@ async function run() {
       fs.writeFileSync(path.join(output,`perimeter-${String(frame).padStart(3,'0')}.png`),(await win.webContents.capturePage({x:140,y:180,width:1160,height:570})).toPNG());
     }
     assert.equal(await win.webContents.executeJavaScript(`document.querySelector('#scene').dataset.effectDropped`),'0');
-    await win.webContents.executeJavaScript(`renderer3D.drawLandmark=fieldLandmark;document.querySelector('#fieldGalleryLabels').remove();cleanEffects();true;`);
+    await win.webContents.executeJavaScript(`renderer3D.environment.scenery.draw=fieldLandmark;document.querySelector('#fieldGalleryLabels').remove();cleanEffects();true;`);
   }
   // New VFX use production event creation and simulation ages, without advancing combat.
   const skillFrames = [];

@@ -1,7 +1,7 @@
 {
   "name": "spacescraft",
   "productName": "SPACECRAFT 星航双子",
-  "version": "0.30.0",
+  "version": "0.31.0",
   "description": "只需移动的双人合作 WebGL 3D 太空射击游戏 / Move-only local co-op WebGL 3D space shooter",
   "author": "SPACECRAFT Team",
   "main": "electron/main.cjs",
@@ -42,7 +42,8 @@
     "stage:web": "node scripts/stage-web.mjs",
     "smoke:web": "electron scripts/smoke-packaged.cjs dist/web",
     "smoke:projectiles": "electron scripts/smoke-projectiles.cjs",
-    "smoke:effects": "electron scripts/smoke-effects.cjs"
+    "smoke:effects": "electron scripts/smoke-effects.cjs",
+    "smoke:shield-gameplay": "electron scripts/smoke-shield-gameplay.cjs"
   },
   "devDependencies": {
     "@electron-forge/cli": "7.11.2",

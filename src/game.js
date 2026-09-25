@@ -480,10 +480,6 @@ const STAGES = [
     bossKey: "stage.1.boss",
     duration: DIRECTOR.STAGE_DURATIONS[0],
     bpm: 132,
-    sky: "#090a24",
-    haze: "#42205d",
-    grid: "#51366e",
-    star: "#ffb4db",
     accent: "#ff78aa",
   },
   {
@@ -493,10 +489,6 @@ const STAGES = [
     bossKey: "stage.2.boss",
     duration: DIRECTOR.STAGE_DURATIONS[1],
     bpm: 148,
-    sky: "#071923",
-    haze: "#124557",
-    grid: "#28606b",
-    star: "#a7ffe8",
     accent: "#f9d65c",
   },
   {
@@ -506,10 +498,6 @@ const STAGES = [
     bossKey: "stage.3.boss",
     duration: DIRECTOR.STAGE_DURATIONS[2],
     bpm: 164,
-    sky: "#100719",
-    haze: "#3b113b",
-    grid: "#5e1d50",
-    star: "#c39aff",
     accent: "#ff5d68",
   },
 ];
@@ -1228,7 +1216,7 @@ const world = {
   lootMaxDrought: 0,
   lootDrops: 0,
   particles: [],
-  stars: [],
+
   loadoutFrame: profile.selectedFrame,
   loadoutModule: profile.selectedModule,
   contractId: profile.selectedContract,
@@ -2327,23 +2315,6 @@ function pulseGamepad(index, duration = 90, strong = 0.35, weak = 0.2) {
   }).catch(() => {});
 }
 
-function makeStars() {
-  world.stars = Array.from({ length: 105 }, () => ({
-    x: visualRand(-W * 2, W * 2),
-    y: visualRand(-H * 2, H * 2),
-    z: visualRand(20, 380),
-    pz: visualRand(20, 380),
-    size: visualRandom() < 0.16 ? 2 : 1,
-  }));
-}
-
-function resetStar(star, far = false) {
-  star.x = visualRand(-W * 2, W * 2);
-  star.y = visualRand(-H * 2, H * 2);
-  star.z = far ? 380 : visualRand(300, 380);
-  star.pz = star.z;
-}
-
 function createPlayer(index) {
   const frame = SHIP_FRAMES.find((entry) => entry.id === profile.selectedFrame) || SHIP_FRAMES[0];
   const module = CORE_MODULES.find((entry) => entry.id === profile.selectedModule) || CORE_MODULES[0];
@@ -2419,6 +2390,8 @@ function createPlayer(index) {
     shieldIncomingX: 0,
     shieldIncomingY: 0,
     shieldImpactDamage: 0,
+    shieldImpactIncoming: 0,
+    shieldImpactLoad: 0,
     shieldImpactColor: "#8deaff",
     shieldImpacts: [],
     shieldBreakTimer: 0,
@@ -2636,10 +2609,6 @@ function resetWorld() {
     const biome = world.biomes[index];
     return {
       ...stage,
-      sky: biome.sky,
-      haze: biome.haze,
-      grid: biome.grid,
-      star: biome.star,
       accent: biome.accent,
       secondary: biome.secondary,
       bpm: stage.bpm + biome.bpmOffset,
@@ -2790,7 +2759,7 @@ function resetWorld() {
   world.enemies = [];
   world.pickups = [];
   world.particles = [];
-  makeStars();
+
   prepareRouteChoice(0);
   upgradePanel.hidden = true;
   buildTray.hidden = true;
@@ -4607,6 +4576,10 @@ function restorePlayerShield(player, amount) {
 function recordShieldContact(player, incoming, impact, absorbed = 0) {
   const strength = absorbed || incoming;
   const event = { age: 0, duration: .8, absorbed, contactOnly: absorbed === 0 };
+  // Snapshot the incoming load against capacity, never the charge left after this hit.
+  // Absorption still owns damage accounting; even the last point must show a heavy impact.
+  event.shieldImpactIncoming = incoming;
+  event.shieldImpactLoad = incoming / Math.max(1, player.maxShield || 3);
   // Presentation metadata only: source side, with reverse velocity at point overlap.
   let impactX = Number.isFinite(impact?.x) ? impact.x - player.x : 0;
   let impactY = Number.isFinite(impact?.y) ? impact.y - player.y : 0;
@@ -5668,26 +5641,17 @@ function handleCollisions() {
   world.particles = world.particles.filter((particle) => particle.life > 0);
 }
 
-function updateStars(dt, idle = false) {
-  const speed = idle ? 18 : 45 + world.stageIndex * 12 + (world.boss ? 12 : 0);
-  for (const star of world.stars) {
-    star.pz = star.z;
-    star.z -= speed * dt;
-    if (star.z < 4) resetStar(star, true);
-  }
-}
-
 function update(dt) {
   audio.update();
   if (world.mode === "menu") {
     world.time += dt;
-    updateStars(dt, true);
+
     input.endFrame();
     return;
   }
   if (world.mode === "draft") {
     world.time += dt;
-    updateStars(dt, true);
+
     updateDraft(dt);
     input.endFrame();
     return;
@@ -5704,7 +5668,7 @@ function update(dt) {
   if (world.routeChoice) {
     world.shake = Math.max(0, world.shake - dt * 2.2);
     world.flash = Math.max(0, world.flash - dt * 2.7);
-    updateStars(dt, true);
+
     updateRouteChoice(dt);
     input.endFrame();
     return;
@@ -5728,7 +5692,7 @@ function update(dt) {
     world.cinematic.timer -= dt;
     if (world.cinematic.timer <= 0) world.cinematic = null;
   }
-  updateStars(dt);
+
   updateStage(dt);
   if (world.mode !== "playing") {
     input.endFrame();
@@ -5830,116 +5794,6 @@ function endGame(victory) {
   renderBuildTray();
   result.hidden = false;
   audio.setStage(Math.min(world.stageIndex, 2), false);
-}
-
-function drawBackground() {
-  const stage = activeStage();
-  const gradient = ctx.createLinearGradient(0, 0, 0, H);
-  gradient.addColorStop(0, stage.sky);
-  gradient.addColorStop(0.62, stage.haze);
-  gradient.addColorStop(1, "#060711");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, W, H);
-
-  drawStageLandmark(stage);
-
-  const cx = W / 2;
-  const cy = H * 0.43;
-  for (const star of world.stars) {
-    const sx = Math.round((star.x / star.z) * 72 + cx);
-    const sy = Math.round((star.y / star.z) * 72 + cy);
-    const px = Math.round((star.x / star.pz) * 72 + cx);
-    const py = Math.round((star.y / star.pz) * 72 + cy);
-    if (sx < 0 || sx >= W || sy < 0 || sy >= H) {
-      resetStar(star, true);
-      continue;
-    }
-    const alpha = clamp(1 - star.z / 380, 0.18, 0.9);
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = stage.star;
-    ctx.lineWidth = star.size;
-    ctx.beginPath();
-    ctx.moveTo(px, py);
-    ctx.lineTo(sx, sy);
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-
-  drawPerspectiveGrid(stage);
-}
-
-function drawStageLandmark(stage) {
-  ctx.save();
-  if (world.stageIndex === 0) {
-    ctx.globalAlpha = 0.5;
-    ctx.fillStyle = "#d85b99";
-    ctx.beginPath();
-    ctx.arc(400, 72, 48, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = "#ffb276";
-    ctx.beginPath();
-    ctx.arc(388, 60, 12, 0, TAU);
-    ctx.fill();
-    ctx.strokeStyle = "#f9a8cc";
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.ellipse(400, 74, 68, 15, -0.2, 0, TAU);
-    ctx.stroke();
-  } else if (world.stageIndex === 1) {
-    ctx.globalAlpha = 0.38;
-    ctx.fillStyle = "#52b7b1";
-    for (let i = 0; i < 7; i += 1) {
-      const x = 35 + i * 75 + Math.sin(world.time * 0.15 + i) * 8;
-      const y = 55 + (i % 3) * 13;
-      ctx.fillRect(x, y, 34, 9);
-      ctx.fillRect(x + 7, y - 6, 22, 20);
-    }
-    ctx.strokeStyle = "#f7d95e";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, 88);
-    ctx.lineTo(W, 65);
-    ctx.stroke();
-  } else {
-    ctx.globalAlpha = 0.42;
-    ctx.fillStyle = "#2b123e";
-    ctx.fillRect(365, 20, 78, 95);
-    ctx.fillStyle = "#5f275b";
-    for (let y = 27; y < 106; y += 13) {
-      for (let x = 373; x < 436; x += 13) ctx.fillRect(x, y, 6, 4);
-    }
-    ctx.fillStyle = "#ff466b";
-    ctx.fillRect(396, 32, 16, 3);
-    ctx.fillRect(400, 27, 8, 13);
-  }
-  ctx.restore();
-}
-
-function drawPerspectiveGrid(stage) {
-  const horizon = 184;
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(0, horizon, W, H - horizon);
-  ctx.clip();
-  ctx.globalAlpha = world.boss ? 0.35 : 0.23;
-  ctx.strokeStyle = stage.grid;
-  ctx.lineWidth = 1;
-  for (let x = -320; x <= W + 320; x += 32) {
-    ctx.beginPath();
-    ctx.moveTo(W / 2 + (x - W / 2) * 0.05, horizon);
-    ctx.lineTo(x, H);
-    ctx.stroke();
-  }
-  const scroll = (world.time * 26) % 18;
-  for (let i = 0; i < 12; i += 1) {
-    const t = (i * 18 + scroll) / 216;
-    const y = horizon + t * t * (H - horizon + 25);
-    ctx.beginPath();
-    ctx.moveTo(0, Math.round(y));
-    ctx.lineTo(W, Math.round(y));
-    ctx.stroke();
-  }
-  ctx.restore();
 }
 
 function drawPlayer(player) {
@@ -6791,6 +6645,7 @@ function draw() {
   canvas.dataset.playerHullDamage = world.players.map((player) => player.hullDamageTaken).join(",");
   canvas.dataset.playerDamageState = world.players.map((player) => player.downed ? "downed" : player.hp / player.maxHp <= .3 ? "critical" : player.hp / player.maxHp <= .6 ? "damaged" : "healthy").join(",");
   canvas.dataset.playerShieldImpactDamage = world.players.map(player => player.shieldImpactDamage || 0).join(",");
+  canvas.dataset.playerShieldImpactLoad = world.players.map(player => (player.shieldImpacts?.at(-1)?.shieldImpactLoad || 0).toFixed(3)).join(",");
   canvas.dataset.playerShieldImpactCount = world.players.map(player => player.shieldImpacts?.length || 0).join(",");
   canvas.dataset.playerShieldImpactColor = world.players.map(player => player.shieldImpactColor || "#8deaff").join(",");
   canvas.dataset.playerShieldReform = world.players.map(player => (player.shieldReformTimer || 0).toFixed(2)).join(",");

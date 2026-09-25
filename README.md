@@ -7,7 +7,7 @@
 **Move. Dodge. Stay linked. Your weapons, energy skills and rescues fire automatically.**
 
 [![Latest release](https://img.shields.io/github/v/release/quater782/spacescraft?display_name=tag&sort=semver&label=stable)](https://github.com/quater782/spacescraft/releases/latest)
-[![Desktop release](https://github.com/quater782/spacescraft/actions/workflows/build-windows.yml/badge.svg?branch=v0.28.0)](https://github.com/quater782/spacescraft/actions/runs/35303342836)
+[![Desktop release](https://github.com/quater782/spacescraft/actions/workflows/build-windows.yml/badge.svg?branch=main)](https://github.com/quater782/spacescraft/actions/workflows/build-windows.yml)
 [![Web release](https://github.com/quater782/spacescraft/actions/workflows/deploy-pages.yml/badge.svg?branch=main)](https://github.com/quater782/spacescraft/actions/runs/35321398725)
 [![WebGL 3D](https://img.shields.io/badge/WebGL-真实%203D-55e6d1)](#这是什么--what-is-it)
 [![Languages](https://img.shields.io/badge/语言-简中%20%7C%20English-9f8cff)](#操作--controls)
@@ -91,11 +91,11 @@ python3 -m http.server 4173
 
 ## 项目状态 // Project status
 
-当前稳定版：**0.28.0 — 双子协同 / Twinship Synergy**。本版汇总了威胁感知 AI 僚机、敌军自由平移与智能芯片、星链协作任务卡、连续像素激光与护盾声光反馈，并启用可复现的 Windows/macOS 正式发行流水线。
+当前稳定版：**0.31.0 — 场景星图 / Scene Constellation**。本版以九个专属 WebGL 3D 主景、清晰的战斗留白和可见远景动态，延续自动战斗、合作系统与 Windows/macOS 网页发行链。
 
-The current stable release is **0.28.0 — Twinship Synergy**, bringing together the threat-aware AI wingmate, free-moving enemies and adaptive chips, Starlink mastery cards, continuous pixel lasers, richer shield feedback, and a reproducible Windows/macOS release pipeline.
+The current stable release is **0.31.0 — Scene Constellation**, with nine purpose-built WebGL 3D starfields, visible landmark motion, a cleaner combat silhouette, and the established co-op, automatic-combat and desktop/web release pipeline.
 
-- [0.28.0 发行说明 / Release notes](docs/RELEASE-0.28.0.md)
+- [0.31.0 发行说明 / Release notes](docs/RELEASE-0.31.0.md)
 - [当前项目状态 / Current project state](docs/PROJECT-STATE.md)
 - [开发与验证 / Development & QA](docs/DEVELOPMENT.md)
 - [桌面打包 / Desktop packaging](docs/PACKAGING.md)

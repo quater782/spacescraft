@@ -1,3 +1,6 @@
+import { compose, multiply, TAU, clamp, lerp } from "./render-math.js";
+import { SpaceEnvironment } from "./scene/environment.js";
+import { SCENE_SETTINGS, qualitySettings } from "./scene/settings.js";
 import * as THREE from "three";
 import { RenderSurfaces } from "./render-surfaces.js";
 import { PixelProjectileArt } from "./projectile-art.js";
@@ -8,13 +11,12 @@ import { UnrealBloomPass } from "../node_modules/three/examples/jsm/postprocessi
 import { SMAAPass } from "../node_modules/three/examples/jsm/postprocessing/SMAAPass.js";
 import { OutputPass } from "../node_modules/three/examples/jsm/postprocessing/OutputPass.js";
 
-const TAU = Math.PI * 2;
 const MAX_SOLID_PER_COLOR = 512;
 const MAX_EMISSIVE_PER_COLOR = 512;
 const MAX_GLOW_PER_COLOR = 512;
 const MIN_PIXEL_EDGE = .12;
 const PIXEL_SCALE_STEP = .04;
-const CAMERA_FOV = 55;
+const CAMERA_FOV = SCENE_SETTINGS.camera.fov;
 const PLAYER_MODEL_SCALE = .82;
 const PLAYER_DEMO_SCALE = .9;
 const REGULAR_ENEMY_SCALE = 1.18;
@@ -24,28 +26,8 @@ const REGULAR_TELEGRAPH_SCALE = 1.26;
 const ELITE_TELEGRAPH_SCALE = 1.5;
 const BOSS_TELEGRAPH_SCALE = 1.62;
 const HOSTILE_PROJECTILE_SCALE = 1.05;
-const ECOLOGY_ANCHORS = Object.freeze({
-  sugarBloom: [-15.2, 1.8, -24],
-  crystalOrchard: [14, -.6, -24],
-  cometTide: [-14.2, 2.6, -23],
-  auroraFoundry: [14.2, 0, -24],
-  thunderWorks: [-14, -.2, -24],
-  cloudReef: [14, 1, -24],
-  eclipseCarnival: [0, -.8, -28],
-  prismGrave: [-14, -1, -24],
-  voidGarden: [14, .2, -25],
-});
-const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-const lerp = (a, b, t) => a + (b - a) * t;
 const quantizePixelEdge = (value) => Math.max(MIN_PIXEL_EDGE, Math.round(Math.abs(value) / PIXEL_SCALE_STEP) * PIXEL_SCALE_STEP);
 
-const compose = (position = [0, 0, 0], rotation = [0, 0, 0], scale = [1, 1, 1]) => {
-  const matrix = new THREE.Matrix4();
-  const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(rotation[0], rotation[1], rotation[2], "YXZ"));
-  matrix.compose(new THREE.Vector3(...position), quaternion, new THREE.Vector3(...scale));
-  return matrix;
-};
-const multiply = (base, local) => new THREE.Matrix4().multiplyMatrices(base, local);
 
 class SpaceRenderer3D {
   constructor(canvas) {
@@ -64,19 +46,19 @@ class SpaceRenderer3D {
     }
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = .9;
+    this.renderer.toneMappingExposure = SCENE_SETTINGS.post.exposure;
     this.renderer.shadowMap.enabled = false;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color("#030510");
-    this.scene.fog = new THREE.FogExp2("#030510", .012);
-    this.camera = new THREE.PerspectiveCamera(CAMERA_FOV, 16 / 9, .1, 96);
+    this.scene.background = new THREE.Color(SCENE_SETTINGS.background);
+    this.scene.fog = new THREE.FogExp2(SCENE_SETTINGS.background, SCENE_SETTINGS.fog);
+    this.camera = new THREE.PerspectiveCamera(CAMERA_FOV, 16 / 9, SCENE_SETTINGS.camera.near, SCENE_SETTINGS.camera.far);
     this.composer = new EffectComposer(this.renderer);
     this.renderPass = new RenderPass(this.scene, this.camera);
     // The bloom threshold deliberately sits above display white. Only HDR energy
     // materials cross it; ceramic hulls and ordinary scenery stay crisp.
-    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(1280, 720), .3, .1, 1.03);
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(1280, 720), SCENE_SETTINGS.post.bloom, SCENE_SETTINGS.post.radius, SCENE_SETTINGS.post.threshold);
     this.smaaPass = new SMAAPass();
     this.outputPass = new OutputPass();
     this.composer.addPass(this.renderPass);
@@ -100,34 +82,17 @@ class SpaceRenderer3D {
     this.glowBatches = new Map();
     this.emissiveBatches = new Map();
 
-    this.starLayers = [
-      this.createStars(360, .055, 90210, 1),
-      this.createStars(210, .085, 37191, .72),
-      this.createStars(96, .13, 72031, .42),
-    ];
-    this.starLayers.forEach((stars) => this.scene.add(stars));
-    this.nebulaTexture = this.createNebulaTexture();
-    this.nebulaLayers = [
-      this.createNebulaCloud(118, 2.45, 44127, .1),
-      this.createNebulaCloud(76, 3.8, 77321, .065),
-    ];
-    this.nebulaLayers.forEach((cloud) => this.scene.add(cloud));
-    this.fillLight = new THREE.AmbientLight("#dce8ff", .16);
-    this.hemisphere = new THREE.HemisphereLight("#c8dcf2", "#29183d", .64);
-    this.keyLight = new THREE.DirectionalLight("#e5eff5", 1.08);
-    this.keyLight.position.set(-7, 12, 8);
-    this.keyLight.castShadow = false;
-    this.keyLight.shadow.mapSize.set(1024, 1024);
-    Object.assign(this.keyLight.shadow.camera, { left: -15, right: 15, top: 14, bottom: -14, near: 1, far: 42 });
-    this.keyLight.shadow.bias = .0005;
-    this.keyLight.shadow.normalBias = .025;
-    this.rimLight = new THREE.PointLight("#7fffe2", 1.35, 28, 2);
-    this.rimLight.position.set(0, 4, -8);
-    this.playerLights = [new THREE.PointLight("#66f6e5", .24, 3.2, 2), new THREE.PointLight("#ff8a70", .24, 3.2, 2)];
-    this.scene.add(this.fillLight, this.hemisphere, this.keyLight, this.rimLight, ...this.playerLights);
-
     this.tempShell = new THREE.Matrix4();
     this.shellScale = new THREE.Vector3();
+    this.environment = new SpaceEnvironment(this.scene, this.camera, {
+      surfaces: this.surfaces, pixelEffects: this.pixelEffects, gradient: this.toonGradient,
+      voxel: this.voxel.bind(this), pushVoxel: this.pushVoxel.bind(this),
+      voxelHalo: this.voxelHalo.bind(this), voxelRing: this.voxelRing.bind(this),
+      voxelPolyline: this.voxelPolyline.bind(this), voxelSegment: this.voxelSegment.bind(this),
+      voxelOrb: this.voxelOrb.bind(this), toWorld: this.toWorld.bind(this),
+      fighterNose: this.fighterNose.bind(this), sweptWing: this.sweptWing.bind(this),
+      voxelThruster: this.voxelThruster.bind(this),
+    }, this.canvas);
     this.ready = true;
     this.canvas.dataset.renderer = "three-r185-instanced-voxel";
     this.canvas.dataset.artStyle = "toon-glow-light-blocks";
@@ -180,92 +145,23 @@ class SpaceRenderer3D {
     this.canvas.dataset.ringGrammar = "continuous-segmented-arcs";
     this.canvas.dataset.factionLanguage = "human-kites-vs-void-organisms";
     this.canvas.dataset.playerModules = "4-integrated-silhouette-parts";
-  }
-
-  createStars(count, size, seed, parallax = 1) {
-    const positions = new Float32Array(count * 3);
-    let state = seed >>> 0;
-    const random = () => {
-      state = (state * 1664525 + 1013904223) >>> 0;
-      return state / 4294967296;
-    };
-    for (let index = 0; index < count; index += 1) {
-      positions[index * 3] = (random() - .5) * (48 + parallax * 12);
-      positions[index * 3 + 1] = -18 + random() * 42;
-      positions[index * 3 + 2] = -46 + random() * 54;
-    }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    const material = new THREE.PointsMaterial({ color: "#dfe8ff", size, sizeAttenuation: true, transparent: true, opacity: .9, depthWrite: false, toneMapped: false });
-    return new THREE.Points(geometry, material);
-  }
-
-  createNebulaTexture() {
-    const canvas = document.createElement("canvas");
-    canvas.width = 64;
-    canvas.height = 64;
-    const context = canvas.getContext("2d");
-    const gradient = context.createRadialGradient(32, 32, 3, 32, 32, 31);
-    gradient.addColorStop(0, "rgba(255,255,255,.78)");
-    gradient.addColorStop(.28, "rgba(255,255,255,.28)");
-    gradient.addColorStop(.7, "rgba(255,255,255,.07)");
-    gradient.addColorStop(1, "rgba(255,255,255,0)");
-    context.fillStyle = gradient;
-    context.fillRect(0, 0, 64, 64);
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.NoColorSpace;
-    texture.minFilter = THREE.LinearFilter;
-    texture.magFilter = THREE.LinearFilter;
-    texture.generateMipmaps = false;
-    texture.needsUpdate = true;
-    return texture;
-  }
-
-  createNebulaCloud(count, size, seed, opacity) {
-    const positions = new Float32Array(count * 3);
-    let state = seed >>> 0;
-    const random = () => {
-      state = (state * 1664525 + 1013904223) >>> 0;
-      return state / 4294967296;
-    };
-    const centers = [[-15, -4], [-2, 1], [13.5, -5]];
-    for (let index = 0; index < count; index += 1) {
-      const center = centers[index % centers.length];
-      const angle = random() * TAU;
-      const radius = 1.2 + Math.pow(random(), .68) * 7.6;
-      positions[index * 3] = center[0] + Math.cos(angle) * radius;
-      positions[index * 3 + 1] = center[1] + Math.sin(angle) * radius * .44 + (random() - .5) * 1.2;
-      positions[index * 3 + 2] = -52 + random() * 19;
-    }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    const material = new THREE.PointsMaterial({
-      color: "#49506c",
-      size,
-      sizeAttenuation: true,
-      transparent: true,
-      opacity,
-      depthWrite: false,
-      depthTest: false,
-      blending: THREE.AdditiveBlending,
-      toneMapped: false,
-      map: this.nebulaTexture,
-      alphaMap: this.nebulaTexture,
-    });
-    const cloud = new THREE.Points(geometry, material);
-    cloud.renderOrder = -10;
-    return cloud;
+    this.canvas.dataset.sceneryDetail = "voxel-strata-orbital-salvage";
+    this.canvas.dataset.hullDetail = "layered-armor-recessed-machinery";
   }
 
   resize() {
     const bounds = this.canvas.getBoundingClientRect();
-    const nativeRatio = Math.min(1.5, window.devicePixelRatio || 1);
-    const pixelRatio = this.quality === "low" ? .72 : this.quality === "balanced" ? 1 : nativeRatio;
+    const quality = qualitySettings(this.quality);
+    const pixelRatio = Math.min(quality.maxDpr, window.devicePixelRatio || 1) * quality.resolution;
+    const width = Math.max(1, Math.round(bounds.width)), height = Math.max(1, Math.round(bounds.height));
+    const key = `${width}:${height}:${pixelRatio}`;
+    if (this.viewportKey === key) return;
+    this.viewportKey = key;
     this.renderer.setPixelRatio(pixelRatio);
-    this.renderer.setSize(Math.max(1, bounds.width), Math.max(1, bounds.height), false);
-    this.composer.setPixelRatio(Math.min(1.25, pixelRatio));
-    this.composer.setSize(Math.max(1, bounds.width), Math.max(1, bounds.height));
-    this.camera.aspect = Math.max(.1, bounds.width / Math.max(1, bounds.height));
+    this.renderer.setSize(width, height, false);
+    this.composer.setPixelRatio(Math.min(SCENE_SETTINGS.post.maxDpr, pixelRatio));
+    this.composer.setSize(width, height);
+    this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
   }
 
@@ -492,62 +388,6 @@ class SpaceRenderer3D {
     }
   }
 
-  streamZ(slot, spacing = 5.2, speed = 2.8, far = -30, count = 9) {
-    const span = spacing * count;
-    return far + ((slot * spacing + this.time * speed) % span);
-  }
-
-  distantEcologyZ(slot, spacing = 7.4, speed = .2, far = -48) {
-    const depthBand = 30;
-    return far + ((slot * spacing + this.time * speed) % depthBand);
-  }
-
-  drawFlightCorridor(biome) {
-    const accent = this.mixColor(biome?.accent || "#7fffe2", "#718399", .82);
-    for (let slot = 0; slot < 2; slot += 1) {
-      const z = this.streamZ(slot, 27, .52, -52, 2);
-      const side = slot % 2 ? 1 : -1;
-      const x = side * (9.2 + slot * .7);
-      const y = 2.1 + slot * 1.7;
-      const base = compose([x, y, z], [slot * .08, slot * .52, side * .12]);
-      this.voxel(base, [0, 0, 0], [.5, .54, .82], "#27344d", .22);
-      this.voxel(base, [side * -.48, .08, .12], [.76, .16, .34], "#46556d", .26, [0, side * .42, 0]);
-      this.voxel(base, [side * -.76, .14, .18], [.18, .18, .2], accent, .78, [0, side * .62, 0]);
-    }
-  }
-
-  voxelFlower(base, accent, secondary, scale = 1) {
-    this.voxel(base, [0, .45 * scale, 0], [.08 * scale, .9 * scale, .08 * scale], secondary, .25);
-    this.voxel(base, [0, .98 * scale, 0], [.28 * scale, .24 * scale, .28 * scale], accent, .78);
-    for (const side of [-1, 1]) {
-      this.voxel(base, [side * .3 * scale, .98 * scale, 0], [.22 * scale, .14 * scale, .22 * scale], secondary, .55);
-      this.voxel(base, [0, .98 * scale, side * .3 * scale], [.22 * scale, .14 * scale, .22 * scale], accent, .48);
-    }
-  }
-
-  voxelCrystal(base, accent, secondary, height = 1.8) {
-    this.voxel(base, [0, height * .36, 0], [.42, height * .72, .42], accent, .34, [0, .12, .08]);
-    this.voxel(base, [-.42, height * .2, .18], [.24, height * .42, .24], secondary, .5, [0, -.22, -.12]);
-    this.voxel(base, [.42, height * .16, -.12], [.2, height * .34, .2], "#dffcff", .72, [0, .28, .15]);
-  }
-
-  voxelCoral(base, accent, secondary, scale = 1) {
-    this.voxel(base, [0, .34 * scale, 0], [.26 * scale, .68 * scale, .26 * scale], accent, .28);
-    for (const side of [-1, 1]) {
-      this.voxel(base, [side * .3 * scale, .58 * scale, 0], [.34 * scale, .16 * scale, .22 * scale], secondary, .44, [0, 0, side * .42]);
-      this.voxel(base, [side * .5 * scale, .79 * scale, 0], [.12 * scale, .44 * scale, .12 * scale], accent, .62);
-    }
-  }
-
-  voxelTree(base, accent, secondary, scale = 1) {
-    this.voxel(base, [0, .66 * scale, 0], [.16 * scale, 1.32 * scale, .16 * scale], secondary, .24);
-    for (const side of [-1, 1]) {
-      this.voxel(base, [side * .42 * scale, 1.12 * scale, 0], [.72 * scale, .12 * scale, .18 * scale], secondary, .38, [0, 0, side * .42]);
-      this.voxel(base, [side * .72 * scale, 1.38 * scale, 0], [.24 * scale, .42 * scale, .24 * scale], accent, .76);
-    }
-    this.voxel(base, [0, 1.66 * scale, 0], [.34 * scale, .34 * scale, .34 * scale], accent, .68);
-  }
-
   voxelThruster(base, x, z, color, flame, scale = 1, housing = "#34445d") {
     this.surfaces.solid(base, [x, .04, z], [.32 * scale, .28 * scale, .34], housing, "metal");
     this.surfaces.solid(base, [x, .04, z + .18], [.3 * scale, .3 * scale, .16], "#90a5b9", "metal", "ring");
@@ -617,17 +457,18 @@ class SpaceRenderer3D {
   shieldRingImpulse(angle, pulse) {
     const { contact, age } = pulse;
     const damage = clamp(pulse.damage, 1, 5);
-    const power = (damage - 1) / 4;
-    const amplitude = .10 + .065 * (damage - 1) ** 1.65;
+    const power = clamp(pulse.load ?? (damage - 1) / 4, 0, 1);
+    const amplitude = .14 + .90 * power ** 1.35;
     const delta = Math.atan2(Math.sin(angle - contact.angle), Math.cos(angle - contact.angle));
-    const width = .13 + power * .30;
+    // A narrow impulse can fall between sparse low-quality motes. Move a material patch.
+    const width = .24 + power * .32;
     const local = Math.exp(-((delta / width) ** 2));
     const attack = 1 - Math.exp(-age * 100);
     const fade = (1 - clamp(age / .8, 0, 1)) ** .5;
-    const decay = Math.exp(-age * 5.5) * fade;
+    const decay = Math.exp(-age * 4.2) * fade;
     const glance = Math.sqrt(Math.max(0, 1 - contact.incidence ** 2));
     const tangentSign = Math.sign(-Math.sin(contact.angle) * contact.tangent.x + Math.cos(contact.angle) * contact.tangent.z) || 1;
-    const dent = -Math.sin(age * 26) * amplitude * local * (.45 + contact.incidence * .55);
+    const dent = -Math.sin(age * 21) * amplitude * local * (.45 + contact.incidence * .55);
     let traveling = 0;
     // Two signed packets travel on ONE periodic perimeter at the same material wave speed.
     // Periodic images let them meet, interfere and pass through without creating new rings.
@@ -637,7 +478,7 @@ class SpaceRenderer3D {
       const weight = side === tangentSign ? 1 + glance * .45 : 1 - glance * .65;
       traveling += (1 - phase * phase) * Math.exp(-phase * phase * .5) * weight;
     }
-    const displacement = dent * attack * decay + traveling * amplitude * .55 * attack * Math.exp(-age * 3.6) * fade;
+    const displacement = dent * attack * decay + traveling * amplitude * .65 * attack * Math.exp(-age * 2.2) * fade;
     const shear = tangentSign * glance * local * amplitude * Math.sin(age * 15) * attack * decay;
     return { displacement, shear, energy: Math.abs(displacement) + Math.abs(shear) * .5 };
   }
@@ -671,7 +512,9 @@ class SpaceRenderer3D {
     if (!events.length && player.shieldHitTimer > 0) events = [{ ...player, age: .48 - player.shieldHitTimer, duration: .8 }];
     const pulses = events.filter(event => event.age < event.duration).map(event => ({
       contact: this.shieldContact(base, profile, event), age: event.age,
-      damage: event.shieldImpactDamage || 1, color: new THREE.Color(event.shieldImpactColor || "#8deaff"),
+      damage: event.shieldImpactIncoming || event.shieldImpactDamage || 1,
+      load: event.shieldImpactLoad ?? (event.shieldImpactDamage || 1) / Math.max(1, player.maxShield || 3),
+      color: new THREE.Color(event.shieldImpactColor || "#8deaff"),
     }));
     const response = angle => this.shieldRingResponse(angle, pulses);
     const point = (angle, field, radius = 1, height = 0) => [
@@ -691,7 +534,8 @@ class SpaceRenderer3D {
       const angle = (index + (seed - .5) * .68) / count * TAU + Math.sin(this.time * .3 + seed * TAU) * .025 + loose * (drift - .5) * 2.8;
       const field = response(angle);
       const nearest = pulses.length ? Math.min(...pulses.map(p => Math.abs(Math.atan2(Math.sin(angle - p.contact.angle), Math.cos(angle - p.contact.angle))))) : Math.PI;
-      const release = breaking ? Math.max(0, breakAge - nearest * .045 - seed * .04) : 0;
+      // Let the dent register before fracture reaches and releases each perimeter patch.
+      const release = breaking ? Math.max(0, breakAge - .11 - nearest / 9.5 - seed * .025) : 0;
       const radius = 1 + loose * (seed < .22 ? -.55 : .45 + drift * .95) + release * (.8 + seed * 1.8);
       const height = (drift - .5) * .16 + loose * (seed - .5) * 1.3 + release * (seed - .5) * .6;
       const large = seed > .87;
@@ -701,8 +545,8 @@ class SpaceRenderer3D {
         large ? 1.5 : .65, index % 3 ? 1.35 : 1, loose * (seed - .5));
     }
     for (const pulse of pulses) {
-      const { contact, age, damage, color } = pulse;
-      const power = clamp((damage - 1) / 4, 0, 1);
+      const { contact, age, color } = pulse;
+      const power = clamp(pulse.load, 0, 1);
       const glance = Math.sqrt(Math.max(0, 1 - contact.incidence ** 2));
       const origin = new THREE.Vector3().fromArray(point(contact.angle, response(contact.angle)));
       const flash = Math.max(0, 1 - age / .16);
@@ -828,6 +672,17 @@ class SpaceRenderer3D {
   drawHullFinish(base, palette, profile) {
     this.surfaces.solid(base, [0, .29, -.53 * profile.nose], [.31, .22, .64], "#263f57", "glass", "orb");
     this.surfaces.line(base, [-.08, .39, -.67], [-.08, .36, -.38], "#87b8c9", .65);
+    for (const side of [-1, 1]) {
+      this.surfaces.solid(base, [side * .19, .3, -.5 * profile.nose], [.06, .16, .57], palette[2], "ceramic");
+      this.surfaces.solid(base, [side * .3, .16, -.87 * profile.nose], [.08, .08, .28], palette[0], "metal");
+      this.surfaces.solid(base, [side * .7 * profile.wing, .115, .15], [.38, .06, .22], palette[2], "ceramic", "plate", [0, side * .4, 0]);
+      this.surfaces.solid(base, [side * .84 * profile.wing, .075, .47], [.32, .08, .15], "#718396", "metal", "plate", [0, side * .45, 0]);
+      for (let mark = 0; mark < 3; mark++) this.surfaces.solid(base, [side * (.62 + mark * .12) * profile.wing, .17, .15 + mark * .06], [.06, .04, .14], palette[1], "ceramic");
+      // Exposed dark engine bed and stepped intake lip retain the original footprint.
+      this.surfaces.solid(base, [side * .31, .14, .71], [.22, .14, .48], palette[0], "metal");
+      this.surfaces.solid(base, [side * .31, .24, .57], [.24, .06, .16], palette[2], "ceramic");
+    }
+    this.surfaces.solid(base, [0, .4, -.35 * profile.nose], [.3, .04, .06], palette[0], "metal");
     for (const side of [-1, 1]) {
       this.surfaces.line(base, [side * .4, .12, -.12], [side * 1.05 * profile.wing, .12, .38], palette[0], .8);
       this.surfaces.solid(base, [side * .44, .18, .42], [.22, .1, .46], palette[0], "metal");
@@ -1085,6 +940,15 @@ class SpaceRenderer3D {
 
   drawIntegratedEnemyModules(enemy, base, palette, moduleColor) {
     const [nose, rear, dorsal, flank] = this.enemyHardpoints(enemy);
+    for (const side of [-1, 1]) {
+      for (let rib = 0; rib < 3; rib++) {
+        const z = -.18 + rib * .23;
+        const x = side * (flank * .64 + Math.sin(rib * 1.3) * .06);
+        this.surfaces.solid(base, [x, dorsal * .6 + .06, z], [.28, .14, .19], rib % 2 ? palette[0] : palette[1], "shell", "plate", [0, side * -.23, side * -.2]);
+        this.surfaces.solid(base, [x, dorsal * .6 + .15, z], [.16, .04, .07], "#96728f", "shell");
+      }
+      this.surfaces.solid(base, [side * flank * .72, dorsal * .46, .53], [.23, .24, .13], palette[0], "metal", "ring");
+    }
     const pose = this.enemyArtPose(enemy);
     const body = (p, size, color = palette[0], finish = "shell", shape = "plate", rotation) => this.surfaces.solid(base, p, size, color, finish, shape, rotation);
     const wire = (a, b, color = palette[1]) => this.surfaces.segment(base, a, b, .035, color, "metal");
@@ -1689,647 +1553,6 @@ class SpaceRenderer3D {
     this.canvas.dataset.modelGallery = "active";
   }
 
-  drawRouteGates(choice) {
-    const laneCenters = [this.width * .19, this.width * .5, this.width * .81];
-    choice.options.forEach((path, index) => {
-      const position = this.toWorld(laneCenters[index], this.height - 63, .12);
-      const selected = index === choice.selectedIndex;
-      const charge = selected ? clamp(choice.hold / .68, 0, 1) : 0;
-      const base = compose(position);
-      for (const side of [-1, 1]) {
-        this.voxel(base, [side * .82, .72, 0], [.18, 1.55, .24], selected ? path.color : "#353055", selected ? .8 : .15);
-        this.voxel(base, [side * .82, 1.52, 0], [.32, .16, .28], path.color, selected ? 1 : .28);
-      }
-      this.voxel(base, [0, 1.5, 0], [1.5, .18, .24], path.color, selected ? 1 : .3);
-      this.voxel(base, [0, .02, 0], [1.55, .08, .7], selected ? path.color : "#24213e", selected ? .45 : .1);
-      for (let beacon = 0; beacon < 5; beacon += 1) {
-        const phase = (beacon + Math.floor(this.time * 5)) % 5;
-        this.voxel(base, [0, .25 + phase * .24, .03], [.08 + charge * .03, .08 + charge * .03, .08], path.color, .7 + charge * .3);
-      }
-    });
-  }
-
-  drawSectorArchitecture(world, stage) {
-    const sector = clamp(world.sectorIndex || 0, 0, 2);
-    const accent = this.mixColor(stage.biome?.accent || stage.accent, "#29354e", .7);
-    const secondary = this.mixColor(stage.biome?.secondary || stage.star, "#303047", .72);
-    if ((world.sectorFlashTimer || 0) > 0) {
-      const remaining = clamp(world.sectorFlashTimer / 1.45, 0, 1);
-      const approach = 1 - remaining;
-      const portal = compose([0, 1.1, lerp(-18, -2.2, approach)], [Math.PI / 2, 0, 0]);
-      const pulse = 1 + Math.sin(this.time * 18) * .08;
-      this.voxelHalo(portal, 4.2 + sector * .36, 0, accent, 14, .22, sector * .7, .22 * pulse);
-      this.voxelHalo(portal, 3.5 + sector * .3, 0, secondary, 10, -.18, sector, .18 * pulse);
-      this.voxel(portal, [0, 0, 0], [.52 * pulse, .52 * pulse, .52], "#ffffff", 1);
-    }
-  }
-
-  drawThreatMatrix(world) {
-    const colors = ["#68f4df", "#76dbff", "#ffe16c", "#ff936b", "#ff67d4"];
-    const tier = clamp(Number(world.threatTier) || 0, 0, 4);
-    const color = colors[tier];
-    const pulseTimer = clamp(Number(world.threatPulseTimer) || 0, 0, 1.1);
-    const pulse = 1 + pulseTimer * .12 + Math.sin(this.time * 12) * .025;
-    const base = compose([10.8, 6.1, -25], [0, -.28, .08]);
-    this.voxel(base, [0, 0, 0], [.42, .34, .5], "#25314d", .2);
-    this.voxel(base, [.34, .03, -.06], [.22, .22, .26], color, .72);
-    for (let pip = 0; pip < 5; pip += 1) {
-      const active = pip <= tier;
-      this.voxel(base, [-.36 + pip * .18, .32, 0], [.12 * pulse, .12 * pulse, .12], active ? color : "#46516d", active ? .88 : .12);
-    }
-    if (tier >= 3) {
-      this.voxelHalo(base, .72 + tier * .05, .1, color, 8, .18, tier * .4, .1 * pulse);
-    }
-    this.canvas.dataset.threatTier = String(tier);
-    this.canvas.dataset.threatColor = color;
-    this.canvas.dataset.threatPulse = pulseTimer.toFixed(2);
-  }
-
-  drawAnomalyField(world) {
-    const anomaly = world.activeAnomaly;
-    if (!anomaly) {
-      this.canvas.dataset.anomalyId = "off";
-      return;
-    }
-    const color = anomaly.color || "#76e9ff";
-    const secondary = anomaly.secondary || "#ff9bd5";
-    const bodyColor = this.mixColor(color, "#17233d", .62);
-    const rimColor = this.mixColor(secondary, "#211d38", .68);
-    const intensity = clamp(Number(anomaly.intensity) || .7, .55, 1);
-    const polarity = anomaly.polarity > 0 ? 1 : -1;
-    const pulse = 1 + Math.sin(this.time * (1.15 + anomaly.tier * .2) + anomaly.phase) * .1 * intensity;
-
-    if (anomaly.kind === "crystal") {
-      for (let crystal = 0; crystal < 4; crystal += 1) {
-        const side = crystal % 2 ? 1 : -1;
-        const z = this.streamZ(crystal, 11.5, .72, -40, 4);
-        const base = compose([side * (6.8 + crystal % 2 * 1.1), .45 + crystal % 3 * 1.15, z], [0, this.time * .04 * polarity + crystal, side * .1]);
-        this.voxel(base, [0, .72, 0], [.46 * pulse, 1.44, .42], bodyColor, .42, [0, .34, 0]);
-        this.voxel(base, [side * -.28, 1.46, -.08], [.22, .52, .24], color, .82, [0, -.38, 0]);
-      }
-    } else if (anomaly.kind === "bloom") {
-      for (let bloom = 0; bloom < 4; bloom += 1) {
-        const side = bloom % 2 ? 1 : -1;
-        const z = this.streamZ(bloom, 12, .74, -41, 4);
-        const base = compose([side * (6.6 + bloom % 2 * 1.25), .2 + bloom % 3 * 1.18, z]);
-        const rise = .58 + ((this.time * .32 + bloom * .17) % 1) * 1.15;
-        this.voxel(base, [0, .62, 0], [.24, 1.2, .24], bodyColor, .3);
-        for (let petal = 0; petal < 4; petal += 1) {
-          const angle = petal / 4 * TAU + this.time * .28 * polarity;
-          this.voxel(base, [Math.cos(angle) * .44, 1.23, Math.sin(angle) * .44], [.38, .16, .28], petal % 2 ? rimColor : bodyColor, .5, [0, angle, 0]);
-        }
-        this.voxel(base, [0, rise, 0], [.16 * pulse, .16 * pulse, .16], color, .92);
-      }
-    } else if (anomaly.kind === "draft") {
-      for (let stream = 0; stream < 5; stream += 1) {
-        const z = this.streamZ(stream, 9.2, 1.5, -40, 5);
-        const x = polarity * (-7.7 + ((this.time * .82 + stream * 3.7) % 15.4));
-        const base = compose([x, 1.1 + (stream * 7 % 4) * 1.15, z], [0, polarity * .34, polarity * .1]);
-        this.voxel(base, [0, 0, 0], [.72 + intensity * .24, .14, .22], stream % 2 ? bodyColor : rimColor, .48);
-        this.voxel(base, [-polarity * .66, .04, 0], [.22, .12, .16], stream % 2 ? color : secondary, .82);
-      }
-    } else if (anomaly.kind === "aurora") {
-      for (let ribbon = 0; ribbon < 2; ribbon += 1) {
-        const z = -30 - ribbon * 5.5;
-        for (let block = -4; block <= 4; block += 1) {
-          const wave = Math.sin(this.time * .32 * polarity + block * .7 + ribbon) * .54;
-          const base = compose([block * 2.2 + ribbon * 1.1, 6.2 + ribbon * .62 + wave, z]);
-          this.voxel(base, [0, 0, 0], [1.72, .18 * pulse, .28], (block + ribbon) % 2 ? bodyColor : rimColor, .4, [0, .08 * polarity, wave * .1]);
-        }
-      }
-    } else if (anomaly.kind === "gravity") {
-      const lens = compose([polarity * 7.2, 5.1, -25], [Math.PI / 2, 0, 0]);
-      this.voxelHalo(lens, 2.5, 0, bodyColor, 16, polarity * .08, anomaly.phase, .18 * pulse);
-      this.voxelHalo(lens, 1.78, 0, rimColor, 12, polarity * -.12, anomaly.phase, .14 * pulse);
-      this.voxel(lens, [0, 0, 0], [.42 * pulse, .42 * pulse, .42 * pulse], color, .92);
-    } else if (anomaly.kind === "prism") {
-      for (let prism = 0; prism < 4; prism += 1) {
-        const side = prism % 2 ? 1 : -1;
-        const z = this.streamZ(prism, 12, .7, -41, 4);
-        const base = compose([side * (6.5 + prism % 2 * 1.35), .5 + prism % 3 * 1.2, z], [0, this.time * .08 * polarity + prism, side * .12]);
-        this.voxel(base, [0, 1.05, 0], [.5 * pulse, 2.1, .46], prism % 2 ? bodyColor : rimColor, .46, [0, .38, 0]);
-        this.voxel(base, [side * -.26, 2.14, -.06], [.24, .5, .24], prism % 2 ? color : secondary, .88, [0, -.38, 0]);
-      }
-    } else if (anomaly.kind === "magnetar") {
-      const magnet = compose([polarity * 6.8, 4.7, -24], [0, polarity * .18, polarity * .08]);
-      this.voxel(magnet, [0, 0, 0], [.78, 2.8, .82], bodyColor, .42);
-      this.voxel(magnet, [-polarity * .82, 1.15, 0], [1.5, .42, .7], rimColor, .52, [0, 0, polarity * .42]);
-      this.voxelHalo(magnet, 2.4, .4, color, 14, polarity * .12, anomaly.phase, .16 * pulse);
-      for (let flux = 0; flux < 6; flux += 1) {
-        const phase = flux / 6 * TAU + this.time * .16 * polarity;
-        this.pushVoxel(compose([polarity * 6.8 + Math.cos(phase) * 3.1, 4.7 + Math.sin(phase) * 1.5, -24], [phase, phase, 0], [.14, .14, .14]), flux % 2 ? color : secondary, 1);
-      }
-    } else if (anomaly.kind === "chrono") {
-      const dial = compose([-polarity * 7.1, 5.2, -25], [0, anomaly.phase * .08, 0]);
-      const radius = 2.45;
-      for (let tick = 0; tick < 12; tick += 1) {
-        const angle = tick / 12 * TAU;
-        this.voxel(dial, [Math.cos(angle) * radius, Math.sin(angle) * radius, 0], [.2 * pulse, .2 * pulse, .28], tick % 3 ? bodyColor : rimColor, .58, [0, 0, angle]);
-      }
-      this.voxel(dial, [0, 0, 0], [.18, radius * .7, .18], color, .9, [0, 0, this.time * .42 * polarity]);
-      this.voxel(dial, [0, 0, 0], [radius * .44, .16, .16], secondary, .86, [0, 0, -this.time * .26 * polarity]);
-    } else if (anomaly.kind === "surge") {
-      for (let wave = 0; wave < 2; wave += 1) {
-        const cycle = (this.time * .22 + wave * .5 + anomaly.phase / TAU) % 1;
-        const radius = 1.1 + cycle * 3.1;
-        const side = wave ? 1 : -1;
-        const base = compose([side * 6.9, 4.6 - wave * .8, -23 - wave * 7], [Math.PI / 2, 0, 0]);
-        this.voxelHalo(base, radius, 0, wave ? bodyColor : rimColor, 18, polarity * .05, anomaly.phase, .18 * pulse);
-        this.voxel(base, [0, 0, 0], [.28 * pulse, .28 * pulse, .28], wave ? color : secondary, .96);
-      }
-    }
-
-    this.canvas.dataset.anomalyId = anomaly.id;
-    this.canvas.dataset.anomalyKind = anomaly.kind;
-    this.canvas.dataset.anomalyColor = color;
-    this.canvas.dataset.anomalySecondary = secondary;
-    this.canvas.dataset.anomalyIntensity = intensity.toFixed(3);
-    this.canvas.dataset.anomalyPolarity = String(polarity);
-  }
-
-  drawEncounter(encounter) {
-    if (!encounter) return;
-    const position = this.toWorld(encounter.x, encounter.y, encounter.kind === "siege" ? .55 : .12);
-    const ratio = encounter.kind === "survive" ? 1 - clamp(encounter.timer / encounter.total, 0, 1) : clamp(encounter.progress / encounter.goal, 0, 1);
-    const base = compose(position, [0, this.time * .18, 0]);
-    if (encounter.kind === "hold") {
-      this.voxel(base, [0, .45, 0], [.28, .9, .28], "#18223c");
-      this.voxel(base, [0, .98, 0], [.42 + ratio * .12, .18, .42 + ratio * .12], encounter.color, 1);
-      for (const side of [-1, 1]) this.voxel(base, [side * .7, .12, 0], [.1, .3 + ratio * .5, .1], encounter.color, .7);
-    } else if (encounter.kind === "escort") {
-      const palette = ["#15243a", encounter.color, "#ffffff"];
-      this.voxel(base, [0, .08, .08], [.48, .28, .7], palette[0]);
-      this.fighterNose(base, palette, .7, "#ffffff");
-      for (const side of [-1, 1]) this.sweptWing(base, side, palette, .55, .7, false);
-      this.voxelThruster(base, 0, .5, encounter.color, .4, .65);
-    } else if (encounter.kind === "siege") {
-      const health = clamp(encounter.hp / encounter.maxHp, 0, 1);
-      this.voxel(base, [0, .15, 0], [.85, .85, .85], "#17162d");
-      this.voxel(base, [0, .15, 0], [.38 + health * .18, .38 + health * .18, .38 + health * .18], encounter.color, 1);
-      for (let index = 0; index < 6; index += 1) {
-        const angle = index / 6 * TAU + this.time * .45;
-        this.voxel(base, [Math.sin(angle) * 1.05, .15, Math.cos(angle) * 1.05], [.12, .12, .32], "#ffffff", .65, [0, angle, 0]);
-      }
-    } else if (encounter.kind === "collect") {
-      this.voxel(base, [0, .02, 0], [1.15, .06, 1.15], "#18233e");
-      for (let index = 0; index < 8; index += 1) {
-        const angle = index / 8 * TAU;
-        this.voxel(base, [Math.sin(angle) * .62, .08, Math.cos(angle) * .62], [.11, .12 + ratio * .22, .11], encounter.color, .75);
-      }
-    } else {
-      this.voxel(base, [0, .12, 0], [.52, .3, .7], "#301d3f");
-      for (const side of [-1, 1]) this.voxel(base, [side * .48, .12, .08], [.42, .12, .42], encounter.color, .65);
-    }
-  }
-
-  drawEncounterObject(object) {
-    const position = this.toWorld(object.x, object.y, object.type === "meteor" ? .35 : .58 + Math.sin(object.age * 4) * .08);
-    const base = compose(position, [object.rotation || object.age, object.age * .7, 0]);
-    if (object.type === "salvage") {
-      this.voxel(base, [0, 0, 0], [.34, .34, .34], object.color, 1);
-      for (const axis of [[.28, 0, 0], [-.28, 0, 0], [0, .28, 0], [0, -.28, 0]]) this.voxel(base, axis, [.18, .18, .18], "#ffffff", .75);
-    } else if (object.type === "meteor") {
-      const scale = .34 + object.r * .018;
-      this.voxel(base, [0, 0, 0], [scale, scale, scale], "#6f4052");
-      this.voxel(base, [.28, .08, -.12], [scale * .55, scale * .45, scale * .5], "#9a5a55");
-      this.voxel(base, [-.23, -.11, .2], [scale * .48, scale * .42, scale * .52], object.color, .35);
-    }
-  }
-
-  drawBiomeFeatures(biome) {
-    if (!biome) return;
-    const accent = biome.accent || "#7fffe2";
-    const secondary = biome.secondary || accent;
-    if (biome.id === "sugarBloom") {
-      for (let index = 0; index < 8; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        const island = compose([side * (5.1 + index % 3 * 1.05), .35 + index % 4 * .9, this.streamZ(index, 7.2, 1.45, -39, 8)], [0, index * .42, side * .08]);
-        this.voxel(island, [0, 0, 0], [.9, .42, .82], "#6a5aa8", .32);
-        this.voxelFlower(island, accent, secondary, .82 + index % 3 * .2);
-      }
-    } else if (biome.id === "crystalOrchard") {
-      for (let index = 0; index < 8; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        this.voxelCrystal(compose([side * (5.4 + index % 3 * 1.08), .2 + index % 4 * .78, this.streamZ(index, 7, 1.6, -40, 8)], [index * .08, side * .18, side * .06]), index % 3 ? accent : secondary, index % 3 ? secondary : accent, 1.45 + index % 4 * .5);
-      }
-    } else if (biome.id === "cometTide") {
-      for (let index = 0; index < 7; index += 1) {
-        const z = this.streamZ(index, 6.2, 4.4, -34, 7);
-        const side = index % 2 ? 1 : -1;
-        const base = compose([side * (5.4 + index % 3), 2.2 + index % 3 * 1.15, z], [0, side * .72, 0]);
-        this.voxel(base, [0, 0, 0], [.38, .38, .62], secondary, .92);
-        for (let tail = 1; tail <= 3; tail += 1) this.voxel(base, [0, 0, -tail * .72], [.22 / tail, .18 / tail, .52], accent, .82 - tail * .12);
-      }
-    } else if (biome.id === "auroraFoundry") {
-      for (let strip = 0; strip < 3; strip += 1) {
-        for (let segment = 0; segment < 8; segment += 1) {
-          const wave = Math.sin(segment * .72 + strip + this.time * .55) * .48;
-          this.voxel(compose([0, 0, 0]), [-8.2 + segment * 2.35, 4.6 + strip * .8 + wave, -18.5 - strip * 2.4], [1.72, .11, .16], strip % 2 ? secondary : accent, .76, [0, .08, wave * .15]);
-        }
-      }
-      for (const side of [-1, 1]) for (let index = 0; index < 3; index += 1) {
-        const base = compose([side * (6.4 + index * .72), .55 + index * .82, -11 - index * 9], [0, side * .16, side * .08]);
-        this.voxel(base, [0, 0, 0], [.52, 2.1, .64], secondary, .36);
-        this.voxel(base, [side * -.58, 1.04, 0], [1.16, .26, .7], accent, .78);
-      }
-    } else if (biome.id === "thunderWorks") {
-      for (let gear = 0; gear < 5; gear += 1) {
-        const side = gear % 2 ? 1 : -1;
-        const base = compose([side * (6.5 + gear % 2), 1.2 + gear % 3 * .75, this.streamZ(gear, 8, 1.65, -34, 5)], [Math.PI / 2, 0, 0]);
-        this.voxel(base, [0, 0, 0], [.35, .35, .5], secondary, .46);
-        this.voxelHalo(base, 1.05 + gear % 3 * .25, 0, accent, 10, side * .32, gear, .18);
-      }
-      for (let index = 0; index < 5; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        const base = compose([side * (6.2 + index % 3 * 1.1), .4 + index % 3 * 1.05, -12 - index * 6.4], [index * .18, side * .24, 0]);
-        this.voxel(base, [0, 0, 0], [.68, 1.18, .72], secondary, .36);
-        this.voxel(base, [0, .72, 0], [.94, .24, .9], accent, .82);
-      }
-    } else if (biome.id === "cloudReef") {
-      for (let index = 0; index < 9; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        const scale = .72 + index % 3 * .2;
-        const base = compose([side * (5.2 + index % 3 * 1.05), .35 + index % 4 * .86, this.streamZ(index, 7.1, 1.4, -40, 9)], [0, index * .24, side * .08]);
-        this.voxel(base, [0, 0, 0], [1.38 * scale, .46, 1.08 * scale], "#b9f2ff", .42);
-        this.voxelCoral(base, accent, secondary, scale);
-      }
-    } else if (biome.id === "eclipseCarnival") {
-      const eclipse = compose([-7.4, 5.5, -23], [0, this.time * .035, 0]);
-      this.voxelOrb(eclipse, 2.7, "#784fd0", "#ff5d78");
-      this.voxelHalo(eclipse, 3.45, 0, secondary, 20, .06, 0, .16);
-      for (let gate = 0; gate < 4; gate += 1) {
-        const side = gate % 2 ? 1 : -1;
-        const z = this.streamZ(gate, 12.2, 1.55, -41, 4);
-        const base = compose([side * (6.4 + gate % 2 * 1.2), .7 + gate % 3 * 1.2, z], [0, side * .22, side * .08]);
-        this.voxel(base, [0, 0, 0], [.42, 2.5, .56], gate % 2 ? accent : secondary, .46);
-        this.voxel(base, [side * -.72, 1.1, 0], [1.28, .28, .56], gate % 2 ? secondary : accent, .82);
-      }
-    } else if (biome.id === "prismGrave") {
-      for (let index = 0; index < 8; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        const base = compose([side * (5.3 + index % 3 * 1.12), .4 + index % 4 * .82, this.streamZ(index, 7.4, 1.48, -40, 8)], [0, side * .2, side * .1]);
-        this.voxel(base, [0, .82 + index % 3 * .32, 0], [.62, 1.9 + index % 3 * .62, .62], index % 2 ? accent : secondary, .58);
-        this.voxel(base, [side * -.5, 1.6 + index % 3 * .3, 0], [.86, .22, .78], index % 2 ? secondary : accent, .84, [0, 0, side * .58]);
-      }
-    } else if (biome.id === "voidGarden") {
-      for (let index = 0; index < 8; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        const island = compose([side * (5.2 + index % 3 * 1.18), .35 + index % 4 * .9, this.streamZ(index, 7.6, 1.32, -41, 8)], [0, side * .26, side * .08]);
-        this.voxel(island, [0, 0, 0], [.92, .48, .88], "#655497", .34);
-        this.voxelTree(island, accent, secondary, .82 + index % 3 * .22);
-      }
-      for (let mote = 0; mote < 10; mote += 1) {
-        const phase = mote / 10 * TAU + this.time * .22;
-        this.pushVoxel(compose([Math.cos(phase) * (6.5 + mote % 3), 2.3 + Math.sin(phase * 2) * 1.2, -15 - mote % 4 * 3.2], [phase, phase, 0], [.1, .1, .1]), mote % 2 ? accent : secondary, 1);
-      }
-    }
-  }
-
-  voxelRock(base, body, rim, scale = 1) {
-    this.voxel(base, [0, 0, 0], [.9 * scale, .64 * scale, 1.02 * scale], body, .2);
-    this.voxel(base, [.38 * scale, .24 * scale, -.24 * scale], [.48 * scale, .4 * scale, .58 * scale], rim, .28);
-    this.voxel(base, [-.32 * scale, -.18 * scale, .28 * scale], [.42 * scale, .34 * scale, .5 * scale], body, .2);
-  }
-
-  drawCosmicBiomeFeatures(biome) {
-    if (!biome) return;
-    const sourceAccent = biome.accent || "#7fffe2";
-    const sourceSecondary = biome.secondary || sourceAccent;
-    const accent = this.mixColor(sourceAccent, "#18243c", .76);
-    const secondary = this.mixColor(sourceSecondary, "#211f3d", .78);
-    const coldRock = "#26324d";
-
-    if (biome.id === "sugarBloom") {
-      for (let index = 0; index < 3; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        const base = compose([side * (6.4 + index % 2 * 1.4), 1.5 + index % 3 * 1.7, this.distantEcologyZ(index, 9.2, .16, -47)], [index * .18, side * .28, 0]);
-        this.voxelRock(base, coldRock, secondary, 1.25 + index % 2 * .35);
-        this.voxel(base, [side * .38, .18, -.18], [.24, .22, .28], "#b88958", .7);
-      }
-    } else if (biome.id === "crystalOrchard") {
-      for (let index = 0; index < 6; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        const base = compose([side * (5.8 + index % 3 * 1.08), .8 + index % 4 * 1.2, this.distantEcologyZ(index, 5.1, .18, -48)], [side * .2, index * .5, side * .12]);
-        this.voxel(base, [0, 0, 0], [.62, 1.65 + index % 3 * .42, .58], index % 2 ? accent : secondary, .38, [0, .38, .12]);
-        this.voxel(base, [0, .92, 0], [.3, .48, .3], sourceAccent, .68, [0, -.38, 0]);
-      }
-    } else if (biome.id === "cometTide") {
-      for (let index = 0; index < 5; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        const base = compose([side * (4.9 + index % 3 * 1.4), 2 + index % 3 * 1.35, this.distantEcologyZ(index, 6.2, .32, -48)], [0, side * .68, 0]);
-        this.voxel(base, [0, 0, 0], [.54, .48, .82], coldRock, .38);
-        this.voxel(base, [0, .08, -.36], [.22, .18, .3], sourceAccent, .72);
-        for (let tail = 1; tail <= 2; tail += 1) this.voxel(base, [0, 0, -tail * .78], [.24, .2, .58], tail === 1 ? accent : secondary, .52 - tail * .1);
-      }
-    } else if (biome.id === "auroraFoundry") {
-      for (let ribbon = 0; ribbon < 2; ribbon += 1) {
-        for (let segment = 0; segment < 8; segment += 1) {
-          const wave = Math.sin(segment * .78 + ribbon + this.time * .28) * .72;
-          this.voxel(compose([0, 0, 0]), [-9 + segment * 2.55, 5.5 + ribbon * 1.05 + wave, -25 - ribbon * 5], [2.05, .18, .26], ribbon ? secondary : accent, .42, [0, .06, wave * .08]);
-        }
-      }
-    } else if (biome.id === "thunderWorks") {
-      for (let index = 0; index < 3; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        const base = compose([side * (6.6 + index * .8), 2.4 + index * 1.35, this.distantEcologyZ(index, 9.4, .16, -47)], [Math.PI / 2, 0, 0]);
-        this.voxelRing(base, 1.25 + index * .26, 0, index % 2 ? accent : secondary, 16, side * .012, index * .4, .16, .72, .7);
-        this.voxel(base, [0, 0, 0], [.58, .58, .68], coldRock, .28);
-        this.voxel(base, [0, 0, 0], [.26, .26, .32], "#d3bc65", .72);
-      }
-    } else if (biome.id === "cloudReef") {
-      for (let index = 0; index < 4; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        const base = compose([side * (6.2 + index % 2 * 1.5), 1.2 + index % 3 * 1.45, this.distantEcologyZ(index, 7.8, .14, -47)], [0, index * .35, 0]);
-        this.voxel(base, [0, 0, 0], [1.55, .58, 1.18], "#34445e", .2);
-        this.voxel(base, [side * .72, .2, -.22], [1.12, .5, .9], accent, .3);
-        this.voxel(base, [side * -.58, -.12, .34], [.92, .44, .82], secondary, .26);
-      }
-    } else if (biome.id === "eclipseCarnival") {
-      for (let index = 0; index < 3; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        const base = compose([side * (6.2 + index * .75), 1.2 + index * 1.25, this.distantEcologyZ(index, 8.4, .12, -46)], [index * .4, side * .22, .1]);
-        this.voxelRock(base, coldRock, secondary, .8 + index * .16);
-      }
-    } else if (biome.id === "prismGrave") {
-      for (let index = 0; index < 5; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        const base = compose([side * (5.9 + index % 3 * 1.15), 1 + index % 3 * 1.4, this.distantEcologyZ(index, 6.3, .15, -48)], [0, side * .22, side * .12]);
-        this.voxel(base, [0, 0, 0], [.72, 2.2 + index % 2 * .6, .68], index % 2 ? accent : secondary, .34, [0, .34, .12]);
-        this.voxel(base, [side * -.52, .72, 0], [.9, .24, .76], coldRock, .26, [0, 0, side * .58]);
-      }
-    } else if (biome.id === "voidGarden") {
-      for (let index = 0; index < 4; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        const base = compose([side * (6.2 + index % 2 * 1.45), 1.2 + index % 3 * 1.55, this.distantEcologyZ(index, 7.7, .13, -47)], [0, side * .34, side * .1]);
-        this.voxel(base, [0, 0, 0], [.5, 1.8, .52], "#302945", .24, [0, 0, side * .18]);
-        this.voxel(base, [side * .72, .68, 0], [1.25, .28, .42], secondary, .32, [0, 0, side * .5]);
-        this.voxel(base, [side * 1.18, 1.08, 0], [.34, .58, .38], accent, .46);
-        this.voxel(base, [side * -.48, -.42, .3], [.86, .28, .5], "#3a304d", .26, [0, side * .48, side * -.35]);
-      }
-    }
-  }
-
-  voxelSeedPod(base, body, seam, core, scale = 1) {
-    const left = multiply(base, compose([-.48 * scale, 0, .08 * scale], [0, -.16, -.08], [1, .68, 1.18]));
-    const right = multiply(base, compose([.48 * scale, -.04 * scale, .12 * scale], [0, .16, .08], [1, .68, 1.18]));
-    this.voxelOrb(left, .72 * scale, "#2b3b55", body);
-    this.voxelOrb(right, .72 * scale, body, seam);
-    this.voxel(base, [0, -.06 * scale, -.72 * scale], [.74 * scale, .42 * scale, .48 * scale], "#374961", .22, [0, .08, 0]);
-    for (const side of [-1, 0, 1]) {
-      this.voxel(base, [side * .38 * scale, .4 * scale, -.22 * scale], [.28 * scale, .14 * scale, .66 * scale], side === 0 ? core : seam, side === 0 ? .92 : .58, [0, side * .12, 0]);
-    }
-    this.voxel(base, [0, .48 * scale, -.68 * scale], [.32 * scale, .22 * scale, .3 * scale], core, .96);
-  }
-
-  voxelShardCluster(base, rock, crystal, core, scale = 1) {
-    this.voxelRock(base, rock, "#52617b", .86 * scale);
-    this.voxel(base, [0, 1.08 * scale, 0], [.58 * scale, 2.18 * scale, .62 * scale], crystal, .4, [0, .32, .12]);
-    this.voxel(base, [-.68 * scale, .62 * scale, .18 * scale], [.34 * scale, 1.28 * scale, .38 * scale], "#4b5a76", .3, [0, -.34, -.28]);
-    this.voxel(base, [.7 * scale, .48 * scale, -.22 * scale], [.3 * scale, 1.02 * scale, .34 * scale], crystal, .34, [0, .42, .3]);
-    this.voxel(base, [.08 * scale, 1.7 * scale, -.18 * scale], [.22 * scale, .48 * scale, .24 * scale], core, .9, [0, -.28, 0]);
-  }
-
-  voxelNebulaCell(base, body, rim, core, scale = 1) {
-    this.voxel(base, [0, 0, 0], [1.06 * scale, .86 * scale, 1.02 * scale], body, .2, [0, .18, 0]);
-    this.voxel(base, [-.62 * scale, .12 * scale, .12 * scale], [.78 * scale, .66 * scale, .76 * scale], "#3c506d", .22, [0, -.22, .08]);
-    this.voxel(base, [.6 * scale, -.1 * scale, -.16 * scale], [.74 * scale, .62 * scale, .7 * scale], body, .2, [0, .28, -.06]);
-    this.voxel(base, [.08 * scale, .48 * scale, -.12 * scale], [.72 * scale, .5 * scale, .66 * scale], rim, .4, [0, -.14, 0]);
-    this.voxel(base, [-.12 * scale, -.42 * scale, .16 * scale], [.64 * scale, .42 * scale, .58 * scale], "#4e6179", .28, [0, .16, 0]);
-    this.voxel(base, [-.12 * scale, .6 * scale, -.42 * scale], [.22 * scale, .18 * scale, .24 * scale], core, .8);
-    const membrane = multiply(base, compose([0, .08 * scale, 0]));
-    this.voxelRing(membrane, .96 * scale, 0, rim, 16, .012, .25, .12 * scale, .74, .62);
-  }
-
-  voxelRelicPylon(base, body, trim, light, scale = 1, handed = 1) {
-    this.voxel(base, [0, .9 * scale, 0], [.54 * scale, 1.8 * scale, .7 * scale], body, .22, [0, 0, handed * .08]);
-    this.voxel(base, [handed * .62 * scale, 1.08 * scale, .04], [1.18 * scale, .24 * scale, .58 * scale], trim, .32, [0, 0, handed * .38]);
-    this.voxel(base, [0, .12 * scale, .12 * scale], [.94 * scale, .3 * scale, .92 * scale], "#33455f", .2, [0, handed * .18, 0]);
-    this.voxel(base, [-handed * .18 * scale, 1.18 * scale, -.38 * scale], [.18 * scale, 1.16 * scale, .18 * scale], light, .82);
-    this.voxel(base, [handed * .1 * scale, 2.02 * scale, -.08 * scale], [.34 * scale, .34 * scale, .36 * scale], light, .92);
-  }
-
-  voxelCometMass(base, rock, wake, core, scale = 1) {
-    const nucleus = multiply(base, compose([0, 0, 0], [0, .08, -.04], [1, .74, 1.12]));
-    this.voxelOrb(nucleus, .78 * scale, rock, "#5a6983");
-    this.voxel(base, [0, .12 * scale, -.78 * scale], [.34 * scale, .28 * scale, .46 * scale], core, .82);
-    for (let tail = 1; tail <= 3; tail += 1) {
-      const taper = 1 - tail * .18;
-      this.voxel(base, [0, 0, tail * 1.08 * scale], [.4 * taper * scale, .3 * taper * scale, .82 * scale], tail === 1 ? wake : "#435b77", .52 - tail * .08);
-    }
-  }
-
-  voxelVoidBranch(base, body, vein, tip, scale = 1, handed = 1) {
-    this.voxel(base, [0, .86 * scale, 0], [.48 * scale, 1.72 * scale, .52 * scale], body, .24, [0, 0, handed * .16]);
-    this.voxel(base, [handed * .64 * scale, 1.32 * scale, 0], [1.12 * scale, .3 * scale, .42 * scale], vein, .34, [0, 0, handed * .48]);
-    this.voxel(base, [handed * 1.16 * scale, 1.7 * scale, -.08 * scale], [.38 * scale, .8 * scale, .4 * scale], body, .26, [0, 0, handed * .26]);
-    this.voxel(base, [-handed * .46 * scale, .42 * scale, .26 * scale], [.82 * scale, .26 * scale, .46 * scale], "#3a435d", .22, [0, handed * .4, -handed * .3]);
-    this.voxel(base, [handed * 1.34 * scale, 2.12 * scale, -.12 * scale], [.24 * scale, .3 * scale, .26 * scale], tip, .76);
-  }
-
-  drawSpaceEcology(biome) {
-    if (!biome) return;
-    const sourceAccent = biome.accent || "#7fffe2";
-    const sourceSecondary = biome.secondary || sourceAccent;
-    const accent = this.mixColor(sourceAccent, "#263b55", .46);
-    const secondary = this.mixColor(sourceSecondary, "#35314c", .5);
-    const rock = "#31425e";
-    const metal = "#586a84";
-    const pale = this.mixColor(sourceAccent, "#d5e4e7", .62);
-    const macro = ECOLOGY_ANCHORS[biome.id] || [-15, 2, -23];
-
-    if (biome.id === "sugarBloom") {
-      const nursery = compose(macro, [.04, -.32, -.12]);
-      this.voxelSeedPod(nursery, rock, "#9d734f", "#ffc66d", 3.45);
-      this.voxelPolyline(nursery, [[-3.7, -.4, .3], [-4.55, .45, .1], [-4.15, 1.65, -.4], [-3.15, 2.45, -.8]], .28, "#c28b58", .56, .1);
-      this.voxelPolyline(nursery, [[3.55, -.25, .5], [4.35, .55, .2], [4.05, 1.55, -.2], [3.25, 2.15, -.65]], .24, "#8a6953", .46, .1);
-      for (let mote = 0; mote < 8; mote += 1) {
-        const angle = mote / 8 * TAU + .3;
-        this.voxel(nursery, [Math.cos(angle) * 4.95, 1.2 + Math.sin(angle * 2) * 1.45, Math.sin(angle) * 1.7], [.18, .18, .22], mote % 3 ? "#9b7656" : "#ffd27c", mote % 3 ? .56 : .86);
-      }
-      for (let index = 0; index < 2; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        const base = compose([side * (6.8 + index * .7), 1.1 + index * 1.35, this.streamZ(index, 17, .46, -48, 3)], [index * .16, side * .38, side * .1]);
-        this.voxelSeedPod(base, rock, "#87664e", "#e4a95d", .76 + index * .12);
-      }
-    } else if (biome.id === "crystalOrchard") {
-      const crown = compose(macro, [.12, .22, -.18]);
-      this.voxelRock(crown, rock, "#4b5870", 2.65);
-      const crownShards = [
-        [-2.7, 1.25, .35, .62, 2.5, .62, -.46, secondary],
-        [-1.35, 2.05, -.1, .76, 4.1, .72, -.22, "#526a92"],
-        [0, 2.65, -.4, .92, 5.3, .84, .06, accent],
-        [1.45, 1.9, .05, .7, 3.8, .68, .3, "#5d5478"],
-        [2.75, 1.12, .4, .54, 2.24, .56, .5, secondary],
-      ];
-      for (const [x, y, z, width, height, depth, tilt, color] of crownShards) {
-        this.voxel(crown, [x, y, z], [width, height, depth], color, .34, [0, tilt * .42, tilt]);
-        this.voxel(crown, [x + Math.sin(tilt) * height * .46, y + height * .52, z - .08], [width * .58, .42, depth * .58], pale, .86, [0, tilt * .42, tilt]);
-      }
-      this.voxelPolyline(crown, [[-3.65, -.2, .45], [-2.7, .2, .2], [-1.5, -.05, -.05], [0, .35, -.2], [1.5, -.02, 0], [2.75, .25, .22], [3.65, -.16, .5]], .24, "#455a76", .48, .02);
-      for (let index = 0; index < 2; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        const base = compose([side * (6.6 + index % 2 * 1.3), .65 + index % 3 * 1.4, this.streamZ(index, 12.5, .52, -47, 4)], [side * .18, index * .42, side * .1]);
-        this.voxelShardCluster(base, rock, index % 2 ? accent : secondary, pale, .58 + index % 2 * .14);
-      }
-    } else if (biome.id === "cometTide") {
-      const leviathan = compose(macro, [.08, .72, -.16]);
-      this.voxelCometMass(leviathan, rock, accent, pale, 3.4);
-      this.voxelPolyline(leviathan, [[-1.5, .6, 2.2], [-1.9, .85, 4.2], [-1.15, .45, 6.3], [-2.15, .15, 8.55]], .48, "#5b7796", .5, .12);
-      this.voxelPolyline(leviathan, [[.1, .1, 2.35], [.55, -.35, 4.7], [.05, -.72, 7.25], [.9, -.5, 10.1]], .38, accent, .74, .12);
-      this.voxelPolyline(leviathan, [[1.45, -.45, 2.15], [1.9, -.8, 4.05], [1.35, -1.2, 6.1], [2.25, -1.45, 8.25]], .26, pale, .84, .12);
-      for (let index = 0; index < 2; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        const base = compose([side * (7.1 + index * .55), 1.4 + index * 1.45, this.streamZ(index, 16, 1.18, -49, 3)], [0, side * (.58 + index * .08), side * .1]);
-        this.voxelCometMass(base, rock, secondary, pale, .62 + index * .12);
-      }
-    } else if (biome.id === "auroraFoundry") {
-      const foundry = compose(macro, [.08, -.18, -.12]);
-      this.voxelPolyline(foundry, [[-4.8, 0, .45], [0, 3.45, 0], [4.8, 0, -.45], [0, -3.45, 0], [-4.8, 0, .45]], .38, metal, .34, 0);
-      this.voxelPolyline(foundry, [[-3.45, 0, .2], [0, 2.38, 0], [3.45, 0, -.2]], .2, accent, .76, 0);
-      this.voxelPolyline(foundry, [[-3.45, -.2, .2], [0, -2.38, 0], [3.45, -.2, -.2]], .18, secondary, .68, 0);
-      this.voxel(foundry, [0, 0, 0], [1.9, 1.55, 1.9], rock, .3, [0, .28, 0]);
-      this.voxel(foundry, [0, .15, -.86], [.72, .72, .5], pale, .94, [0, .28, 0]);
-      for (const side of [-1, 1]) {
-        this.voxel(foundry, [side * 2.55, 0, 0], [2.2, .34, .52], metal, .34, [0, 0, side * .14]);
-        this.voxel(foundry, [side * 4.6, 0, 0], [.62, 1.18, .72], "#41536c", .3, [0, 0, side * .3]);
-      }
-      this.voxelPolyline(foundry, [[-5.4, -1.55, .5], [-3.4, -2.25, .25], [-1.25, -1.75, .05], [1.05, -2.45, -.1], [3.35, -1.9, -.3], [5.35, -2.55, -.5]], .22, secondary, .78, .03);
-      this.voxelPolyline(foundry, [[-5.15, 1.65, -.4], [-3.05, 2.2, -.2], [-.9, 1.7, 0], [1.4, 2.38, .18], [3.7, 1.82, .4]], .18, pale, .84, .03);
-      for (let index = 0; index < 2; index += 1) {
-        const side = index ? 1 : -1;
-        this.voxelRelicPylon(compose([side * 7.4, .3 + index * 1.4, -17 - index * 13], [0, side * .3, side * .08]), rock, metal, pale, .82, side);
-      }
-    } else if (biome.id === "thunderWorks") {
-      const coil = compose(macro, [Math.PI / 2, -.08, -.16]);
-      this.voxelRing(coil, 4.72, 0, "#626c80", 26, .022, .2, .3, .4, .84);
-      this.voxelRing(coil, 3.35, 0, accent, 20, -.052, 1.1, .18, .92, .7);
-      this.voxel(coil, [0, 0, 0], [1.7, 1.7, 1.8], rock, .3);
-      this.voxel(coil, [0, 0, 0], [.58, .58, .62], "#ffe68b", .92);
-      const spark = Math.sin(this.time * 4.8) > -.25 ? "#fff3ae" : accent;
-      this.voxelPolyline(coil, [[-5.5, -1.9, .3], [-4.1, -.8, .12], [-2.7, -1.35, -.05], [-1.35, -.35, .12], [0, -.8, -.15]], .2, spark, .94, .08);
-      this.voxelPolyline(coil, [[.2, .75, -.12], [1.45, 1.55, .12], [2.6, .8, -.08], [3.85, 1.75, .15], [5.25, 1.1, -.12]], .18, accent, .9, .08);
-      for (let index = 0; index < 2; index += 1) {
-        const side = index ? 1 : -1;
-        this.voxelRelicPylon(compose([side * 7.2, .2 + index * 1.5, -18 - index * 14], [0, side * .22, 0]), rock, metal, index ? pale : "#c4ad69", .86, side);
-      }
-    } else if (biome.id === "cloudReef") {
-      const reef = compose(macro, [0, .18, .08]);
-      const cloudOffsets = [[0, 0, 0], [-3.1, .75, .4], [3.05, -.3, -.45], [-1.45, 2.35, -.72], [2.1, 2.05, .52]];
-      for (const [index, offset] of cloudOffsets.entries()) {
-        const cell = multiply(reef, compose(offset));
-        this.voxelNebulaCell(cell, index % 2 ? "#3b526e" : rock, secondary, pale, 1.18 + index % 3 * .16);
-      }
-      this.voxelPolyline(reef, [[-5.15, .9, -.8], [-3.35, 1.75, -.45], [-1.2, 1.35, -.15], [.8, 2.15, .18], [3.2, 1.55, .5], [5.25, 2.3, .75]], .2, pale, .84, .04);
-      this.voxelPolyline(reef, [[-4.6, -.35, .45], [-2.8, .25, .2], [-.7, -.15, 0], [1.4, .5, -.18], [3.75, .05, -.45]], .26, accent, .68, .05);
-      for (let index = 0; index < 2; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        const base = compose([side * (6.8 + index * .6), .8 + index * 1.35, this.streamZ(index, 17, .42, -49, 3)], [0, side * .26, 0]);
-        this.voxelNebulaCell(base, rock, index % 2 ? accent : secondary, pale, .76 + index * .1);
-      }
-    } else if (biome.id === "eclipseCarnival") {
-      const eclipse = compose(macro, [.18, this.time * .008, -.12]);
-      this.voxelOrb(eclipse, 3.55, "#171b2c", "#3f3347");
-      this.voxelRing(eclipse, 4.45, 0, "#c36268", 28, .01, .2, .18, .88, .86);
-      this.voxelRing(eclipse, 5.28, 0, "#684c68", 30, -.008, .8, .14, .54, .62);
-      this.voxelPolyline(eclipse, [[-5.6, -2.2, .5], [-4.3, -1.15, .28], [-3.25, -1.55, .05]], .22, "#814e61", .54, .1);
-      this.voxelPolyline(eclipse, [[3.25, 1.4, -.05], [4.45, 2.15, -.3], [5.45, 1.35, -.55]], .18, pale, .82, .1);
-      for (let index = 0; index < 2; index += 1) {
-        const side = index ? 1 : -1;
-        const wreck = compose([side * 7.4, .5 + index * 1.6, -18 - index * 14], [index * .3, side * .42, side * .12]);
-        this.voxelRelicPylon(wreck, rock, "#68546b", index ? "#c66b70" : pale, .82, side);
-        this.voxel(wreck, [side * 1.1, 1.6, .2], [.7, .2, .5], "#2b3147", .24, [0, side * .4, side * .52]);
-      }
-    } else if (biome.id === "prismGrave") {
-      const monument = compose(macro, [.08, -.18, .14]);
-      this.voxel(monument, [0, 2.25, 0], [1.04, 4.5, 1.02], "#4a4262", .3, [0, .08, .04]);
-      this.voxel(monument, [0, 4.72, -.08], [.7, .56, .72], pale, .84, [0, .22, .12]);
-      this.voxel(monument, [-2.65, 1.55, .42], [.9, 3.1, .84], "#403c59", .3, [0, -.24, -.32]);
-      this.voxel(monument, [2.55, 1.18, -.38], [.82, 2.36, .8], "#594563", .32, [0, .32, .42]);
-      this.voxel(monument, [-2.65, 3.32, .35], [.5, .44, .52], secondary, .68, [0, -.2, 0]);
-      this.voxel(monument, [2.55, 2.55, -.42], [.46, .38, .48], accent, .72, [0, .28, 0]);
-      this.voxelPolyline(monument, [[-4.3, -.15, .5], [-4.15, 1.55, .35], [-3.35, 3.05, .2], [-2.1, 4.15, .05], [-.72, 4.72, -.1]], .34, secondary, .48, .08);
-      this.voxelPolyline(monument, [[4.3, -.15, -.5], [4.15, 1.55, -.35], [3.35, 3.05, -.2], [2.1, 4.15, -.05], [.72, 4.72, .1]], .3, "#4d6178", .4, .08);
-      this.voxel(monument, [-.36, 4.82, 0], [.34, .26, .42], pale, .88, [0, -.3, .18]);
-      for (let index = 0; index < 2; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        const base = compose([side * (6.7 + index * .7), .45 + index * 1.25, this.streamZ(index, 16, .38, -49, 3)], [0, side * .24, side * .1]);
-        this.voxelShardCluster(base, rock, index % 2 ? accent : secondary, pale, .62 + index * .1);
-      }
-    } else if (biome.id === "voidGarden") {
-      const singularity = compose(macro, [Math.PI / 2, 0, -.14]);
-      this.voxel(singularity, [0, 0, 0], [2.25, 2.25, 2.34], "#17182a", .22);
-      this.voxelRing(singularity, 4.12, 0, "#62456d", 28, .02, .2, .26, .5, .78);
-      this.voxelRing(singularity, 5.18, 0, accent, 30, -.012, 1.1, .16, .9, .68);
-      const garden = compose([macro[0], macro[1] - .5, macro[2] - 1], [0, -.05, -.08]);
-      this.voxelPolyline(garden, [[-1.3, .1, .4], [-2.5, 1.15, .15], [-3.7, 1.55, -.2], [-4.7, 2.75, -.4]], .38, "#343853", .36, .1);
-      this.voxelPolyline(garden, [[1.15, .2, .3], [2.15, -.55, .05], [3.25, -.15, -.25], [4.35, -1.15, -.5]], .34, secondary, .5, .1);
-      this.voxelPolyline(garden, [[-.55, .35, .2], [-.9, 1.65, 0], [-.35, 2.75, -.25], [-.75, 3.85, -.55]], .24, accent, .74, .1);
-      for (const side of [-1, 1]) this.voxelVoidBranch(compose([macro[0] + side * 4.25, macro[1] - .5, macro[2] - 1 + side * 1.2], [0, -side * .28, -side * .08]), "#30344e", secondary, pale, 1.6, -side);
-      for (let index = 0; index < 2; index += 1) {
-        const side = index % 2 ? 1 : -1;
-        const base = compose([side * (6.8 + index * .7), .35 + index * 1.4, this.streamZ(index, 17, .34, -50, 3)], [0, side * .34, side * .1]);
-        this.voxelVoidBranch(base, "#343951", secondary, pale, .66 + index * .1, side);
-      }
-    }
-  }
-
-  drawDistantCelestial(biome) {
-    if (!biome) return;
-    const macro = ECOLOGY_ANCHORS[biome.id] || [-14, 1, -24];
-    const side = macro[0] > 2 ? -1 : 1;
-    const base = compose([side * 17.2, -1.25, -44], [.12, side * .18 + this.time * .004, side * .08]);
-    const accent = this.mixColor(biome.accent || "#7fffe2", "#35445f", .72);
-    const secondary = this.mixColor(biome.secondary || biome.accent || "#7fffe2", "#4a405b", .7);
-
-    if (biome.id === "sugarBloom") {
-      this.voxelOrb(base, 3.05, "#1d2a42", "#5d4d42");
-      this.voxelRing(base, 3.82, 0, "#705842", 24, .003, .2, .16, .42, .72);
-    } else if (biome.id === "crystalOrchard") {
-      this.voxelOrb(base, 2.65, "#17243b", "#334765");
-      for (const [index, offset] of [[0, [-3.4, .8, .4]], [1, [3.25, -1.1, -.3]], [2, [2.5, 2.5, -.5]]]) {
-        this.voxelShardCluster(multiply(base, compose(offset, [0, index * .4, side * .12])), "#26344d", accent, "#afc9d8", .34 + index * .05);
-      }
-    } else if (biome.id === "cometTide") {
-      this.voxelCometMass(multiply(base, compose([0, 0, 0], [0, side * .82, .06])), "#202e47", accent, "#8fb0c5", 2.2);
-    } else if (biome.id === "auroraFoundry") {
-      this.voxelOrb(base, 2.78, "#172a3c", "#294b53");
-      for (let band = -1; band <= 1; band += 1) {
-        this.voxelPolyline(base, [[-2.45, band * .62, -2.25], [-.8, band * .52 + .2, -2.62], [.8, band * .58 - .15, -2.6], [2.38, band * .5 + .12, -2.18]], .14, band === 0 ? accent : secondary, .62, .04);
-      }
-    } else if (biome.id === "thunderWorks") {
-      this.voxelOrb(base, 2.92, "#202a3f", "#5b5141");
-      for (let band = -1; band <= 1; band += 1) {
-        this.voxelSegment(base, [-2.55, band * .72, -2.3], [2.5, band * .58 + .16, -2.3], .18, band === 0 ? "#9a7e48" : secondary, .56);
-      }
-    } else if (biome.id === "cloudReef") {
-      for (const [index, offset] of [[0, [0, 0, 0]], [1, [-2.35, .65, .35]], [2, [2.1, -.55, -.45]]]) {
-        this.voxelNebulaCell(multiply(base, compose(offset, [0, index * .35, 0])), "#25364f", index === 1 ? secondary : accent, "#8ca8b1", 1.15 + index * .12);
-      }
-    } else if (biome.id === "eclipseCarnival") {
-      for (let index = 0; index < 5; index += 1) {
-        const angle = index / 5 * TAU + .35;
-        this.voxelRock(multiply(base, compose([Math.cos(angle) * 2.8, Math.sin(angle) * 1.65, Math.sin(angle) * .7], [angle, angle * .6, 0])), "#24283c", index % 2 ? secondary : accent, .46 + index % 2 * .12);
-      }
-    } else if (biome.id === "prismGrave") {
-      this.voxelOrb(base, 2.05, "#20243b", "#44405e");
-      for (let index = 0; index < 4; index += 1) {
-        const angle = index / 4 * TAU + .5;
-        this.voxel(multiply(base, compose([Math.cos(angle) * 3, Math.sin(angle) * 2.15, Math.sin(angle) * .5], [angle, angle * .4, 0])), [0, 0, 0], [.5, .78 + index * .12, .48], index % 2 ? accent : secondary, .36, [0, .3, angle]);
-      }
-    } else if (biome.id === "voidGarden") {
-      this.voxel(base, [0, 0, 0], [2.2, 2.2, 2.2], "#17192c", .2);
-      this.voxelRing(base, 3.35, 0, accent, 22, -.004, .3, .16, .5, .58);
-      this.voxelRing(base, 2.65, 0, secondary, 20, .005, 1.1, .14, .4, .42);
-    }
-  }
-
-  drawLandmark(stageIndex, biome) {
-    this.drawDistantCelestial(biome);
-    this.drawFlightCorridor(biome);
-    this.drawCosmicBiomeFeatures(biome);
-    this.drawSpaceEcology(biome);
-  }
-
   projectileTrail(base, color, width, length, segments = 3, offsetX = 0) {
     // Discrete exhaust cells: a short wake, never a second projectile silhouette.
     const count = this.quality === "low" ? 2 : segments;
@@ -2710,31 +1933,6 @@ class SpaceRenderer3D {
     });
   }
 
-  configureScene(stage, world) {
-    this.scene.background.set(stage.sky);
-    this.scene.fog.color.set(stage.sky);
-    this.scene.fog.density = this.quality === "low" ? .009 : .011;
-    this.starLayers[0].material.color.set(stage.star);
-    this.starLayers[1].material.color.set(stage.biome?.secondary || stage.star);
-    this.starLayers[2].material.color.set(stage.biome?.accent || stage.star);
-    this.starLayers[0].position.z = (this.time * .46) % 24;
-    this.starLayers[1].position.z = ((this.time * .28) % 24) - 12;
-    this.starLayers[2].position.z = ((this.time * .12) % 24) - 18;
-    this.nebulaLayers[0].material.color.set(this.mixColor(stage.biome?.secondary || stage.star, "#303650", .46));
-    this.nebulaLayers[1].material.color.set(this.mixColor(stage.biome?.accent || stage.star, "#1d2942", .54));
-    this.nebulaLayers[0].position.z = ((this.time * .045) % 10) - 5;
-    this.nebulaLayers[1].position.z = ((this.time * .028) % 12) - 6;
-    this.rimLight.color.set(world.activeAnomaly?.color || stage.biome?.accent || stage.grid);
-    this.rimLight.intensity = (this.quality === "low" ? .9 : 1.2) + (world.sectorIndex || 0) * .14 + (world.threatTier || 0) * .08 + (world.activeAnomaly?.tier || 0) * .1;
-    this.renderer.shadowMap.enabled = false;
-    for (const batch of this.toonBatches.values()) batch.castShadow = false;
-    this.playerLights.forEach((light, index) => {
-      const player = world.players?.[index];
-      light.visible = Boolean(player && world.mode !== "menu" && !world.modelGallery);
-      if (player) light.position.fromArray(this.toWorld(player.x, player.y, .85));
-    });
-  }
-
   render(world, stages, playerConfigs, settings = {}) {
     if (!this.ready) return false;
     this.quality = settings.quality || "high";
@@ -2743,24 +1941,8 @@ class SpaceRenderer3D {
     this.time = world.time;
     this.stageIndex = world.stageIndex || 0;
     const stage = stages[this.stageIndex];
-    this.configureScene(stage, world);
+    this.environment.update(stage, world, settings);
     this.beginFrame();
-    let follow = 0;
-    if (world.players?.length && world.mode !== "menu") follow = world.players.reduce((sum, player) => sum + this.toWorld(player.x, player.y)[0], 0) / world.players.length * .08;
-    const shakeStrength = Number.isFinite(settings.shake) ? settings.shake : 1;
-    const shake = world.shake > 0 ? (Math.random() - .5) * world.shake * .14 * shakeStrength : 0;
-    const cinematic = world.cinematic;
-    const progress = cinematic ? clamp(1 - cinematic.timer / cinematic.total, 0, 1) : 0;
-    const cinematicAmount = cinematic && !["boss", "phase"].includes(cinematic.type) ? Math.sin(progress * Math.PI) : 0;
-    const eye = [follow + shake, 9.2 + shake - cinematicAmount * .65, 12.8 - cinematicAmount * 1.35];
-    const target = [follow * .25, -.1, -3.8];
-    if (cinematic?.type === "encounter" && world.activeEncounter) {
-      const encounterPosition = this.toWorld(world.activeEncounter.x, world.activeEncounter.y, .3);
-      target[0] = lerp(target[0], encounterPosition[0], cinematicAmount * .42);
-      target[2] = lerp(target[2], encounterPosition[2], cinematicAmount * .3);
-    }
-    this.camera.position.fromArray(eye);
-    this.camera.lookAt(...target);
     if (world.bossGallery) {
       this.drawBossGallery(world);
       this.canvas.dataset.modelGallery = "off";
@@ -2774,10 +1956,7 @@ class SpaceRenderer3D {
       return true;
     }
     this.canvas.dataset.modelGallery = "off";
-    this.drawLandmark(this.stageIndex, stage.biome);
-    this.drawSectorArchitecture(world, stage);
-    this.drawAnomalyField(world);
-    this.drawThreatMatrix(world);
+    this.environment.drawBackground(world);
     if (world.boss) this.drawBossAttackTelegraphs(world.boss);
     if (world.mode === "menu") {
       this.drawShip({ index: 0, frameId: world.loadoutFrame, moduleId: world.loadoutModule, x: 4.8 + Math.sin(this.time * .6) * .4, z: -.5 + Math.cos(this.time) * .25 }, playerConfigs[0], true);
@@ -2785,9 +1964,7 @@ class SpaceRenderer3D {
       this.endFrame();
       return true;
     }
-    if (world.routeChoice) this.drawRouteGates(world.routeChoice);
-    if (world.activeEncounter) this.drawEncounter(world.activeEncounter);
-    for (const object of world.encounterObjects || []) this.drawEncounterObject(object);
+    this.environment.drawObjectives(world);
     for (const pickup of world.pickups) this.drawPickup(pickup);
     for (const enemy of world.enemies) this.drawEnemy(enemy);
     for (const bullet of world.bullets) this.drawProjectile(bullet, false);

@@ -6,7 +6,7 @@ const roguelikeSource = fs.readFileSync(new URL("../src/roguelike.js", import.me
 const directorSource = fs.readFileSync(new URL("../src/director.js", import.meta.url), "utf8");
 const expeditionSource = fs.readFileSync(new URL("../src/expedition.js", import.meta.url), "utf8");
 const gameSource = fs.readFileSync(new URL("../src/game.js", import.meta.url), "utf8");
-const rendererSource = fs.readFileSync(new URL("../src/renderer3d.js", import.meta.url), "utf8");
+const rendererSource = ["renderer3d", "scene/events", "scene/scenery"].map(name => fs.readFileSync(new URL(`../src/${name}.js`, import.meta.url), "utf8")).join("\n");
 const i18nSource = fs.readFileSync(new URL("../src/i18n.js", import.meta.url), "utf8");
 const sandbox = { window: {} };
 vm.runInNewContext(roguelikeSource, sandbox, { filename: "src/roguelike.js" });
@@ -25,7 +25,7 @@ for (let stageIndex = 0; stageIndex < 3; stageIndex += 1) {
 for (const biome of BIOMES) {
   assert.match(biome.nameKey, /^biome\.[^.]+\.name$/);
   assert.match(biome.descriptionKey, /^biome\.[^.]+\.description$/);
-  for (const color of [biome.sky, biome.haze, biome.grid, biome.star, biome.accent, biome.secondary]) assert.match(color, /^#[0-9a-f]{6}$/i);
+  for (const color of [biome.accent, biome.secondary]) assert.match(color, /^#[0-9a-f]{6}$/i);
   for (const value of [biome.enemyHp, biome.spawnRate, biome.bulletSpeed, biome.bpmOffset, biome.musicShift]) assert.ok(Number.isFinite(value));
   assert.ok(HULL_MODULES.some((hull) => hull.id === biome.speciesId && hull.nativeBiome === biome.id), `${biome.id} needs a dedicated native species`);
   assert.ok(WEAPON_MODULES.some((weapon) => weapon.id === biome.preferredWeapon), `${biome.id} needs a valid signature weapon`);
@@ -272,7 +272,7 @@ assert.match(gameSource, /function applyEnemyDebuff\(player, bullet\)/);
 assert.match(gameSource, /stage === 0 && progress < \.25 \? null : activeStage\(stage\)\.biome\?\.speciesId/, "chapter-one scripted natives must wait until the first strategy draft");
 assert.match(gameSource, /world\.stageIndex === 0 && progress < \.42 \? "" : build\.deathrattle/, "chapter one must teach signature attacks before deathrattles");
 assert.match(gameSource, /elite \? \(QA_FORCE_ELITE \? 20 : \[3\.8, 4\.4, 4\.8\]\[world\.stageIndex\]\) : 1/, "elite durability must rise by chapter outside the QA pursuit harness");
-assert.match(rendererSource, /drawBiomeFeatures\(biome\)/);
+assert.match(rendererSource, /drawSpaceEcology\(biome\)/);
 assert.match(rendererSource, /drawRouteGates\(choice\)/);
 assert.match(rendererSource, /drawEncounter\(encounter\)/);
 assert.match(rendererSource, /drawEncounterObject\(object\)/);

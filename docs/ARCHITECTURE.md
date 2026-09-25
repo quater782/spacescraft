@@ -1,5 +1,11 @@
 # 系统架构
 
+## 场景所有权（2026-09-25）
+
+`src/scene/settings.js` 集中场景色板、主景构图、镜头、环境光、雾、后处理与画质预算；`environment.js` 统一资源和帧更新，`scenery.js` 绘制地标/天体，`events.js` 读取异象/战区/星门/遭遇状态。`renderer3d.js` 继续拥有战斗模型和共用批次，只通过显式绘图接口接入环境。`render-math.js` 提供无状态共用工具。
+
+删除游戏内的旧 2D 背景、地板及无效星空更新，删除渲染器的废弃生态入口与重复小景流。`expedition.js` 的 UI/模块颜色仍是语义数据，背景色板独立归场景；章节只提供 ID。渲染目标仅在视口或 DPR 变化时调整。具体影响来源、资源上限和入口见[场景系统与美术配置](./SCENE-SYSTEM.md)。
+
 ## 敌军控制与发射几何（2026-09-15）
 
 `src/enemy-ai.js` 是不访问 DOM/世界单例的控制与几何模块：角色能力、目标迟滞、七态战术、预测避让、速度/转向积分、发射挂点、yaw 非等比映射及激光/冲撞几何。`game.js` 持有全部敌军状态、武器状态、并发预算和碰撞结算，普通敌机与 Boss 统一使用 `weaponState/weaponTimer/weaponDuration/weaponAge/weaponCharge`；`combat.js` 仅负责章节压力、编队和弹幕选择，职责与武器时序参数归新控制器，旧状态表/字段/兼容映射全部删除。`renderer3d.js` 读取实际 heading/bank/pitch/weaponYaw/throttle 与共享挂点，不推算第二份攻击逻辑。`attackCommit` 冻结射线或冲撞走廊，预警、僚机避让与伤害共同读取。所有敌军的目标朝向与全向平移解耦，仅冲撞使用轴向前推。`enemy-ai.js` 还提供独立种子芯片抽取、拥挤/弹道评分、站位迟滞与芯片感知；`game.js` 执行每章生成上限和首次扫描，渲染器只读芯片/反推/侧推状态。芯片作为运行时附加修饰，不加入既有 43,008 构筑签名或永久 profile。新字段均不入 profile，HTML 先加载控制模块，再加载游戏。Boss 的开火保持由 `fire` 状态控制，阶段切换或目标失效会取消预警。
@@ -63,7 +69,7 @@
 | 战斗学说 | `src/combat.js` | 三套章别节拍轮廓、四段压力波、六编队、弹幕选择、常规精英概率和普通敌弹预算 |
 | 星域异象 | `src/anomalies.js` | 九种确定性战区异象、章节安全池、玩家力场、敌我非对称弹道和经济/音乐倍率 |
 | 远征规则 | `src/expedition.js` | 9 种生态、7 种星门协议、5 类动态遭遇、确定性计划/判定、16 个船体与推进/武器/核心/AI/载荷六维组装 |
-| 3D 渲染 | `src/renderer3d.js` | Three.js WebGL2 透视相机、原生分辨率 + SMAA、0.12 粗体素、按颜色缓存的 `BoxGeometry` 实例批次、三阶 Toon/轻辉光/HDR 能量层、五级选择性 Bloom、人类风筝战机构造器、独立虚空生物构造器、开放深空生态与局部异象 |
+| 3D 渲染 | `src/renderer3d.js` | Three.js WebGL2 透视相机、原生分辨率 + SMAA、0.12 粗体素、按颜色缓存的 `BoxGeometry` 实例批次、三阶 Toon/轻辉光/HDR 能量层、五级选择性 Bloom、人类风筝战机构造器、独立虚空生物构造器与场景层接入 |
 | 本地化 | `src/i18n.js` | `zh`/`en` 目录、变量插值、DOM/元数据/ARIA 同步 |
 | 音频 | `AudioEngine` in `src/game.js` | Web Audio 多轨 8-bit 音序、分层 SFX、音量与静音 |
 | 桌面壳 | `electron/main.cjs` | 最小权限 BrowserWindow 与应用生命周期 |

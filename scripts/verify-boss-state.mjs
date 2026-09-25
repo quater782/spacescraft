@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const game = fs.readFileSync(new URL("../src/game.js", import.meta.url), "utf8");
-const renderer = fs.readFileSync(new URL("../src/renderer3d.js", import.meta.url), "utf8");
+const renderer = ["renderer3d", "scene/environment"].map(name => fs.readFileSync(new URL(`../src/${name}.js`, import.meta.url), "utf8")).join("\n");
 const smoke = fs.readFileSync(new URL("./smoke-bosses.cjs", import.meta.url), "utf8");
 const combatSmoke = fs.readFileSync(new URL("./smoke-boss-state.cjs", import.meta.url), "utf8");
 
