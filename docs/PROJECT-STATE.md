@@ -1,6 +1,6 @@
 # 当前项目状态
 
-## 0.31.0 发行候选：场景星图 / Scene Constellation（2026-09-25）
+## 0.31.0 正式发行：场景星图 / Scene Constellation（2026-09-25）
 
 Major 主题：集中场景所有权，按主景、色调、留白重排九星域。新增 `src/scene/` 的配置/环境/地标/事件分工，删除废弃 2D 背景及星空模拟、废弃生态入口、重复小景流；渲染器的视口尺寸只在变化时更新。背景按稳定生态 ID 解析，UI/敌军语义颜色保留。方舟、行星、轨道站等按星域选择，不再全图叠加同一批装饰。清除九类异象装饰实体、顶部威胁信标及无交互零散配景，状态继续由环境光和 HUD 表达。详见[场景系统](./SCENE-SYSTEM.md)。
 
@@ -8,7 +8,9 @@ Major 主题：集中场景所有权，按主景、色调、留白重排九星�
 
 保留已存在的机体细节与并行护盾工作。无战斗数值、存档、音频或依赖变更。当前验证：`smoke:biomes -- --scene-audit` 覆盖九生态并轮换三档画质，九项均为 60 FPS、场景 ID/画质正确、零表面/粒子丢弃、零页面错误，九宫格已查看；移除漂浮物后再次通过 `smoke:anomalies` 的九种异象和正常开局：20 秒、60 FPS、HP 3/7、零倒地和页面错误；`smoke:models` 的机体/模块三档画廊与正常首章通过，首章 20.05 秒、双机 7/7 HP、零倒地、60 FPS。三章 Boss 展示专项通过，固定镜头、连续预警及表面预算正常；未重跑整场 Boss 战。`smoke:shield-gameplay` 以真实低容量护盾碰撞检查三档画质的外缘位移、吸收/溢出与固定步回收。完整 `npm run verify` 已通过，生产依赖 0 漏洞。少量 Electron 底层 Skia mailbox 日志未伴随应用错误。
 
-未重验完整章节、真人双人/双手柄、Windows 和主观音频；桌面与网页发行流水线待由 `v0.31.0` 标签和同提交 `main` 触发后记录实际产物。
+发布：`v0.31.0` 的[桌面发行工作流 #36157115908](https://github.com/quater782/spacescraft/actions/runs/36157115908)通过 Ubuntu 验证、Windows x64/macOS arm64 构建及两端包内启动检查，并公开[Release](https://github.com/quater782/spacescraft/releases/tag/v0.31.0)。实际附件为两个 Windows 包、Apple Silicon DMG 和两份 SHA-256 清单；哈希记录见[打包指南](./PACKAGING.md)。[Pages 工作流 #36157525164](https://github.com/quater782/spacescraft/actions/runs/36157525164)从同一应用提交 `fce2237` 通过完整验证、WebGL 冒烟并部署，实际网页入口确认版本和缓存入口均为 0.31.0。
+
+未重验完整章节、真人双人/双手柄、Windows 和主观音频。Windows 未代码签名，macOS 未公证。
 
 ## 0.30.0 正式发行：协同战线 / Cooperative Front（2026-09-25）
 

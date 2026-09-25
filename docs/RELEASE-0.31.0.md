@@ -19,4 +19,4 @@
 
 完整 `npm run verify` 通过。九生态低/均衡/高画质矩阵均达到 60 FPS，零表面/粒子丢弃和页面错误；场景动态审查确认暂停冻结，并已查看九宫格连续帧及行星、轨道站、裂环的三段正常速度 WebGL 录像。异象、机体/模块和正常首章专项继续通过。
 
-没有重新执行完整自然三章、真人双人/双手柄、不同 Windows PC、主观音频或真人胜率验收。桌面包与网页构建由 `v0.31.0` GitHub Actions 工作流产出；实际附件、校验清单和网页部署结果在构建完成后记录于[打包指南](./PACKAGING.md)与[当前项目状态](./PROJECT-STATE.md)。Windows 未代码签名，macOS DMG 未公证。
+没有重新执行完整自然三章、真人双人/双手柄、不同 Windows PC、主观音频或真人胜率验收。桌面包由[发行工作流 #36157115908](https://github.com/quater782/spacescraft/actions/runs/36157115908)在 Windows x64 与 Apple Silicon macOS arm64 上构建，并从打包应用完成启动检查；[Release](https://github.com/quater782/spacescraft/releases/tag/v0.31.0)包含两个 Windows 包、macOS DMG 和两份 SHA-256 清单。网页由[Pages 工作流 #36157525164](https://github.com/quater782/spacescraft/actions/runs/36157525164)通过验证、WebGL 冒烟并部署。实际附件、校验值和入口核验记录在[打包指南](./PACKAGING.md)与[当前项目状态](./PROJECT-STATE.md)。Windows 未代码签名，macOS DMG 未公证。

@@ -1,5 +1,13 @@
 # 桌面与 Windows EXE 打包
 
+## 2026-09-25 — 0.31.0 正式发行链
+
+`v0.31.0` 的[桌面发行工作流 #36157115908](https://github.com/quater782/spacescraft/actions/runs/36157115908)全部通过：Ubuntu 验证、Windows x64 构建及打包后启动检查、Apple Silicon macOS arm64 构建及打包后启动检查，以及稳定 Release 发布。[SPACECRAFT 0.31.0 Release](https://github.com/quater782/spacescraft/releases/tag/v0.31.0)实际附件为 `SPACECRAFT-0.31.0-windows-x64-Setup.exe`、`SPACECRAFT-0.31.0-windows-x64-portable.zip`、`SPACECRAFT-0.31.0-macOS-arm64.dmg` 与两份平台 `SHA256SUMS-*.txt` 清单。
+
+实际 SHA-256：Windows 安装器 `2b0a42a39426788bf4373fb0f42f26e91932bf804d62c0f7a0fb1582638fe278`，Windows 免安装 ZIP `9c79c55ffe5499ae8485816fa5e4fdafe7ffb1040b97b5466c45e28bb7cec8fa`，Apple Silicon DMG `30bd7e1767c808e1ed1c8a4d3304f7ce2b49bf6c640992452ac4cd696a67de69`。
+
+网页由同一应用提交 `fce2237` 的[Pages 工作流 #36157525164](https://github.com/quater782/spacescraft/actions/runs/36157525164)显式从 `main` 构建；完整验证、WebGL 冒烟与部署均通过。已读取 <https://quater782.github.io/spacescraft/> 的实际入口，确认显示 0.31.0、`style.css?v=15`、`renderer3d.js?v=32` 与 `game.js?v=40`。Windows 未代码签名，macOS 未公证。
+
 ## 2026-09-25 — 0.30.0 正式发行链
 
 `v0.30.0` 的[桌面发行工作流 #36040210888](https://github.com/quater782/spacescraft/actions/runs/36040210888)已通过验证、Windows x64 与 Apple Silicon macOS arm64 构建及包内启动检查，并发布[SPACECRAFT 0.30.0 Release](https://github.com/quater782/spacescraft/releases/tag/v0.30.0)。附件为 `SPACECRAFT-0.30.0-windows-x64-Setup.exe`、`SPACECRAFT-0.30.0-windows-x64-portable.zip`、`SPACECRAFT-0.30.0-macOS-arm64.dmg` 与两份平台 `SHA256SUMS-*.txt` 清单。
